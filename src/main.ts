@@ -11,15 +11,58 @@ import { Camera } from './core/camera';
 import { attachInput } from './core/input';
 import { chunkIndexOf, tileToWorldX, tileToWorldY } from './core/iso';
 import { pickTile } from './core/pick';
+import { signOut } from './net/auth';
+import { loadCity } from './net/citySave';
+import {
+  OfflineSaveManager,
+  SaveManager,
+  type AnySaveManager,
+} from './net/saveManager';
+import type { ChunkOverride } from './world/world';
+import type { CityDoc } from './net/types';
 import { loadTileAtlas } from './render/atlas';
 import { WorldRenderer } from './render/worldRenderer';
 import { Hud } from './ui/hud';
+import { requireSession } from './ui/loginScreen';
+import { SaveBadge } from './ui/saveBadge';
+import { Terrain } from './world/terrain';
 import { findDryTileNearBase, World } from './world/world';
 
 /** 카메라가 base 밖으로 나갈 수 있는 거리(청크). 이웃의 안개까지는 보이게 둔다. */
 const ROAM_CHUNKS = 8;
 
 async function boot(): Promise<void> {
+  const loading = document.getElementById('loading');
+
+  // 1) 로그인. 서버 설정이 없거나 학생이 건너뛰면 session 이 null 이고,
+  //    그 경우 0단계와 똑같이 저장 없는 상태로 돈다.
+  if (loading) loading.textContent = '로그인을 기다리는 중…';
+  const session = await requireSession();
+
+  // 2) 도시 불러오기. 실패해도 게임은 떠야 한다 — 렌더러는 서버와 무관하다.
+  if (loading) loading.textContent = '도시를 불러오는 중…';
+  let city: CityDoc | null = null;
+  let overrides = new Map<string, ChunkOverride>();
+  let loadFailed = false;
+  if (session) {
+    try {
+      const loaded = await loadCity(session);
+      city = loaded.city;
+      overrides = loaded.overrides;
+    } catch (err) {
+      console.error('도시 불러오기 실패', err);
+      loadFailed = true;
+    }
+  }
+
+  // 3) 월드 생성. 지형은 여기서 새로 만들어지고, 저장된 건 "달라진 칸"뿐이다.
+  if (loading) loading.textContent = '지형을 그리는 중…';
+  const world = new World(city?.cityIndex ?? 0);
+  if (city) {
+    world.setExploredKeys(city.explored);
+    world.setPersistedOverrides(overrides);
+  }
+
   const app = new Application();
   await app.init({
     resizeTo: window,
@@ -33,8 +76,6 @@ async function boot(): Promise<void> {
   });
   document.body.appendChild(app.canvas);
 
-  // 1단계에서 로그인한 학생의 도시 번호로 바꾼다. 지금은 0번 도시 고정.
-  const world = new World(0);
   const atlas = await loadTileAtlas();
   const renderer = new WorldRenderer(world, atlas);
   app.stage.addChild(renderer.root);
@@ -54,13 +95,26 @@ async function boot(): Promise<void> {
   };
   centerCamera();
 
+  // 4) 저장 연결. 서버가 없으면 아무것도 안 하는 껍데기가 들어간다.
+  const badge = new SaveBadge();
+  const saver: AnySaveManager =
+    session && city
+      ? new SaveManager(world, session.uid, city.saveToken, city)
+      : new OfflineSaveManager();
+  saver.onStatus = (status, message) => badge.set(status, message);
+  saver.start();
+  if (loadFailed) badge.set('error', '불러오기 실패 — 저장되지 않습니다');
+
   const hud = new Hud();
   let cursor: { tx: number; ty: number } | null = null;
+  // 2단계 도로 도구가 들어오기 전까지 저장 경로를 확인하는 임시 기능.
+  let painting = false;
 
   attachInput(app.canvas, camera, {
     onTap: (wx, wy) => {
       cursor = pickTile(world, wx, wy);
       renderer.setCursorTile(cursor);
+      if (painting) world.setTile(cursor.tx, cursor.ty, Terrain.Dirt);
     },
     onHover: (wx, wy) => {
       cursor = pickTile(world, wx, wy);
@@ -76,7 +130,21 @@ async function boot(): Promise<void> {
     camera.resize(w, h);
   });
 
-  bindToolbar(renderer, centerCamera);
+  bindToolbar({
+    centerCamera,
+    renderer,
+    saver,
+    loggedIn: Boolean(session),
+    togglePaint: (on) => {
+      painting = on;
+    },
+  });
+
+  const cityLabel = city
+    ? `${city.cityName} (${city.cityIndex}번)`
+    : session
+      ? '불러오기 실패'
+      : '둘러보기';
 
   app.ticker.add((ticker) => {
     const now = performance.now();
@@ -97,6 +165,7 @@ async function boot(): Promise<void> {
       visibleChunks: renderer.stats.visibleChunks,
       loadedMeshes: renderer.stats.loadedMeshes,
       placeholderArt: atlas.placeholder,
+      city: cityLabel,
     });
   });
 
@@ -121,13 +190,26 @@ function roamLimit(world: World): {
   };
 }
 
-function bindToolbar(renderer: WorldRenderer, centerCamera: () => void): void {
+interface ToolbarDeps {
+  centerCamera: () => void;
+  renderer: WorldRenderer;
+  saver: AnySaveManager;
+  loggedIn: boolean;
+  togglePaint: (on: boolean) => void;
+}
+
+function bindToolbar(deps: ToolbarDeps): void {
+  const { renderer } = deps;
   const fogBtn = document.getElementById('btn-fog');
   const gridBtn = document.getElementById('btn-grid');
   const centerBtn = document.getElementById('btn-center');
+  const paintBtn = document.getElementById('btn-paint');
+  const saveBtn = document.getElementById('btn-save');
+  const logoutBtn = document.getElementById('btn-logout');
 
   fogBtn?.setAttribute('aria-pressed', String(renderer.showFog));
   gridBtn?.setAttribute('aria-pressed', String(renderer.showGrid));
+  paintBtn?.setAttribute('aria-pressed', 'false');
 
   fogBtn?.addEventListener('click', () => {
     renderer.showFog = !renderer.showFog;
@@ -138,7 +220,30 @@ function bindToolbar(renderer: WorldRenderer, centerCamera: () => void): void {
     gridBtn.setAttribute('aria-pressed', String(renderer.showGrid));
     renderer.forceRedraw();
   });
-  centerBtn?.addEventListener('click', centerCamera);
+  centerBtn?.addEventListener('click', deps.centerCamera);
+
+  let painting = false;
+  paintBtn?.addEventListener('click', () => {
+    painting = !painting;
+    paintBtn.setAttribute('aria-pressed', String(painting));
+    deps.togglePaint(painting);
+  });
+
+  saveBtn?.addEventListener('click', () => {
+    void deps.saver.saveNow();
+  });
+
+  if (!deps.loggedIn) {
+    logoutBtn?.setAttribute('hidden', '');
+    saveBtn?.setAttribute('hidden', '');
+  }
+  logoutBtn?.addEventListener('click', () => {
+    void (async () => {
+      await deps.saver.saveNow();
+      await signOut();
+      location.reload();
+    })();
+  });
 }
 
 boot().catch((err: unknown) => {

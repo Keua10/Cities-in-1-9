@@ -126,3 +126,142 @@ canvas {
     transition: none;
   }
 }
+
+/* ---------- 1단계: 로그인 화면 ---------- */
+
+#login {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-content: center;
+  padding: 24px;
+  background: #0e1418;
+}
+
+.login-card {
+  width: min(340px, 86vw);
+  padding: 24px 22px 20px;
+  border: 1px solid var(--edge);
+  border-radius: 16px;
+  background: rgba(20, 28, 33, 0.9);
+}
+
+.login-card h1 {
+  margin: 0 0 6px;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.login-msg {
+  margin: 0 0 18px;
+  color: var(--ink-dim);
+  font-size: 13px;
+}
+
+.login-field {
+  display: block;
+  margin-bottom: 12px;
+}
+
+.login-field span {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--ink-dim);
+  font-size: 12px;
+}
+
+.login-field input {
+  width: 100%;
+  /* 16px 미만이면 아이패드 사파리가 입력할 때 화면을 확대해버린다 */
+  font-size: 16px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--edge);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.28);
+  color: var(--ink);
+  font-family: inherit;
+}
+
+.login-field input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 0;
+}
+
+.login-error {
+  margin: 4px 0 0;
+  min-height: 18px;
+  color: #ff9d8a;
+  font-size: 12px;
+}
+
+.login-actions {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.login-btn {
+  min-height: 46px;
+  border: 0;
+  border-radius: 10px;
+  font: inherit;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.login-btn.primary {
+  background: var(--accent);
+  color: #06120f;
+  font-weight: 600;
+}
+
+.login-btn.ghost {
+  background: transparent;
+  color: var(--ink-dim);
+}
+
+.login-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* ---------- 1단계: 저장 상태 ---------- */
+
+#save-status {
+  position: fixed;
+  top: calc(10px + var(--safe-top));
+  right: 10px;
+  z-index: 5;
+  padding: 6px 11px;
+  border: 1px solid var(--edge);
+  border-radius: 999px;
+  background: var(--panel);
+  backdrop-filter: blur(6px);
+  font-size: 12px;
+  color: var(--ink-dim);
+  pointer-events: none;
+  transition: opacity 400ms ease;
+}
+
+#save-status.dim {
+  opacity: 0.35;
+}
+
+#save-status[data-status="saving"],
+#save-status[data-status="pending"] {
+  color: var(--accent);
+}
+
+#save-status[data-status="error"],
+#save-status[data-status="conflict"] {
+  border-color: rgba(255, 157, 138, 0.5);
+  color: #ff9d8a;
+  opacity: 1;
+}
+
+#toolbar button[hidden] {
+  display: none;
+}

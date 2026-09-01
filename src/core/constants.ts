@@ -43,3 +43,13 @@ export const RENDER_MARGIN_PX = 192; // 화면 밖으로 미리 채워두는 여
 export const CHUNK_MESH_BUDGET = 28; // 동시에 메모리에 올려두는 청크 메시 상한
 export const SIM_RADIUS_CHUNKS = 1; // 마이크로 시뮬 반경 (카메라 기준 3x3)
 export const MAX_ACTIVE_VEHICLES = 1000; // 4단계에서 사용
+
+/* ---------- 저장(1단계) ---------- */
+/** Firestore 문서 구조 버전. 구조를 바꾸면 올리고 마이그레이션 코드를 붙인다. */
+export const SCHEMA_VERSION = 1;
+/** 오버레이 배열에서 "생성값 그대로" 를 뜻하는 값. 지형 ID·고도는 절대 255 가 아니다. */
+export const OVERRIDE_NONE = 255;
+/** 마지막 변경 후 이만큼 조용하면 저장한다. */
+export const SAVE_DEBOUNCE_MS = 5_000;
+/** 아무리 자주 고쳐도 이 간격보다 자주는 저장하지 않는다. Spark 쓰기 한도 방어선. */
+export const SAVE_MIN_INTERVAL_MS = 60_000;

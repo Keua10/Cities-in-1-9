@@ -2,6 +2,8 @@ import {
   BASE_CHUNK_SPAN,
   BASE_SPACING_CHUNKS,
   CHUNK_SIZE,
+  CHUNK_TILES,
+  OVERRIDE_NONE,
 } from '../core/constants';
 import { chunkIndexOf, chunkKey, localIndexOf } from '../core/iso';
 import {
@@ -10,6 +12,12 @@ import {
   Terrain,
   type TerrainId,
 } from './terrain';
+
+/** 생성값과 달라진 칸만 담는 배열. OVERRIDE_NONE 인 칸은 "생성값 그대로". */
+export interface ChunkOverride {
+  tiles: Uint8Array | null;
+  heights: Uint8Array | null;
+}
 
 export interface Chunk {
   cx: number;
@@ -21,16 +29,34 @@ export interface Chunk {
   revision: number;
   /** 고도가 바뀔 때마다 올린다. 렌더러는 메시를 통째로 다시 만든다. */
   heightRevision: number;
+  /**
+   * 저장 대상. 생성값과 달라진 칸만 들어간다.
+   * 한 번도 고친 적 없는 청크는 null 이라 메모리를 안 먹는다(청크당 4KB 절약).
+   */
+  tileOverride: Uint8Array | null;
+  heightOverride: Uint8Array | null;
 }
 
 /**
  * 지형·소유권을 들고 있는 메모리 상의 월드.
- * 0단계에서는 전부 로컬 생성이고, 1단계에서 Firestore 스냅샷을 여기에 덮어쓴다.
- * 저장되는 것은 "생성값과 달라진 타일"뿐이므로 지형 자체는 저장하지 않는다.
+ *
+ * 지형과 고도는 좌표에서 매번 다시 만든다(저장하지 않는다).
+ * 학생이 고친 칸만 오버레이 배열에 따로 기록하고, 그 오버레이만 Firestore 로 간다.
+ * 1단계에서 불러온 오버레이는 pending 에 넣어두었다가 그 청크가 처음 만들어질 때
+ * 덮어씌운다 — 청크는 카메라가 다가가야 생기므로 미리 다 만들면 안 된다.
  */
 export class World {
   private chunks = new Map<string, Chunk>();
   private explored = new Set<string>();
+  /** 아직 청크가 안 만들어져서 대기 중인 저장 데이터. */
+  private pending = new Map<string, ChunkOverride>();
+  /** 저장해야 할 청크 키. */
+  private dirtyKeys = new Set<string>();
+  /** 개척 목록이 바뀌었는가. */
+  private exploredDirty = false;
+
+  /** 저장할 게 생겼을 때 불린다. SaveManager 가 여기에 물린다. */
+  onDirty: (() => void) | null = null;
 
   /** 이 클라이언트가 조종하는 도시의 base 청크 왼쪽 위 좌표. */
   baseCx = 0;
@@ -52,8 +78,24 @@ export class World {
     let chunk = this.chunks.get(key);
     if (!chunk) {
       const { tiles, heights } = generateChunk(cx, cy);
-      chunk = { cx, cy, key, tiles, heights, revision: 0, heightRevision: 0 };
+      chunk = {
+        cx,
+        cy,
+        key,
+        tiles,
+        heights,
+        revision: 0,
+        heightRevision: 0,
+        tileOverride: null,
+        heightOverride: null,
+      };
       this.chunks.set(key, chunk);
+
+      const saved = this.pending.get(key);
+      if (saved) {
+        this.pending.delete(key);
+        applyOverride(chunk, saved);
+      }
     }
     return chunk;
   }
@@ -74,7 +116,12 @@ export class World {
     const i = localIndexOf(ty) * CHUNK_SIZE + localIndexOf(tx);
     if (chunk.tiles[i] === id) return;
     chunk.tiles[i] = id;
+    if (!chunk.tileOverride) {
+      chunk.tileOverride = new Uint8Array(CHUNK_TILES).fill(OVERRIDE_NONE);
+    }
+    chunk.tileOverride[i] = id;
     chunk.revision++;
+    this.markDirty(chunk.key);
   }
 
   getHeight(tx: number, ty: number): number {
@@ -85,6 +132,10 @@ export class World {
   /**
    * 고도만 필요한 경우. 청크가 아직 메모리에 없으면 생성하지 않고
    * 지형 함수로 바로 계산한다. 청크 경계에서 이웃 고도를 볼 때 쓴다.
+   *
+   * 주의: 저장된 고도 오버레이는 반영되지 않는다. 터레이닝을 실제로 넣는
+   * 단계에서는 청크를 만들어 보는 쪽으로 바꿔야 한다. 지금은 고도를 아무도
+   * 고치지 않으므로 문제없다.
    */
   sampleHeight(tx: number, ty: number): number {
     const chunk = this.peekChunk(chunkIndexOf(tx), chunkIndexOf(ty));
@@ -98,7 +149,12 @@ export class World {
     const i = localIndexOf(ty) * CHUNK_SIZE + localIndexOf(tx);
     if (chunk.heights[i] === h) return;
     chunk.heights[i] = h;
+    if (!chunk.heightOverride) {
+      chunk.heightOverride = new Uint8Array(CHUNK_TILES).fill(OVERRIDE_NONE);
+    }
+    chunk.heightOverride[i] = h;
     chunk.heightRevision++;
+    this.markDirty(chunk.key);
   }
 
   isExplored(cx: number, cy: number): boolean {
@@ -106,7 +162,11 @@ export class World {
   }
 
   explore(cx: number, cy: number): void {
-    this.explored.add(chunkKey(cx, cy));
+    const key = chunkKey(cx, cy);
+    if (this.explored.has(key)) return;
+    this.explored.add(key);
+    this.exploredDirty = true;
+    this.onDirty?.();
   }
 
   exploredCount(): number {
@@ -115,11 +175,108 @@ export class World {
 
   /** 메모리 회수. 5단계 이후 청크가 많아지면 필요해진다. */
   unloadChunk(cx: number, cy: number): void {
-    this.chunks.delete(chunkKey(cx, cy));
+    const key = chunkKey(cx, cy);
+    // 아직 저장 안 된 청크를 버리면 학생의 작업이 사라진다.
+    if (this.dirtyKeys.has(key)) return;
+    const chunk = this.chunks.get(key);
+    // 오버레이는 살려서 pending 으로 돌려놓는다. 다시 다가오면 그대로 복원된다.
+    if (chunk && (chunk.tileOverride || chunk.heightOverride)) {
+      this.pending.set(key, {
+        tiles: chunk.tileOverride,
+        heights: chunk.heightOverride,
+      });
+    }
+    this.chunks.delete(key);
   }
 
   loadedChunkCount(): number {
     return this.chunks.size;
+  }
+
+  /* ---------------- 저장/불러오기 연결부 ---------------- */
+
+  /** 불러온 오버레이를 넣는다. 청크 생성 전에 부르는 게 정상 경로다. */
+  setPersistedOverrides(map: Map<string, ChunkOverride>): void {
+    for (const [key, ov] of map) {
+      const chunk = this.chunks.get(key);
+      if (chunk) applyOverride(chunk, ov);
+      else this.pending.set(key, ov);
+    }
+  }
+
+  /** 불러온 개척 목록으로 갈아끼운다. base 4x4 는 항상 남긴다. */
+  setExploredKeys(keys: readonly string[]): void {
+    for (const key of keys) this.explored.add(key);
+    this.exploredDirty = false;
+  }
+
+  exploredKeys(): string[] {
+    return [...this.explored];
+  }
+
+  hasUnsaved(): boolean {
+    return this.dirtyKeys.size > 0 || this.exploredDirty;
+  }
+
+  /**
+   * 저장할 청크를 꺼내고 변경 표시를 지운다.
+   * 배열은 **복사해서** 넘긴다 — 저장이 오가는 동안 학생이 계속 타일을 고쳐도
+   * 저장되는 내용과 화면이 어긋나지 않게 하기 위해서다.
+   * 저장이 실패하면 restoreDirty 로 되돌린다.
+   */
+  takeDirty(): { keys: string[]; chunks: ChunkSnapshot[] } {
+    const keys = [...this.dirtyKeys];
+    const chunks: ChunkSnapshot[] = [];
+    for (const key of keys) {
+      const chunk = this.chunks.get(key);
+      if (!chunk) continue;
+      chunks.push({
+        cx: chunk.cx,
+        cy: chunk.cy,
+        tiles: chunk.tileOverride ? new Uint8Array(chunk.tileOverride) : null,
+        heights: chunk.heightOverride ? new Uint8Array(chunk.heightOverride) : null,
+      });
+    }
+    this.dirtyKeys.clear();
+    this.exploredDirty = false;
+    return { keys, chunks };
+  }
+
+  /** 저장 실패 시 원상복구. 다음 주기에 다시 시도된다. */
+  restoreDirty(keys: readonly string[]): void {
+    for (const key of keys) this.dirtyKeys.add(key);
+    this.exploredDirty = true;
+  }
+
+  private markDirty(key: string): void {
+    this.dirtyKeys.add(key);
+    this.onDirty?.();
+  }
+}
+
+export interface ChunkSnapshot {
+  cx: number;
+  cy: number;
+  tiles: Uint8Array | null;
+  heights: Uint8Array | null;
+}
+
+function applyOverride(chunk: Chunk, ov: ChunkOverride): void {
+  if (ov.tiles) {
+    chunk.tileOverride = ov.tiles;
+    for (let i = 0; i < CHUNK_TILES; i++) {
+      const v = ov.tiles[i];
+      if (v !== OVERRIDE_NONE) chunk.tiles[i] = v;
+    }
+    chunk.revision++;
+  }
+  if (ov.heights) {
+    chunk.heightOverride = ov.heights;
+    for (let i = 0; i < CHUNK_TILES; i++) {
+      const v = ov.heights[i];
+      if (v !== OVERRIDE_NONE) chunk.heights[i] = v;
+    }
+    chunk.heightRevision++;
   }
 }
 

@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "firebase": "^11.10.0",
     "pixi.js": "^8.6.0"
   },
   "devDependencies": {

@@ -10,6 +10,8 @@ export interface HudData {
   visibleChunks: number;
   loadedMeshes: number;
   placeholderArt: boolean;
+  /** 지금 조종 중인 도시. 1단계에서 추가. */
+  city: string;
 }
 
 /** 개발용 상태 표시. 학생용 UI 는 2단계에서 따로 만든다. */
@@ -34,6 +36,7 @@ export class Hud {
 
     const lines = [
       `<b>${data.fps.toFixed(0)} fps</b>   배율 ${data.zoom.toFixed(2)}x`,
+      `도시 ${data.city}`,
       `타일 ${tile}`,
       `청크 ${chunk}   지형 ${terrain}`,
       `고도 ${data.height === null ? '—' : data.height}`,
