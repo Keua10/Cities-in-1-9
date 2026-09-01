@@ -1,0 +1,128 @@
+:root {
+  --ink: #e7eef2;
+  --ink-dim: #93a3ac;
+  --panel: rgba(14, 20, 24, 0.82);
+  --edge: rgba(231, 238, 242, 0.14);
+  --accent: #6fd3b8;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #0e1418;
+  color: var(--ink);
+  font-family: "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  /* 캔버스 위에서 브라우저의 스크롤·확대 제스처를 완전히 끈다 */
+  touch-action: none;
+  overscroll-behavior: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+canvas {
+  display: block;
+  position: fixed;
+  inset: 0;
+}
+
+#loading {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  color: var(--ink-dim);
+  letter-spacing: 0.02em;
+  z-index: 10;
+  transition: opacity 240ms ease;
+}
+
+#loading.done {
+  opacity: 0;
+  pointer-events: none;
+}
+
+#hud {
+  position: fixed;
+  top: calc(10px + var(--safe-top));
+  left: 10px;
+  z-index: 5;
+  padding: 8px 11px;
+  min-width: 168px;
+  border: 1px solid var(--edge);
+  border-radius: 10px;
+  background: var(--panel);
+  backdrop-filter: blur(6px);
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  color: var(--ink-dim);
+  pointer-events: none;
+  white-space: pre;
+}
+
+#hud b {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+#toolbar {
+  position: fixed;
+  bottom: calc(12px + var(--safe-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  display: flex;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid var(--edge);
+  border-radius: 12px;
+  background: var(--panel);
+  backdrop-filter: blur(6px);
+}
+
+#toolbar button {
+  min-height: 40px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink-dim);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+#toolbar button:hover {
+  color: var(--ink);
+}
+
+#toolbar button[aria-pressed="true"] {
+  background: rgba(111, 211, 184, 0.16);
+  color: var(--accent);
+}
+
+#toolbar button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #loading {
+    transition: none;
+  }
+}
