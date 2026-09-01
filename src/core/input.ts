@@ -6,11 +6,11 @@ export interface InputHandlers {
   onTap?: (wx: number, wy: number) => void;
   /** 마우스 커서가 움직일 때만 호출된다. 터치에서는 안 온다. */
   onHover?: (wx: number, wy: number) => void;
-  /** 터치가 끝나 커서를 지워야 할 때. */
+  /** 터치 드래그/핀치가 끝나 커서를 지워야 할 때. */
   onHoverEnd?: () => void;
 }
 
-const TAP_MOVE_LIMIT = 8; // px
+const TAP_MOVE_LIMIT = 12; // px — 손가락의 미세한 떨림 허용
 const TAP_TIME_LIMIT = 300; // ms
 
 interface P {
@@ -84,7 +84,14 @@ export function attachInput(
     }
 
     const prevMid = midpoint();
-    p.moved += Math.hypot(e.clientX - p.x, e.clientY - p.y);
+
+    // 시작 지점에서 가장 멀리 벗어난 거리로 탭/드래그를 판정한다.
+    // 이벤트마다 이동량을 누적하면 손가락 미세 떨림만으로 탭이 취소될 수 있다.
+    p.moved = Math.max(
+      p.moved,
+      Math.hypot(e.clientX - p.startX, e.clientY - p.startY),
+    );
+
     p.x = e.clientX;
     p.y = e.clientY;
     const mid = midpoint();
@@ -130,13 +137,18 @@ export function attachInput(
 
     if (pointers.size === 0 && p) {
       const held = performance.now() - p.startT;
-      if (p.moved < TAP_MOVE_LIMIT && held < TAP_TIME_LIMIT) {
+      const tapped = p.moved < TAP_MOVE_LIMIT && held < TAP_TIME_LIMIT;
+
+      if (tapped) {
         const w = camera.screenToWorld(p.x, p.y);
         handlers.onTap?.(w.wx, w.wy);
-      } else if (performance.now() - lastMoveT < 80) {
-        camera.fling(velX, velY);
+        // 터치 탭으로 선택한 커서는 유지한다.
+      } else {
+        if (performance.now() - lastMoveT < 80) {
+          camera.fling(velX, velY);
+        }
+        if (e.pointerType !== 'mouse') handlers.onHoverEnd?.();
       }
-      if (e.pointerType !== 'mouse') handlers.onHoverEnd?.();
     }
   };
 
