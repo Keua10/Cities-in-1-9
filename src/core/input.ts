@@ -76,7 +76,6 @@ export function attachInput(
     e.preventDefault();
 
     el.setPointerCapture(e.pointerId);
-
     camera.stopFling();
 
     pointers.set(e.pointerId, {
@@ -102,33 +101,18 @@ export function attachInput(
     const p = pointers.get(e.pointerId);
 
     if (!p) {
-      if (
-        e.pointerType === 'mouse' &&
-        handlers.onHover
-      ) {
-        const w = camera.screenToWorld(
-          e.clientX,
-          e.clientY,
-        );
-
-        handlers.onHover(
-          w.wx,
-          w.wy,
-        );
+      if (e.pointerType === 'mouse' && handlers.onHover) {
+        const w = camera.screenToWorld(e.clientX, e.clientY);
+        handlers.onHover(w.wx, w.wy);
       }
-
       return;
     }
 
     e.preventDefault();
 
     const prevMid = midpoint();
-
-    const dxPointer =
-      e.clientX - p.x;
-
-    const dyPointer =
-      e.clientY - p.y;
+    const dxPointer = e.clientX - p.x;
+    const dyPointer = e.clientY - p.y;
 
     p.moved = Math.max(
       p.moved,
@@ -148,10 +132,7 @@ export function attachInput(
 
       const d = distance();
 
-      if (
-        pinchDist > 0 &&
-        d > 0
-      ) {
+      if (pinchDist > 0 && d > 0) {
         camera.zoomAt(
           mid.x,
           mid.y,
@@ -192,10 +173,7 @@ export function attachInput(
         ? mid.y - prevMid.y
         : dyPointer;
 
-    camera.panByScreen(
-      dx,
-      dy,
-    );
+    camera.panByScreen(dx, dy);
 
     const now = performance.now();
 
@@ -206,11 +184,6 @@ export function attachInput(
 
     lastMoveT = now;
 
-    /*
-     * 지수 평활.
-     * 손가락 끝의 마지막 떨림 때문에
-     * 관성이 크게 바뀌지 않도록 한다.
-     */
     velX =
       velX * 0.6 +
       (dx / dt) * 0.4;
@@ -239,22 +212,12 @@ export function attachInput(
     e: PointerEvent,
     cancelled: boolean,
   ): void => {
-    const p = pointers.get(
-      e.pointerId,
-    );
+    const p = pointers.get(e.pointerId);
 
-    pointers.delete(
-      e.pointerId,
-    );
+    pointers.delete(e.pointerId);
 
-    if (
-      el.hasPointerCapture(
-        e.pointerId,
-      )
-    ) {
-      el.releasePointerCapture(
-        e.pointerId,
-      );
+    if (el.hasPointerCapture(e.pointerId)) {
+      el.releasePointerCapture(e.pointerId);
     }
 
     if (!p) {
@@ -277,39 +240,26 @@ export function attachInput(
       velX = 0;
       velY = 0;
 
-      if (
-        pointers.size === 0
-      ) {
+      if (pointers.size === 0) {
         multiTouchGesture = false;
       }
 
-      if (
-        e.pointerType !== 'mouse'
-      ) {
+      if (e.pointerType !== 'mouse') {
         handlers.onHoverEnd?.();
       }
 
       return;
     }
 
-    if (
-      pointers.size === 1
-    ) {
-      /*
-       * 핀치에서 한 손가락만 남은 순간.
-       * 남은 손가락을 새 기준으로 삼는다.
-       */
+    if (pointers.size === 1) {
       pinchDist = 0;
       velX = 0;
       velY = 0;
       lastMoveT = performance.now();
-
       return;
     }
 
-    if (
-      pointers.size !== 0
-    ) {
+    if (pointers.size !== 0) {
       return;
     }
 
@@ -323,9 +273,13 @@ export function attachInput(
       held <= TAP_TIME_LIMIT;
 
     if (tapped) {
+      /*
+       * 탭 허용 범위 안에서 손가락이 조금 움직였더라도
+       * 선택 위치는 처음 손가락을 댄 곳을 기준으로 한다.
+       */
       const w = camera.screenToWorld(
-        p.x,
-        p.y,
+        p.startX,
+        p.startY,
       );
 
       handlers.onTap?.(
@@ -333,12 +287,7 @@ export function attachInput(
         w.wy,
       );
 
-      /*
-       * 터치 탭으로 선택한 타일은
-       * 손가락을 뗀 뒤에도 유지한다.
-       */
       multiTouchGesture = false;
-
       return;
     }
 
@@ -353,9 +302,7 @@ export function attachInput(
       );
     }
 
-    if (
-      e.pointerType !== 'mouse'
-    ) {
+    if (e.pointerType !== 'mouse') {
       handlers.onHoverEnd?.();
     }
 
@@ -366,20 +313,13 @@ export function attachInput(
     e: PointerEvent,
   ): void => {
     e.preventDefault();
-
-    finishPointer(
-      e,
-      false,
-    );
+    finishPointer(e, false);
   };
 
   const onCancel = (
     e: PointerEvent,
   ): void => {
-    finishPointer(
-      e,
-      true,
-    );
+    finishPointer(e, true);
   };
 
   const onWheel = (
@@ -412,92 +352,26 @@ export function attachInput(
   const onLeave = (
     e: PointerEvent,
   ): void => {
-    /*
-     * 모바일에서는 터치 종료 직후
-     * pointerleave가 발생할 수 있다.
-     *
-     * 터치 선택은 지우지 않고
-     * 마우스 hover만 해제한다.
-     */
-    if (
-      e.pointerType === 'mouse'
-    ) {
+    if (e.pointerType === 'mouse') {
       handlers.onHoverEnd?.();
     }
   };
 
-  el.addEventListener(
-    'pointerdown',
-    onDown,
-  );
-
-  el.addEventListener(
-    'pointermove',
-    onMove,
-  );
-
-  el.addEventListener(
-    'pointerup',
-    onUp,
-  );
-
-  el.addEventListener(
-    'pointercancel',
-    onCancel,
-  );
-
-  el.addEventListener(
-    'wheel',
-    onWheel,
-    {
-      passive: false,
-    },
-  );
-
-  el.addEventListener(
-    'contextmenu',
-    onContext,
-  );
-
-  el.addEventListener(
-    'pointerleave',
-    onLeave,
-  );
+  el.addEventListener('pointerdown', onDown);
+  el.addEventListener('pointermove', onMove);
+  el.addEventListener('pointerup', onUp);
+  el.addEventListener('pointercancel', onCancel);
+  el.addEventListener('wheel', onWheel, { passive: false });
+  el.addEventListener('contextmenu', onContext);
+  el.addEventListener('pointerleave', onLeave);
 
   return () => {
-    el.removeEventListener(
-      'pointerdown',
-      onDown,
-    );
-
-    el.removeEventListener(
-      'pointermove',
-      onMove,
-    );
-
-    el.removeEventListener(
-      'pointerup',
-      onUp,
-    );
-
-    el.removeEventListener(
-      'pointercancel',
-      onCancel,
-    );
-
-    el.removeEventListener(
-      'wheel',
-      onWheel,
-    );
-
-    el.removeEventListener(
-      'contextmenu',
-      onContext,
-    );
-
-    el.removeEventListener(
-      'pointerleave',
-      onLeave,
-    );
+    el.removeEventListener('pointerdown', onDown);
+    el.removeEventListener('pointermove', onMove);
+    el.removeEventListener('pointerup', onUp);
+    el.removeEventListener('pointercancel', onCancel);
+    el.removeEventListener('wheel', onWheel);
+    el.removeEventListener('contextmenu', onContext);
+    el.removeEventListener('pointerleave', onLeave);
   };
 }
