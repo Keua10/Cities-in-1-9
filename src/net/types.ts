@@ -58,6 +58,14 @@ export interface ChunkDoc {
   tiles: string | null;
   /** 고도 오버레이(터레이닝). 지금은 항상 null 이지만 자리는 잡아둔다. */
   heights: string | null;
+  /**
+   * 2단계에서 추가. 도로·지구 레이어. 형식은 tiles 와 완전히 같다.
+   *
+   * 순수 가산이라 SCHEMA_VERSION 을 올리지 않는다. 1단계에 저장된 문서에는 이
+   * 필드가 없고, decodeOverride(null) 이 null 을 돌려주므로 "아무것도 안 지음"
+   * 으로 자연스럽게 읽힌다. 마이그레이션 코드가 필요 없다.
+   */
+  build: string | null;
   updatedAt: number;
 }
 
@@ -67,6 +75,7 @@ export interface ChunkPayload {
   cy: number;
   tiles: Uint8Array | null;
   heights: Uint8Array | null;
+  build: Uint8Array | null;
 }
 
 /**

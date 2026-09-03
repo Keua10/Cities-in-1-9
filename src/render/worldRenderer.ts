@@ -11,11 +11,14 @@ import {
 } from '../core/constants';
 import type { Camera } from '../core/camera';
 import {
+  chunkIndexOf,
   chunkKey,
+  localIndexOf,
   tileToWorldX,
   tileToWorldY,
   visibleChunkRange,
 } from '../core/iso';
+import { makeTopResolver, type TopResolver } from '../world/build';
 import type { World } from '../world/world';
 import type { TileAtlas } from './atlas';
 import { ChunkMesh } from './chunkMesh';
@@ -73,9 +76,33 @@ export class WorldRenderer {
     // 고도가 있으면 청크끼리도 겹친다. 뒤쪽 청크부터 그려야 한다.
     this.groundLayer.sortableChildren = true;
     this.sampleHeight = (tx, ty) => this.world.sampleHeight(tx, ty);
+    this.resolveTop = makeTopResolver(world);
   }
 
   private sampleHeight: (tx: number, ty: number) => number;
+  private resolveTop: TopResolver;
+
+  /**
+   * 타일 한 칸의 윗면만 다시 그린다. 도로·지구를 놓거나 지울 때 부른다.
+   *
+   * 청크 전체를 다시 굽지 않는 이유:
+   *   writeAllUVs 는 4096칸을 훑고 128KB 짜리 정점 버퍼를 통째로 올린다.
+   *   드래그로 도로를 그으면 그게 매 프레임 돌아 아이패드에서 체감된다.
+   *   여기서는 UV 8개만 고친다.
+   *
+   * 화면에 없는 청크는 그냥 넘어간다. 다시 보일 때 새로 구워지면서 반영된다.
+   */
+  invalidateTile(tx: number, ty: number): void {
+    const cx = chunkIndexOf(tx);
+    const cy = chunkIndexOf(ty);
+    const mesh = this.meshes.get(chunkKey(cx, cy));
+    if (!mesh) return;
+    const chunk = this.world.peekChunk(cx, cy);
+    if (!chunk) return;
+    const lx = localIndexOf(tx);
+    const ly = localIndexOf(ty);
+    mesh.setTile(lx, ly, this.resolveTop(chunk, ly * CHUNK_SIZE + lx, tx, ty));
+  }
 
   /** 격자/안개 토글처럼 카메라와 무관한 변화가 생겼을 때 다음 프레임에 다시 그린다. */
   forceRedraw(): void {
@@ -142,7 +169,7 @@ export class WorldRenderer {
       mesh = undefined;
     }
     if (!mesh) {
-      mesh = new ChunkMesh(chunk, this.atlas, this.sampleHeight);
+      mesh = new ChunkMesh(chunk, this.atlas, this.sampleHeight, this.resolveTop);
       mesh.mesh.zIndex = cx + cy;
       this.meshes.set(key, mesh);
       this.groundLayer.addChild(mesh.mesh);

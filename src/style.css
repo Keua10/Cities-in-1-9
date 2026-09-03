@@ -121,6 +121,74 @@ canvas {
   outline-offset: 2px;
 }
 
+/* ---------- 2단계: 도구 막대 ---------- */
+
+/*
+ * 도구는 유틸 버튼(#toolbar)과 줄을 나눈다. 아이패드 세로 화면에서 한 줄에
+ * 11개를 넣으면 버튼이 손가락보다 좁아진다.
+ */
+#tools {
+  position: fixed;
+  bottom: calc(64px + var(--safe-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  display: flex;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid var(--edge);
+  border-radius: 12px;
+  background: var(--panel);
+  backdrop-filter: blur(6px);
+}
+
+#tools button {
+  min-width: 52px;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink-dim);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+#tools button:hover {
+  color: var(--ink);
+}
+
+#tools button[aria-pressed="true"] {
+  background: rgba(111, 211, 184, 0.16);
+  color: var(--accent);
+}
+
+/* 지구 버튼은 켜졌을 때 지구 색을 그대로 쓴다. 지도 위 색과 같아야 헷갈리지 않는다. */
+#tools button[data-zone="r"][aria-pressed="true"] {
+  background: rgba(63, 143, 79, 0.28);
+  color: #8fe0a0;
+}
+
+#tools button[data-zone="c"][aria-pressed="true"] {
+  background: rgba(47, 111, 168, 0.28);
+  color: #8fc4ec;
+}
+
+#tools button[data-zone="i"][aria-pressed="true"] {
+  background: rgba(168, 134, 47, 0.28);
+  color: #e8cc86;
+}
+
+#tools button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+#hud .warn {
+  color: #ffb4a2;
+}
+
 @media (prefers-reduced-motion: reduce) {
   #loading {
     transition: none;

@@ -17,6 +17,11 @@ import {
 export interface ChunkOverride {
   tiles: Uint8Array | null;
   heights: Uint8Array | null;
+  /**
+   * 2단계: 도로·지구 레이어. 지형과 달리 "생성값" 이 없으므로 이 배열 자체가
+   * 곧 저장 대상이다. OVERRIDE_NONE(255) = 아무것도 안 지음.
+   */
+  build: Uint8Array | null;
 }
 
 export interface Chunk {
@@ -35,6 +40,14 @@ export interface Chunk {
    */
   tileOverride: Uint8Array | null;
   heightOverride: Uint8Array | null;
+  /**
+   * 2단계: 도로·지구. 처음 지을 때 만들고 OVERRIDE_NONE 으로 채운다.
+   * 아무것도 안 지은 청크는 null 이라 메모리를 안 먹는다(청크당 4KB 절약).
+   *
+   * tiles 와 달리 "생성값 + 오버레이" 두 벌이 아니다. 전부 학생이 만든
+   * 데이터라 배열 하나가 곧 저장 대상이다.
+   */
+  build: Uint8Array | null;
 }
 
 /**
@@ -88,6 +101,7 @@ export class World {
         heightRevision: 0,
         tileOverride: null,
         heightOverride: null,
+        build: null,
       };
       this.chunks.set(key, chunk);
 
@@ -157,6 +171,54 @@ export class World {
     this.markDirty(chunk.key);
   }
 
+  /* ---------------- 2단계: 도로·지구 레이어 ---------------- */
+
+  getBuild(tx: number, ty: number): number {
+    const chunk = this.getChunk(chunkIndexOf(tx), chunkIndexOf(ty));
+    if (!chunk.build) return OVERRIDE_NONE;
+    return chunk.build[localIndexOf(ty) * CHUNK_SIZE + localIndexOf(tx)];
+  }
+
+  /**
+   * 청크를 만들지 않고 build 값만 본다. 도로 연결 마스크를 계산할 때 옆 청크를
+   * 들여다보는 용도다.
+   *
+   * getChunk 를 쓰면 화면 밖 청크까지 generateChunk(4096칸 노이즈)가 돌아버린다.
+   * 아직 안 만들어진 청크는 pending(불러왔지만 아직 안 펼친 저장 데이터)까지만 본다.
+   */
+  sampleBuild(tx: number, ty: number): number {
+    const cx = chunkIndexOf(tx);
+    const cy = chunkIndexOf(ty);
+    const i = localIndexOf(ty) * CHUNK_SIZE + localIndexOf(tx);
+    const chunk = this.chunks.get(chunkKey(cx, cy));
+    if (chunk) return chunk.build ? chunk.build[i] : OVERRIDE_NONE;
+    const saved = this.pending.get(chunkKey(cx, cy));
+    if (saved?.build) return saved.build[i];
+    return OVERRIDE_NONE;
+  }
+
+  /**
+   * 도로·지구를 놓거나 지운다.
+   *
+   * **revision 을 올리지 않는다.** 올리면 ChunkMesh.syncIfStale 이 매 프레임
+   * writeAllUVs(4096칸 + 128KB 버퍼 업로드)를 돌려서, 드래그로 도로를 그을 때
+   * 아이패드에서 체감된다. 화면 갱신은 WorldRenderer.invalidateTile 로
+   * 바뀐 칸만 직접 고친다.
+   */
+  setBuild(tx: number, ty: number, value: number): void {
+    const chunk = this.getChunk(chunkIndexOf(tx), chunkIndexOf(ty));
+    const i = localIndexOf(ty) * CHUNK_SIZE + localIndexOf(tx);
+    const cur = chunk.build ? chunk.build[i] : OVERRIDE_NONE;
+    if (cur === value) return;
+    if (!chunk.build) {
+      // 지울 것도 없는데 배열만 만들 이유가 없다.
+      if (value === OVERRIDE_NONE) return;
+      chunk.build = new Uint8Array(CHUNK_TILES).fill(OVERRIDE_NONE);
+    }
+    chunk.build[i] = value;
+    this.markDirty(chunk.key);
+  }
+
   isExplored(cx: number, cy: number): boolean {
     return this.explored.has(chunkKey(cx, cy));
   }
@@ -180,10 +242,11 @@ export class World {
     if (this.dirtyKeys.has(key)) return;
     const chunk = this.chunks.get(key);
     // 오버레이는 살려서 pending 으로 돌려놓는다. 다시 다가오면 그대로 복원된다.
-    if (chunk && (chunk.tileOverride || chunk.heightOverride)) {
+    if (chunk && (chunk.tileOverride || chunk.heightOverride || chunk.build)) {
       this.pending.set(key, {
         tiles: chunk.tileOverride,
         heights: chunk.heightOverride,
+        build: chunk.build,
       });
     }
     this.chunks.delete(key);
@@ -235,6 +298,7 @@ export class World {
         cy: chunk.cy,
         tiles: chunk.tileOverride ? new Uint8Array(chunk.tileOverride) : null,
         heights: chunk.heightOverride ? new Uint8Array(chunk.heightOverride) : null,
+        build: chunk.build ? new Uint8Array(chunk.build) : null,
       });
     }
     this.dirtyKeys.clear();
@@ -259,6 +323,7 @@ export interface ChunkSnapshot {
   cy: number;
   tiles: Uint8Array | null;
   heights: Uint8Array | null;
+  build: Uint8Array | null;
 }
 
 function applyOverride(chunk: Chunk, ov: ChunkOverride): void {
@@ -277,6 +342,10 @@ function applyOverride(chunk: Chunk, ov: ChunkOverride): void {
       if (v !== OVERRIDE_NONE) chunk.heights[i] = v;
     }
     chunk.heightRevision++;
+  }
+  if (ov.build) {
+    // build 는 생성값이 없다. 배열을 그대로 받는다.
+    chunk.build = ov.build;
   }
 }
 
