@@ -25,7 +25,8 @@ import { WorldRenderer } from './render/worldRenderer';
 import { Hud } from './ui/hud';
 import { requireSession } from './ui/loginScreen';
 import { SaveBadge } from './ui/saveBadge';
-import { Terrain } from './world/terrain';
+import { bindToolButtons, Tools, TOOL_LABELS } from './ui/tools';
+import { Build, hasRoadAccess, isZone } from './world/build';
 import { findDryTileNearBase, World } from './world/world';
 
 /** 카메라가 base 밖으로 나갈 수 있는 거리(청크). 이웃의 안개까지는 보이게 둔다. */
@@ -107,14 +108,14 @@ async function boot(): Promise<void> {
 
   const hud = new Hud();
   let cursor: { tx: number; ty: number } | null = null;
-  // 2단계 도로 도구가 들어오기 전까지 저장 경로를 확인하는 임시 기능.
-  let painting = false;
+
+  // 5) 2단계 도구. 도로·지구 지정은 전부 여기를 지난다.
+  const tools = new Tools(world, renderer);
 
   attachInput(app.canvas, camera, {
     onTap: (wx, wy) => {
       cursor = pickTile(world, wx, wy);
       renderer.setCursorTile(cursor);
-      if (painting) world.setTile(cursor.tx, cursor.ty, Terrain.Dirt);
     },
     onHover: (wx, wy) => {
       cursor = pickTile(world, wx, wy);
@@ -123,6 +124,20 @@ async function boot(): Promise<void> {
     onHoverEnd: () => {
       cursor = null;
       renderer.setCursorTile(null);
+    },
+    isPainting: () => tools.isPainting(),
+    onPaintStart: (wx, wy) => {
+      cursor = pickTile(world, wx, wy);
+      renderer.setCursorTile(cursor);
+      tools.beginPaint(wx, wy);
+    },
+    onPaintMove: (wx, wy) => {
+      cursor = pickTile(world, wx, wy);
+      renderer.setCursorTile(cursor);
+      tools.movePaint(wx, wy);
+    },
+    onPaintEnd: () => {
+      tools.endPaint();
     },
   });
 
@@ -135,10 +150,8 @@ async function boot(): Promise<void> {
     renderer,
     saver,
     loggedIn: Boolean(session),
-    togglePaint: (on) => {
-      painting = on;
-    },
   });
+  bindToolButtons(tools);
 
   const cityLabel = city
     ? `${city.cityName} (${city.cityIndex}번)`
@@ -153,12 +166,21 @@ async function boot(): Promise<void> {
     renderer.update(camera, now);
     renderer.flush();
 
+    const cursorBuild = cursor ? world.getBuild(cursor.tx, cursor.ty) : null;
+
     hud.update(now, {
       fps: ticker.FPS,
       zoom: camera.zoom,
       tile: cursor,
       terrain: cursor ? world.getTile(cursor.tx, cursor.ty) : null,
       height: cursor ? world.getHeight(cursor.tx, cursor.ty) : null,
+      tool: TOOL_LABELS[tools.tool],
+      build: cursorBuild === Build.None ? null : cursorBuild,
+      roadAccess:
+        cursor && cursorBuild !== null && isZone(cursorBuild)
+          ? hasRoadAccess(world, cursor.tx, cursor.ty)
+          : null,
+      message: tools.activeMessage(now),
       chunk: cursor
         ? { cx: chunkIndexOf(cursor.tx), cy: chunkIndexOf(cursor.ty) }
         : null,
@@ -195,7 +217,6 @@ interface ToolbarDeps {
   renderer: WorldRenderer;
   saver: AnySaveManager;
   loggedIn: boolean;
-  togglePaint: (on: boolean) => void;
 }
 
 function bindToolbar(deps: ToolbarDeps): void {
@@ -203,13 +224,11 @@ function bindToolbar(deps: ToolbarDeps): void {
   const fogBtn = document.getElementById('btn-fog');
   const gridBtn = document.getElementById('btn-grid');
   const centerBtn = document.getElementById('btn-center');
-  const paintBtn = document.getElementById('btn-paint');
   const saveBtn = document.getElementById('btn-save');
   const logoutBtn = document.getElementById('btn-logout');
 
   fogBtn?.setAttribute('aria-pressed', String(renderer.showFog));
   gridBtn?.setAttribute('aria-pressed', String(renderer.showGrid));
-  paintBtn?.setAttribute('aria-pressed', 'false');
 
   fogBtn?.addEventListener('click', () => {
     renderer.showFog = !renderer.showFog;
@@ -221,13 +240,6 @@ function bindToolbar(deps: ToolbarDeps): void {
     renderer.forceRedraw();
   });
   centerBtn?.addEventListener('click', deps.centerCamera);
-
-  let painting = false;
-  paintBtn?.addEventListener('click', () => {
-    painting = !painting;
-    paintBtn.setAttribute('aria-pressed', String(painting));
-    deps.togglePaint(painting);
-  });
 
   saveBtn?.addEventListener('click', () => {
     void deps.saver.saveNow();

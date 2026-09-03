@@ -8,6 +8,17 @@ export interface InputHandlers {
   onHover?: (wx: number, wy: number) => void;
   /** 터치 드래그/핀치가 끝나 커서를 지워야 할 때. */
   onHoverEnd?: () => void;
+
+  /* ---------- 2단계: 칠하기 도구 ---------- */
+
+  /**
+   * 지금 칠하기 도구(도로·지구·철거)가 켜져 있는가.
+   * true 면 한 손가락 드래그가 지도를 움직이지 않고 칠하기가 된다.
+   */
+  isPainting?: () => boolean;
+  onPaintStart?: (wx: number, wy: number) => void;
+  onPaintMove?: (wx: number, wy: number) => void;
+  onPaintEnd?: () => void;
 }
 
 const TAP_MOVE_LIMIT = 18; // px
@@ -28,6 +39,15 @@ interface P {
  * - 18px를 넘으면 드래그로 전환한다.
  * - 두 손가락: 핀치 확대/축소 + 이동.
  * - 마우스: 기존 hover / 드래그 / 휠 동작 유지.
+ *
+ * 2단계에서 칠하기 도구가 붙으면서 한 손가락 드래그의 의미가 갈린다.
+ *
+ *   선택 도구      한 손가락 드래그 = 지도 이동   (기존 그대로)
+ *   칠하기 도구    한 손가락 드래그 = 칠하기      (지도가 안 움직인다)
+ *   어느 쪽이든    두 손가락       = 이동 + 확대/축소
+ *
+ * 두 손가락으로 늘어나면 진행 중이던 칠하기를 즉시 끊는다. 핀치하면서 도로가
+ * 그어지면 학생이 지도를 못 움직인다.
  */
 export function attachInput(
   el: HTMLElement,
@@ -41,6 +61,7 @@ export function attachInput(
   let velY = 0;
   let pinchDist = 0;
   let multiTouchGesture = false;
+  let painting = false;
 
   const midpoint = (): { x: number; y: number } => {
     let x = 0;
@@ -94,6 +115,27 @@ export function attachInput(
     if (pointers.size >= 2) {
       multiTouchGesture = true;
       pinchDist = distance();
+
+      if (painting) {
+        painting = false;
+        handlers.onPaintEnd?.();
+      }
+
+      return;
+    }
+
+    if (handlers.isPainting?.()) {
+      painting = true;
+
+      const w = camera.screenToWorld(
+        e.clientX,
+        e.clientY,
+      );
+
+      handlers.onPaintStart?.(
+        w.wx,
+        w.wy,
+      );
     }
   };
 
@@ -145,6 +187,24 @@ export function attachInput(
       camera.panByScreen(
         mid.x - prevMid.x,
         mid.y - prevMid.y,
+      );
+
+      return;
+    }
+
+    /*
+     * 칠하기 중에는 지도를 움직이지 않는다.
+     * 관성도 걸지 않는다(velX/velY 를 건드리지 않고 빠져나간다).
+     */
+    if (painting) {
+      const w = camera.screenToWorld(
+        e.clientX,
+        e.clientY,
+      );
+
+      handlers.onPaintMove?.(
+        w.wx,
+        w.wy,
       );
 
       return;
@@ -218,6 +278,11 @@ export function attachInput(
 
     if (el.hasPointerCapture(e.pointerId)) {
       el.releasePointerCapture(e.pointerId);
+    }
+
+    if (painting && pointers.size === 0) {
+      painting = false;
+      handlers.onPaintEnd?.();
     }
 
     if (!p) {

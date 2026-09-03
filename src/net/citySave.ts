@@ -107,11 +107,16 @@ async function loadOverrides(uid: string): Promise<Map<string, ChunkOverride>> {
       console.warn('청크 문서 이름이 이상합니다:', d.id);
       continue;
     }
-    const data = d.data() as Partial<{ tiles: string; heights: string }>;
+    const data = d.data() as Partial<{
+      tiles: string;
+      heights: string;
+      build: string;
+    }>;
     const tiles = decodeOverride(data.tiles ?? null, CHUNK_TILES);
     const heights = decodeOverride(data.heights ?? null, CHUNK_TILES);
-    if (!tiles && !heights) continue;
-    out.set(chunkKey(cx, cy), { tiles, heights });
+    const build = decodeOverride(data.build ?? null, CHUNK_TILES);
+    if (!tiles && !heights && !build) continue;
+    out.set(chunkKey(cx, cy), { tiles, heights, build });
   }
   return out;
 }
@@ -168,12 +173,18 @@ export async function saveCity(
       const id = chunkDocId(chunk.cx, chunk.cy);
       const tiles = encodeOverride(chunk.tiles);
       const heights = encodeOverride(chunk.heights);
-      if (!tiles && !heights) {
+      const build = encodeOverride(chunk.build);
+      if (!tiles && !heights && !build) {
         // 고쳤다가 원래대로 되돌린 청크. 문서를 남길 이유가 없다.
         emptyChunks.push(id);
         continue;
       }
-      tx.set(doc(db, 'cities', uid, 'chunks', id), { tiles, heights, updatedAt: now });
+      tx.set(doc(db, 'cities', uid, 'chunks', id), {
+        tiles,
+        heights,
+        build,
+        updatedAt: now,
+      });
     }
   });
 

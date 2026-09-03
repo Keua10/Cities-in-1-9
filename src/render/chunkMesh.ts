@@ -7,6 +7,7 @@ import {
   TILE_HW,
 } from '../core/constants';
 import { tileToWorldX, tileToWorldY } from '../core/iso';
+import type { TopResolver } from '../world/build';
 import { wallMaterial } from '../world/terrain';
 import type { Chunk } from '../world/world';
 import { shadeCellFor, WallCell, type TileAtlas } from './atlas';
@@ -19,6 +20,10 @@ export type HeightSampler = (tx: number, ty: number) => number;
  * 타일 4096개를 스프라이트 4096개로 만들면 아이패드에서 청크 몇 개만 띄워도
  * 프레임이 무너진다. 대신 정점 버퍼 하나 + 아틀라스 텍스처 하나로 묶으면
  * 청크당 드로우콜이 1이 된다.
+ *
+ * 2단계의 도로·지구도 **이 구조를 그대로 쓴다.** 새 사각형을 얹지 않고 윗면의
+ * UV 만 다른 셀(도로·지구)로 바꾼다. 그래서 정점 수도 드로우콜도 안 늘어난다.
+ * 어떤 셀을 쓸지는 resolveTop 콜백이 정하므로 이 파일은 도로를 몰라도 된다.
  *
  * 사각형(quad) 구성은 타일 하나당
  *   [오른쪽 절벽 n장] [왼쪽 절벽 n장] [윗면 1장] [고도 음영 1장]
@@ -47,13 +52,20 @@ export class ChunkMesh {
   /** 마지막으로 화면에 쓰인 시각 — LRU 회수용 */
   lastUsed = 0;
 
+  /** 이 청크의 왼쪽 위 타일 좌표. resolveTop 에 넘길 전역 좌표를 만드는 데 쓴다. */
+  private baseX: number;
+  private baseY: number;
+
   constructor(
     chunk: Chunk,
     private atlas: TileAtlas,
     sampleHeight: HeightSampler,
+    private resolveTop: TopResolver,
   ) {
     const baseX = chunk.cx * CHUNK_SIZE;
     const baseY = chunk.cy * CHUNK_SIZE;
+    this.baseX = baseX;
+    this.baseY = baseY;
 
     this.quadStart = new Int32Array(CHUNK_TILES);
     this.rightWalls = new Uint8Array(CHUNK_TILES);
@@ -151,38 +163,50 @@ export class ChunkMesh {
     this.flush();
   }
 
-  /** 청크 전체의 UV 를 다시 쓴다. */
+  /**
+   * 청크 전체의 UV 를 다시 쓴다.
+   * 청크가 처음 구워질 때와 불러오기 직후에만 돈다. 도로를 한 칸 놓을 때는
+   * setTile 쪽으로 가야 한다(4096칸을 다시 쓰면 드래그가 버벅인다).
+   */
   writeAllUVs(chunk: Chunk): void {
-    for (let i = 0; i < CHUNK_TILES; i++) {
-      const tile = chunk.tiles[i];
-      const walls = this.wallCount[i];
-      if (walls > 0) {
-        const rock = wallMaterial(tile) === 'rock';
-        const right = this.rightWalls[i];
-        for (let k = 0; k < walls; k++) {
-          const isRight = k < right;
-          const cell = rock
-            ? isRight
-              ? WallCell.RockRight
-              : WallCell.RockLeft
-            : isRight
-              ? WallCell.SoilRight
-              : WallCell.SoilLeft;
-          this.writeWallUV(this.quadStart[i] + k, cell, isRight);
+    for (let ly = 0; ly < CHUNK_SIZE; ly++) {
+      for (let lx = 0; lx < CHUNK_SIZE; lx++) {
+        const i = ly * CHUNK_SIZE + lx;
+        const tile = chunk.tiles[i];
+        const walls = this.wallCount[i];
+        if (walls > 0) {
+          // 절벽 옆면은 항상 지형으로 판정한다.
+          // 도로를 깐다고 절벽이 아스팔트가 되면 안 된다.
+          const rock = wallMaterial(tile) === 'rock';
+          const right = this.rightWalls[i];
+          for (let k = 0; k < walls; k++) {
+            const isRight = k < right;
+            const cell = rock
+              ? isRight
+                ? WallCell.RockRight
+                : WallCell.RockLeft
+              : isRight
+                ? WallCell.SoilRight
+                : WallCell.SoilLeft;
+            this.writeWallUV(this.quadStart[i] + k, cell, isRight);
+          }
         }
+        const top = this.quadStart[i] + walls;
+        this.writeTopUV(top, this.resolveTop(chunk, i, this.baseX + lx, this.baseY + ly));
+        const h = chunk.heights[i];
+        if (h > 0) this.writeTopUV(top + 1, shadeCellFor(h));
       }
-      const top = this.quadStart[i] + walls;
-      this.writeTopUV(top, tile);
-      const h = chunk.heights[i];
-      if (h > 0) this.writeTopUV(top + 1, shadeCellFor(h));
     }
     this.revision = chunk.revision;
   }
 
-  /** 타일 하나의 윗면만 갱신. 도로를 그을 때 이 경로만 탄다. */
-  setTile(localX: number, localY: number, tileId: number): void {
+  /**
+   * 타일 하나의 윗면만 갱신. 도로·지구를 놓을 때 타는 유일한 경로다.
+   * cell 은 지형 ID 일 수도 있고 도로·지구 셀 번호일 수도 있다.
+   */
+  setTile(localX: number, localY: number, cell: number): void {
     const i = localY * CHUNK_SIZE + localX;
-    this.writeTopUV(this.quadStart[i] + this.wallCount[i], tileId);
+    this.writeTopUV(this.quadStart[i] + this.wallCount[i], cell);
   }
 
   private writeTopUV(quad: number, tileId: number): void {

@@ -34,12 +34,40 @@ export const WallCell = {
  */
 export const SHADE_BASE = ATLAS_COLUMNS * 2;
 export const ATLAS_ART_ROWS = 2; // 사람이 그리는 행: 0=지형, 1=절벽
-export const ATLAS_CELL_COUNT = SHADE_BASE + MAX_HEIGHT + 1;
+export const SHADE_CELL_COUNT = MAX_HEIGHT + 1;
+
+/**
+ * 2단계 셀. 도로·지구도 고도 음영과 똑같이 **코드가 그린다.**
+ * terrain.png 가 아직 보류 상태라 그림을 기다리다 2단계가 멈추면 안 된다.
+ *
+ * 셀 번호는 저장되지 않는다(연결 마스크는 이웃에서 매번 계산한다). 나중에 진짜
+ * 그림으로 교체하거나 순서를 바꿔도 이미 저장된 도시는 안 깨진다.
+ *
+ *    0 ~  7  지형      (사람이 그림, 행 0)
+ *    8 ~ 11  절벽      (사람이 그림, 행 1)
+ *   16 ~ 24  고도 음영 (코드)
+ *   25 ~ 40  도로 16칸 (코드) — 연결 마스크 0~15 가 그대로 셀 번호
+ *   41 ~ 46  지구 6칸  (코드) — (주거·상업·공업) x (도로 미접함·접함)
+ */
+export const ROAD_CELL_BASE = SHADE_BASE + SHADE_CELL_COUNT;
+export const ROAD_CELL_COUNT = 16;
+export const ZONE_CELL_BASE = ROAD_CELL_BASE + ROAD_CELL_COUNT;
+export const ZONE_CELL_COUNT = 6;
+export const ATLAS_CELL_COUNT = ZONE_CELL_BASE + ZONE_CELL_COUNT;
 
 /** 고도 h 에 해당하는 음영 셀. 0 이면 음영 자체가 없다. */
 export function shadeCellFor(height: number): number {
   return SHADE_BASE + Math.min(MAX_HEIGHT, height);
 }
+
+/** 지구 셀. zone 은 0=주거, 1=상업, 2=공업. */
+export function zoneCell(zone: number, hasRoad: boolean): number {
+  return ZONE_CELL_BASE + zone * 2 + (hasRoad ? 1 : 0);
+}
+
+/** 지구 색. HUD 범례도 같은 값을 쓴다. */
+export const ZONE_COLORS: readonly string[] = ['#3f8f4f', '#2f6fa8', '#a8862f'];
+export const ZONE_LABELS: readonly string[] = ['주거', '상업', '공업'];
 
 export interface TileAtlas {
   texture: Texture;
@@ -72,6 +100,8 @@ export async function loadTileAtlas(): Promise<TileAtlas> {
   ctx.imageSmoothingEnabled = false;
   ctx.drawImage(source, 0, 0);
   drawShadeCells(ctx);
+  drawRoadCells(ctx);
+  drawZoneCells(ctx);
 
   const texture = Texture.from(canvas);
   texture.source.scaleMode = 'nearest';
@@ -140,6 +170,149 @@ function drawShadeCells(ctx: CanvasRenderingContext2D): void {
   }
 }
 
+/** 셀 index 의 그림 영역 왼쪽 위 좌표. */
+function cellOrigin(index: number): { ox: number; oy: number } {
+  return {
+    ox: (index % ATLAS_COLUMNS) * ATLAS_CELL_W + ATLAS_PAD,
+    oy: Math.floor(index / ATLAS_COLUMNS) * ATLAS_CELL_H + ATLAS_PAD,
+  };
+}
+
+/**
+ * 다이아몬드 꼭짓점과 변의 중점.
+ *
+ *        T(32,0)
+ *   L(0,16)   R(64,16)
+ *        B(32,32)
+ *
+ * 방향 d 의 변과 중점(= 이웃 타일과 맞닿는 지점):
+ *   0 (+tx, 오른쪽 아래) R->B, 중점 (48,24)
+ *   1 (+ty, 왼쪽 아래)   B->L, 중점 (16,24)
+ *   2 (-tx, 왼쪽 위)     L->T, 중점 (16,8)
+ *   3 (-ty, 오른쪽 위)   T->R, 중점 (48,8)
+ */
+const EDGE_MID: ReadonlyArray<readonly [number, number]> = [
+  [TILE_HW + TILE_W / 4, TILE_HH + TILE_H / 4],
+  [TILE_W / 4, TILE_HH + TILE_H / 4],
+  [TILE_W / 4, TILE_H / 4],
+  [TILE_HW + TILE_W / 4, TILE_H / 4],
+];
+
+const EDGE_LINE: ReadonlyArray<readonly [number, number, number, number]> = [
+  [TILE_W, TILE_HH, TILE_HW, TILE_H],
+  [TILE_HW, TILE_H, 0, TILE_HH],
+  [0, TILE_HH, TILE_HW, 0],
+  [TILE_HW, 0, TILE_W, TILE_HH],
+];
+
+/**
+ * 도로 16칸. 셀 번호의 아래 4비트가 곧 연결 마스크다.
+ *
+ * 진짜 그림이 들어오기 전까지 쓰는 코드 생성 타일이지만, 연결 모양이 눈에
+ * 보여야 2단계를 검증할 수 있으므로 대충 그리지 않는다.
+ */
+function drawRoadCells(ctx: CanvasRenderingContext2D): void {
+  for (let mask = 0; mask < ROAD_CELL_COUNT; mask++) {
+    const { ox, oy } = cellOrigin(ROAD_CELL_BASE + mask);
+
+    ctx.save();
+    diamondPath(ctx, ox, oy);
+    ctx.clip();
+
+    // 노면
+    ctx.fillStyle = '#3b4046';
+    ctx.fillRect(ox, oy, TILE_W, TILE_H);
+    const shade = ctx.createLinearGradient(ox, oy, ox, oy + TILE_H);
+    shade.addColorStop(0, 'rgba(255,255,255,0.06)');
+    shade.addColorStop(1, 'rgba(0,0,0,0.18)');
+    ctx.fillStyle = shade;
+    ctx.fillRect(ox, oy, TILE_W, TILE_H);
+
+    // 연결되지 않은 변에는 연석을 그린다. 도로가 어디서 끊겼는지 바로 보인다.
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = '#8d9199';
+    for (let d = 0; d < 4; d++) {
+      if (mask & (1 << d)) continue;
+      const e = EDGE_LINE[d];
+      ctx.beginPath();
+      ctx.moveTo(ox + e[0], oy + e[1]);
+      ctx.lineTo(ox + e[2], oy + e[3]);
+      ctx.stroke();
+    }
+
+    if (mask === 0) {
+      // 외톨이 도로. 가운데에 점만 찍는다.
+      ctx.fillStyle = 'rgba(226,214,140,0.7)';
+      ctx.fillRect(ox + TILE_HW - 2, oy + TILE_HH - 1, 4, 2);
+    } else {
+      // 중앙선. 연결된 방향으로만 뻗는다.
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = 'rgba(226,214,140,0.75)';
+      ctx.setLineDash([4, 3]);
+      for (let d = 0; d < 4; d++) {
+        if (!(mask & (1 << d))) continue;
+        const m = EDGE_MID[d];
+        ctx.beginPath();
+        ctx.moveTo(ox + TILE_HW, oy + TILE_HH);
+        ctx.lineTo(ox + m[0], oy + m[1]);
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+    }
+
+    ctx.restore();
+  }
+}
+
+/**
+ * 지구 6칸. (주거·상업·공업) x (도로 미접함·접함).
+ *
+ * 도로에 접하지 않은 지구는 어둡게 그린다. 3단계에서 "도로에 접한 지구만 개발"
+ * 규칙이 붙을 자리라, 학생이 지금부터 그 차이를 눈으로 알 수 있어야 한다.
+ */
+function drawZoneCells(ctx: CanvasRenderingContext2D): void {
+  for (let zone = 0; zone < ZONE_COLORS.length; zone++) {
+    for (let r = 0; r < 2; r++) {
+      const hasRoad = r === 1;
+      const { ox, oy } = cellOrigin(zoneCell(zone, hasRoad));
+
+      ctx.save();
+      diamondPath(ctx, ox, oy);
+      ctx.clip();
+
+      ctx.fillStyle = ZONE_COLORS[zone];
+      ctx.fillRect(ox, oy, TILE_W, TILE_H);
+
+      if (!hasRoad) {
+        // 아직 못 짓는 땅. 회색을 덮어 채도를 떨어뜨린다.
+        ctx.fillStyle = 'rgba(24,28,32,0.5)';
+        ctx.fillRect(ox, oy, TILE_W, TILE_H);
+      }
+
+      const shade = ctx.createLinearGradient(ox, oy, ox, oy + TILE_H);
+      shade.addColorStop(0, 'rgba(255,255,255,0.10)');
+      shade.addColorStop(1, 'rgba(0,0,0,0.20)');
+      ctx.fillStyle = shade;
+      ctx.fillRect(ox, oy, TILE_W, TILE_H);
+
+      // 안쪽 점선 테두리 — 지구는 "구획" 이라는 신호
+      ctx.setLineDash([5, 4]);
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = hasRoad ? 'rgba(255,255,255,0.75)' : 'rgba(255,255,255,0.32)';
+      ctx.beginPath();
+      ctx.moveTo(ox + TILE_HW, oy + 5);
+      ctx.lineTo(ox + TILE_W - 10, oy + TILE_HH);
+      ctx.lineTo(ox + TILE_HW, oy + TILE_H - 5);
+      ctx.lineTo(ox + 10, oy + TILE_HH);
+      ctx.closePath();
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      ctx.restore();
+    }
+  }
+}
+
 /* ---------------------------------------------------------------- *
  * 자리표시용 타일 생성
  * ---------------------------------------------------------------- */
@@ -154,11 +327,6 @@ function buildPlaceholderCanvas(): HTMLCanvasElement {
   const ctx = canvas.getContext('2d');
   if (!ctx) return canvas;
   ctx.imageSmoothingEnabled = false;
-
-  const cellOrigin = (i: number): { ox: number; oy: number } => ({
-    ox: (i % columns) * ATLAS_CELL_W + ATLAS_PAD,
-    oy: Math.floor(i / columns) * ATLAS_CELL_H + ATLAS_PAD,
-  });
 
   for (let i = 0; i < TERRAIN_COUNT; i++) {
     const { ox, oy } = cellOrigin(i);
