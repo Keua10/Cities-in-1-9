@@ -266,7 +266,7 @@ export type TopResolver = (
 export function makeTopResolver(world: World): TopResolver {
   return (chunk, index, tx, ty) => {
     // 아무것도 안 지은 칸이 대부분이다. 배열 읽기 한 번으로 끝내는 빠른 길.
-    const b = chunk.build ? chunk.build[index] : Build.None;
+    const b = chunk.parcel.build ? chunk.parcel.build[index] : Build.None;
     if (b === Build.None) return chunk.tiles[index];
     if (b === Build.Road) return ROAD_CELL_BASE + roadMask(world, tx, ty);
     if (b >= Build.ZoneR && b <= Build.ZoneI) {

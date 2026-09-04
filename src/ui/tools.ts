@@ -1,5 +1,7 @@
 import { pickTile } from '../core/pick';
 import type { WorldRenderer } from '../render/worldRenderer';
+import type { MacroSim } from '../sim/macro';
+import { COST_ROAD, COST_ZONE } from '../sim/simConstants';
 import {
   Build,
   canPlaceRoad,
@@ -47,7 +49,8 @@ const MESSAGE_MS = 2500;
  *   2. 눌린 월드 좌표를 타일로 바꿔 규칙을 검사하고 World 에 쓴다.
  *   3. 바뀐 칸과 그 이웃만 렌더러에 알려 다시 그리게 한다.
  *
- * 돈은 계산하지 않는다. 건설비는 3단계에서 매크로가 들어올 때 붙인다.
+ * 3.1단계에서 건설비가 붙었다. 돈이 모자라면 배치 자체가 거부된다.
+ * 철거는 공짜다 — 학생이 실수를 되돌리는 걸 돈으로 막을 이유가 없다.
  */
 export class Tools {
   tool: ToolId = 'select';
@@ -61,6 +64,7 @@ export class Tools {
   constructor(
     private world: World,
     private renderer: WorldRenderer,
+    private sim: MacroSim,
   ) {}
 
   isPainting(): boolean {
@@ -149,6 +153,7 @@ export class Tools {
     if (this.tool === 'select') return;
 
     if (this.tool === 'bulldoze') {
+      // 지구를 지우면 그 위의 건물도 같이 헐린다(World.setBuild).
       if (this.world.getBuild(tx, ty) === Build.None) return;
       this.world.setBuild(tx, ty, Build.None);
       this.refresh(tx, ty);
@@ -165,6 +170,12 @@ export class Tools {
 
     if (!result.ok) {
       if (result.reason) this.note(result.reason);
+      return;
+    }
+
+    const cost = value === Build.Road ? COST_ROAD : COST_ZONE;
+    if (!this.sim.spend(cost)) {
+      this.note('돈이 모자랍니다');
       return;
     }
 

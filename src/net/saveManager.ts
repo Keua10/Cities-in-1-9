@@ -1,4 +1,8 @@
-import { SAVE_DEBOUNCE_MS, SAVE_MIN_INTERVAL_MS } from '../core/constants';
+import {
+  SAVE_DEBOUNCE_MS,
+  SAVE_MIN_INTERVAL_MS,
+  SAVE_SIM_INTERVAL_MS,
+} from '../core/constants';
 import type { World } from '../world/world';
 import { ConflictError, saveCity } from './citySave';
 import type { CityDoc } from './types';
@@ -36,6 +40,8 @@ export class SaveManager {
   /** 충돌이 나면 잠근다. 새로고침 전까지 저장하지 않는다. */
   private locked = false;
   private detach: (() => void) | null = null;
+  /** 청크는 그대로인데 돈·틱만 바뀐 경우. 도시 문서만 다시 써야 한다. */
+  private macroDirty = false;
 
   constructor(
     private world: World,
@@ -77,13 +83,28 @@ export class SaveManager {
     return this.flush(true);
   }
 
+  /** 매크로가 돈·틱을 바꿨을 때. 청크가 안 바뀌어도 도시 문서는 갱신해야 한다. */
+  noteMacroChange(): void {
+    this.macroDirty = true;
+    this.schedule();
+  }
+
+  /**
+   * 다음 저장까지 기다릴 시간.
+   * 학생이 직접 고친 게 섞여 있으면 짧게(60초), 시뮬레이션이 혼자 지은 것만
+   * 쌓였으면 길게(10분) 잡는다. 이유는 constants.ts 의 SAVE_SIM_INTERVAL_MS 참고.
+   */
+  private minInterval(): number {
+    return this.world.hasUserEdits() ? SAVE_MIN_INTERVAL_MS : SAVE_SIM_INTERVAL_MS;
+  }
+
   private schedule(): void {
     if (this.locked) return;
     if (this.timer !== null) return;
 
     const now = Date.now();
     const sinceLast = now - this.lastSaveAt;
-    const wait = Math.max(SAVE_DEBOUNCE_MS, SAVE_MIN_INTERVAL_MS - sinceLast);
+    const wait = Math.max(SAVE_DEBOUNCE_MS, this.minInterval() - sinceLast);
 
     this.setStatus('pending');
     this.timer = window.setTimeout(() => {
@@ -94,11 +115,11 @@ export class SaveManager {
 
   private async flush(force: boolean): Promise<void> {
     if (this.locked || this.saving) return;
-    if (!this.world.hasUnsaved()) {
+    if (!this.world.hasUnsaved() && !this.macroDirty) {
       if (this.status === 'pending') this.setStatus('idle');
       return;
     }
-    if (!force && Date.now() - this.lastSaveAt < SAVE_MIN_INTERVAL_MS) {
+    if (!force && Date.now() - this.lastSaveAt < this.minInterval()) {
       this.schedule();
       return;
     }
@@ -109,6 +130,7 @@ export class SaveManager {
     }
 
     const taken = this.world.takeDirty();
+    this.macroDirty = false;
     this.saving = true;
     this.setStatus('saving');
 
@@ -128,6 +150,7 @@ export class SaveManager {
     } catch (err) {
       // 저장에 실패했으면 변경 표시를 되돌려서 다음에 다시 시도한다.
       this.world.restoreDirty(taken.keys);
+      this.macroDirty = true;
       if (err instanceof ConflictError) {
         this.locked = true;
         this.setStatus('conflict');
@@ -181,6 +204,10 @@ export class OfflineSaveManager {
 
   saveNow(): Promise<void> {
     return Promise.resolve();
+  }
+
+  noteMacroChange(): void {
+    /* 할 일 없음 */
   }
 }
 

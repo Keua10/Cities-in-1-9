@@ -22,6 +22,13 @@ export interface HudData {
   roadAccess: boolean | null;
   /** 배치가 거부됐을 때의 사유. 없으면 빈 문자열. */
   message: string;
+  /* ---------- 3.1단계 ---------- */
+  /** 커서 칸에 서 있는 건물 설명. 없으면 null. */
+  building: string | null;
+  /** 화면에 그려지고 있는 건물 수. */
+  visibleBuildings: number;
+  /** 메모리에 남아 있는 필지 수. 지형 청크와 따로 센다. */
+  parcels: number;
 }
 
 /** 개발용 상태 표시. 학생용 UI 는 2단계에서 따로 만든다. */
@@ -50,14 +57,16 @@ export class Hud {
         : (BUILD_LABELS[data.build] ?? '빈 땅');
 
     const lines = [
-      `<b>${data.fps.toFixed(0)} fps</b>   배율 ${data.zoom.toFixed(2)}x`,
-      `도시 ${data.city}`,
-      `도구 ${data.tool}`,
-      `타일 ${tile}`,
-      `청크 ${chunk}   지형 ${terrain}`,
+      `<b>${data.fps.toFixed(0)} fps</b>   확대 ${data.zoom.toFixed(2)}x`,
+      `도시 ID ${data.city}`,
+      `선택 도구 ${data.tool}`,
+      `타일 좌표 ${tile}`,
+      `청크 ${chunk}   지형 종류 ${terrain}`,
       `고도 ${data.height === null ? '—' : data.height}`,
-      `지은것 ${build}${data.roadAccess === null ? '' : data.roadAccess ? '   도로 접함' : '   도로 없음'}`,
-      `화면 청크 ${data.visibleChunks}   메시 ${data.loadedMeshes}`,
+      `시설 ${build}${data.roadAccess === null ? '' : data.roadAccess ? '   도로 연결' : '   도로 미연결'}`,
+      `건물 ${data.building ?? '—'}`,
+      `화면 청크 ${data.visibleChunks}   메시 ${data.loadedMeshes}   필지 ${data.parcels}`,
+      `화면 건물 ${data.visibleBuildings}`,
     ];
     if (data.placeholderArt) lines.push('그림: 임시 타일 사용 중');
     if (data.message) lines.push(`<b class="warn">${data.message}</b>`);

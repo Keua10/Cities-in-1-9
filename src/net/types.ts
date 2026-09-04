@@ -1,3 +1,5 @@
+import { START_MONEY } from '../sim/simConstants';
+
 /**
  * Firestore 에 실제로 저장되는 것들의 타입.
  *
@@ -15,19 +17,29 @@
  *   - 한 계정이 도시 두 개를 가지는 게 구조적으로 불가능해진다.
  */
 
-/** 3단계에서 채울 매크로 상태. 지금은 자리만 잡아둔다. */
+/**
+ * 매크로 상태. 3.1단계에서 실제로 쓰이기 시작했다.
+ *
+ * **여기 있는 네 개가 전부다.** 인구 구성, 수요, 만족도, 입주율, 통근 거리는
+ * 저장하지 않는다. 전부 (건물 배치 + 도로 배치 + 틱) 에서 다시 계산되는
+ * 값이고, 매 틱 변하는 값을 저장하면 도시의 모든 청크가 매 틱 저장 대상이
+ * 되어 Spark 무료 한도가 하루 만에 날아간다.
+ *
+ * 필드가 1단계와 같으므로 SCHEMA_VERSION 은 그대로 둔다.
+ */
 export interface MacroState {
-  /** 도시 자금. 3단계 전까지는 서버가 검증하지 않는다. */
+  /** 도시 자금. 3.1단계에서는 클라이언트가 계산한다. */
   money: number;
+  /** 표시용 인구. 접속 직후 시뮬레이션이 돌기 전에도 보여주려고 넣어둔다. */
   population: number;
-  /** 이 도시가 소화한 시뮬레이션 틱 수. 오프라인 따라잡기 계산의 기준점. */
+  /** 이 도시가 소화한 시뮬레이션 틱 수 = 게임 내 경과 시간(시간 단위). */
   tick: number;
   /** 마지막으로 시뮬레이션이 진행된 실제 시각(ms). 접속 공백을 재는 데 쓴다. */
   tickedAt: number;
 }
 
 export function emptyMacro(): MacroState {
-  return { money: 0, population: 0, tick: 0, tickedAt: Date.now() };
+  return { money: START_MONEY, population: 0, tick: 0, tickedAt: Date.now() };
 }
 
 /** cities/{uid} 문서. */
@@ -66,6 +78,15 @@ export interface ChunkDoc {
    * 으로 자연스럽게 읽힌다. 마이그레이션 코드가 필요 없다.
    */
   build: string | null;
+  /**
+   * 3.1단계에서 추가. 건물 레이어와 건설 날짜(하위/상위 8비트).
+   * build 와 형식이 완전히 같고, 순수 가산이라 SCHEMA_VERSION 을 올리지 않는다.
+   * 2단계까지 저장된 문서에는 이 필드가 없고 decodeOverride(null) 이 null 을
+   * 돌려주므로 "건물 없음" 으로 자연스럽게 읽힌다.
+   */
+  bld: string | null;
+  bornLo: string | null;
+  bornHi: string | null;
   updatedAt: number;
 }
 
@@ -76,6 +97,9 @@ export interface ChunkPayload {
   tiles: Uint8Array | null;
   heights: Uint8Array | null;
   build: Uint8Array | null;
+  bld: Uint8Array | null;
+  bornLo: Uint8Array | null;
+  bornHi: Uint8Array | null;
 }
 
 /**

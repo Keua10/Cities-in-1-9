@@ -21,12 +21,16 @@ import {
 import { makeTopResolver, type TopResolver } from '../world/build';
 import type { World } from '../world/world';
 import type { TileAtlas } from './atlas';
+import type { BuildingAtlas } from './buildingAtlas';
+import { BuildingMesh } from './buildingMesh';
 import { ChunkMesh } from './chunkMesh';
 
 export interface RenderStats {
   visibleChunks: number;
   loadedMeshes: number;
   foggedChunks: number;
+  /** 화면에 그려지고 있는 건물 수. 3.1단계에서 추가. */
+  visibleBuildings: number;
 }
 
 /** 청크 하나가 덮는 큰 다이아몬드의 꼭짓점 4개. */
@@ -55,6 +59,12 @@ export class WorldRenderer {
   private cursorLayer = new Graphics();
 
   private meshes = new Map<string, ChunkMesh>();
+  /**
+   * 건물 메시. 지형 메시와 같은 groundLayer 에 넣되 zIndex 를 0.5 올린다.
+   * 그러면 자기 청크 지형 위, 다음 청크 지형 아래에 그려져서 앞쪽 청크의 언덕이
+   * 뒤쪽 청크의 건물을 제대로 가린다.
+   */
+  private buildings = new Map<string, BuildingMesh>();
   private fog = new Map<string, Graphics>();
 
   private lastRangeKey = '';
@@ -64,11 +74,17 @@ export class WorldRenderer {
   showFog = true;
   showGrid = false;
 
-  stats: RenderStats = { visibleChunks: 0, loadedMeshes: 0, foggedChunks: 0 };
+  stats: RenderStats = {
+    visibleChunks: 0,
+    loadedMeshes: 0,
+    foggedChunks: 0,
+    visibleBuildings: 0,
+  };
 
   constructor(
     private world: World,
     private atlas: TileAtlas,
+    private buildingAtlas: BuildingAtlas,
   ) {
     this.root.addChild(this.groundLayer, this.fogLayer, this.gridLayer, this.cursorLayer);
     this.groundLayer.interactiveChildren = false;
@@ -128,6 +144,7 @@ export class WorldRenderer {
 
     let visible = 0;
     let fogged = 0;
+    let buildingsShown = 0;
 
     for (let cy = range.cy0; cy <= range.cy1; cy++) {
       for (let cx = range.cx0; cx <= range.cx1; cx++) {
@@ -144,6 +161,7 @@ export class WorldRenderer {
         this.dropFog(key);
         const mesh = this.ensureMesh(key, cx, cy);
         mesh.lastUsed = now;
+        buildingsShown += this.ensureBuildings(key, cx, cy);
       }
     }
 
@@ -159,6 +177,7 @@ export class WorldRenderer {
     this.stats.visibleChunks = visible;
     this.stats.loadedMeshes = this.meshes.size;
     this.stats.foggedChunks = fogged;
+    this.stats.visibleBuildings = buildingsShown;
   }
 
   private ensureMesh(key: string, cx: number, cy: number): ChunkMesh {
@@ -181,10 +200,47 @@ export class WorldRenderer {
 
   private dropMesh(key: string): void {
     const mesh = this.meshes.get(key);
-    if (!mesh) return;
-    this.groundLayer.removeChild(mesh.mesh);
-    mesh.destroy();
-    this.meshes.delete(key);
+    if (mesh) {
+      this.groundLayer.removeChild(mesh.mesh);
+      mesh.destroy();
+      this.meshes.delete(key);
+    }
+    this.dropBuildings(key);
+  }
+
+  /**
+   * 건물 메시를 필지 상태에 맞춘다.
+   *
+   * 필지의 bldRevision 이 바뀌었을 때만 다시 굽는다. 건물은 매크로 틱이 가끔
+   * 짓고 허무는 것이라 이 값이 자주 오르지 않는다. 드래그 건설과 달리 통째로
+   * 다시 구워도 부담이 없다.
+   */
+  private ensureBuildings(key: string, cx: number, cy: number): number {
+    const parcel = this.world.peekParcel(cx, cy);
+    if (!parcel || !parcel.bld) {
+      this.dropBuildings(key);
+      return 0;
+    }
+    let bm = this.buildings.get(key);
+    if (bm && bm.needsRebuild(parcel)) {
+      this.dropBuildings(key);
+      bm = undefined;
+    }
+    if (!bm) {
+      bm = new BuildingMesh(parcel, this.buildingAtlas, this.sampleHeight);
+      bm.mesh.zIndex = cx + cy + 0.5;
+      this.buildings.set(key, bm);
+      this.groundLayer.addChild(bm.mesh);
+    }
+    return bm.count;
+  }
+
+  private dropBuildings(key: string): void {
+    const bm = this.buildings.get(key);
+    if (!bm) return;
+    this.groundLayer.removeChild(bm.mesh);
+    bm.destroy();
+    this.buildings.delete(key);
   }
 
   private ensureFog(key: string, cx: number, cy: number): void {
@@ -222,6 +278,7 @@ export class WorldRenderer {
       this.groundLayer.removeChild(mesh.mesh);
       mesh.destroy();
       this.meshes.delete(key);
+      this.dropBuildings(key);
       over--;
     }
 
