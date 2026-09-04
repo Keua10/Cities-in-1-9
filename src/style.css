@@ -333,3 +333,228 @@ canvas {
 #toolbar button[hidden] {
   display: none;
 }
+
+
+/* ---------- 3.1단계: 도시 상태판 ---------- */
+
+/*
+ * HUD 는 왼쪽 위(개발용 숫자), 이쪽은 오른쪽 위(학생이 실제로 보는 값)다.
+ * 저장 배지 바로 아래에 붙인다.
+ */
+#city-panel {
+  position: fixed;
+  top: calc(46px + var(--safe-top));
+  right: 10px;
+  z-index: 5;
+  width: 214px;
+  padding: 10px 12px;
+  border: 1px solid var(--edge);
+  border-radius: 12px;
+  background: var(--panel);
+  backdrop-filter: blur(6px);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.cp-top {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cp-label,
+.cp-section-title {
+  color: var(--ink-dim);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.cp-money {
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+
+.cp-money.broke {
+  color: #ff9d8a;
+}
+
+.cp-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--ink-dim);
+}
+
+.cp-meta b {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.cp-occupancy {
+  margin-top: 9px;
+  padding-top: 9px;
+  border-top: 1px solid var(--edge);
+}
+
+.cp-occupancy-head,
+.cp-occupancy-scale {
+  display: flex;
+  justify-content: space-between;
+}
+
+.cp-occupancy-head {
+  margin-bottom: 5px;
+  color: var(--ink-dim);
+  font-size: 11px;
+}
+
+.cp-occupancy-head b {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.cp-occupancy-track {
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 157, 138, 0.28);
+}
+
+.cp-occupancy-fill {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: #6fd3b8;
+  transition: width 200ms ease, background-color 200ms ease;
+}
+
+.cp-occupancy-fill.warning {
+  background: #e0bc6a;
+}
+
+.cp-occupancy-fill.critical {
+  background: #ff9d8a;
+}
+
+.cp-occupancy-scale {
+  margin-top: 3px;
+  color: var(--ink-dim);
+  font-size: 9px;
+  opacity: 0.7;
+}
+
+.cp-demand {
+  margin-top: 9px;
+  padding-top: 9px;
+  border-top: 1px solid var(--edge);
+}
+
+.cp-section-title {
+  margin-bottom: 3px;
+}
+
+.cp-legend {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 4px;
+  padding-left: 30px;
+  font-size: 10px;
+  color: var(--ink-dim);
+  opacity: 0.75;
+}
+
+.cp-legend span {
+  flex: 1;
+  text-align: center;
+}
+
+.cp-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.cp-row > span {
+  width: 24px;
+  font-size: 11px;
+  color: var(--ink-dim);
+}
+
+.cp-bars {
+  display: flex;
+  flex: 1;
+  gap: 4px;
+}
+
+/*
+ * 수요 막대. 가운데가 0 이고 오른쪽이 플러스, 왼쪽이 마이너스다.
+ * 폭과 위치만 바꾸므로 갱신할 때 DOM 을 새로 만들지 않는다.
+ */
+.cp-bar {
+  position: relative;
+  flex: 1;
+  height: 12px;
+  border-radius: 3px;
+  background: rgba(231, 238, 242, 0.07);
+  overflow: hidden;
+}
+
+.cp-bar::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(231, 238, 242, 0.22);
+}
+
+.cp-bar i {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: 50%;
+  width: 0;
+  border-radius: 2px;
+  background: currentColor;
+  transition: width 200ms ease, left 200ms ease;
+}
+
+.cp-bar i.neg {
+  opacity: 0.55;
+}
+
+.cp-z0 .cp-bar {
+  color: #6ed08a;
+}
+
+.cp-z1 .cp-bar {
+  color: #6fb4e8;
+}
+
+.cp-z2 .cp-bar {
+  color: #e0bc6a;
+}
+
+.cp-note {
+  margin-top: 8px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--ink-dim);
+}
+
+/* 화면이 좁으면 상태판이 지도를 너무 가린다. */
+@media (max-width: 560px) {
+  #city-panel {
+    width: 168px;
+    padding: 8px 10px;
+  }
+
+  .cp-money {
+    font-size: 16px;
+  }
+}

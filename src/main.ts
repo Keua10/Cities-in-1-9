@@ -21,7 +21,12 @@ import {
 import type { ChunkOverride } from './world/world';
 import type { CityDoc } from './net/types';
 import { loadTileAtlas } from './render/atlas';
+import { loadBuildingAtlas } from './render/buildingAtlas';
 import { WorldRenderer } from './render/worldRenderer';
+import { MacroSim } from './sim/macro';
+import { CATCHUP_TICKS_PER_FRAME, START_MONEY } from './sim/simConstants';
+import { TIER_NAMES, ZONE_NAMES } from './sim/buildings';
+import { CityPanel } from './ui/cityPanel';
 import { Hud } from './ui/hud';
 import { requireSession } from './ui/loginScreen';
 import { SaveBadge } from './ui/saveBadge';
@@ -78,7 +83,8 @@ async function boot(): Promise<void> {
   document.body.appendChild(app.canvas);
 
   const atlas = await loadTileAtlas();
-  const renderer = new WorldRenderer(world, atlas);
+  const buildingAtlas = await loadBuildingAtlas();
+  const renderer = new WorldRenderer(world, atlas, buildingAtlas);
   app.stage.addChild(renderer.root);
 
   const camera = new Camera();
@@ -109,8 +115,20 @@ async function boot(): Promise<void> {
   const hud = new Hud();
   let cursor: { tx: number; ty: number } | null = null;
 
-  // 5) 2단계 도구. 도로·지구 지정은 전부 여기를 지난다.
-  const tools = new Tools(world, renderer);
+  // 5) 3.1단계 매크로 시뮬레이션.
+  //    city.macro 객체를 그대로 넘긴다. 시뮬레이션이 그 자리에서 고치므로
+  //    SaveManager 가 따로 옮겨 담을 필요 없이 저장에 그대로 실린다.
+  const sim = new MacroSim(
+    world,
+    city?.macro ?? { money: START_MONEY, population: 0, tick: 0, tickedAt: Date.now() },
+  );
+  sim.onMacroChange = () => saver.noteMacroChange();
+  sim.primeCatchup(Date.now());
+
+  const cityPanel = new CityPanel();
+
+  // 6) 2단계 도구. 도로·지구 지정은 전부 여기를 지난다.
+  const tools = new Tools(world, renderer, sim);
 
   attachInput(app.canvas, camera, {
     onTap: (wx, wy) => {
@@ -161,12 +179,17 @@ async function boot(): Promise<void> {
 
   app.ticker.add((ticker) => {
     const now = performance.now();
+    sim.update(ticker.deltaMS, CATCHUP_TICKS_PER_FRAME);
     camera.update(ticker.deltaMS);
     camera.applyTo(renderer.root);
     renderer.update(camera, now);
     renderer.flush();
 
     const cursorBuild = cursor ? world.getBuild(cursor.tx, cursor.ty) : null;
+    const here = cursor ? world.buildingCovering(cursor.tx, cursor.ty) : null;
+    const occupancy = cursor ? sim.occupancyAt(cursor.tx, cursor.ty) : null;
+
+    cityPanel.update(now, sim);
 
     hud.update(now, {
       fps: ticker.FPS,
@@ -184,6 +207,13 @@ async function boot(): Promise<void> {
       chunk: cursor
         ? { cx: chunkIndexOf(cursor.tx), cy: chunkIndexOf(cursor.ty) }
         : null,
+      building: here
+        ? `${ZONE_NAMES[here.zone]} ${here.level}단계 (${TIER_NAMES[here.level - 1]}) · ` +
+          `${occupancy === null || occupancy <= 0 ? '공실' : `입주 ${Math.round(occupancy * 100)}%`} · ` +
+          `${sim.day - here.born}일 됨`
+        : null,
+      visibleBuildings: renderer.stats.visibleBuildings,
+      parcels: world.parcelCount(),
       visibleChunks: renderer.stats.visibleChunks,
       loadedMeshes: renderer.stats.loadedMeshes,
       placeholderArt: atlas.placeholder,

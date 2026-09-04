@@ -11,7 +11,7 @@ import {
   MAX_HEIGHT,
   WALL_ART,
 } from '../core/constants';
-import { TERRAIN_COLORS, TERRAIN_COUNT } from '../world/terrain';
+import { Terrain, TERRAIN_COLORS, TERRAIN_COUNT } from '../world/terrain';
 
 export const ATLAS_URL = 'sprites/terrain.png';
 
@@ -99,6 +99,7 @@ export async function loadTileAtlas(): Promise<TileAtlas> {
   if (!ctx) throw new Error('2D 캔버스를 만들 수 없습니다');
   ctx.imageSmoothingEnabled = false;
   ctx.drawImage(source, 0, 0);
+  drawIsometricTerrainDetails(ctx);
   drawShadeCells(ctx);
   drawRoadCells(ctx);
   drawZoneCells(ctx);
@@ -176,6 +177,103 @@ function cellOrigin(index: number): { ox: number; oy: number } {
     ox: (index % ATLAS_COLUMNS) * ATLAS_CELL_W + ATLAS_PAD,
     oy: Math.floor(index / ATLAS_COLUMNS) * ATLAS_CELL_H + ATLAS_PAD,
   };
+}
+
+/**
+ * 2:1 아이소메트릭 표면 결.
+ *
+ * 화면 축 기준 정사각형 픽셀 블록을 반복하면 타일이 체크무늬처럼 보인다.
+ * 이 함수는 원본 지형색과 다이아몬드 외곽을 그대로 두고, 가로 2px : 세로 1px인
+ * 두 아이소 축을 따라가는 짧고 낮은 대비의 결만 더한다.
+ */
+function drawIsometricTerrainDetails(ctx: CanvasRenderingContext2D): void {
+  for (let terrain = 0; terrain < TERRAIN_COUNT; terrain++) {
+    const { ox, oy } = cellOrigin(terrain);
+    ctx.save();
+    diamondPath(ctx, ox, oy);
+    ctx.clip();
+
+    switch (terrain) {
+      case Terrain.WaterDeep:
+        drawIsoSegment(ctx, ox + 18, oy + 9, 6, 1, 'rgba(190,232,239,0.20)');
+        drawIsoSegment(ctx, ox + 46, oy + 18, 5, -1, 'rgba(18,80,105,0.22)');
+        break;
+      case Terrain.WaterShallow:
+        drawIsoSegment(ctx, ox + 20, oy + 10, 5, 1, 'rgba(229,247,236,0.24)');
+        drawIsoSegment(ctx, ox + 48, oy + 19, 4, -1, 'rgba(35,111,125,0.20)');
+        break;
+      case Terrain.Sand:
+        drawIsoDiamond(ctx, ox + 22, oy + 12, 'rgba(255,240,183,0.34)');
+        drawIsoDiamond(ctx, ox + 43, oy + 19, 'rgba(142,112,64,0.22)');
+        break;
+      case Terrain.Grass:
+        drawIsoTuft(ctx, ox + 24, oy + 15, 'rgba(51,112,56,0.28)');
+        drawIsoSegment(ctx, ox + 38, oy + 20, 3, 1, 'rgba(190,211,102,0.18)');
+        break;
+      case Terrain.GrassDry:
+        drawIsoTuft(ctx, ox + 23, oy + 14, 'rgba(111,119,47,0.25)');
+        drawIsoSegment(ctx, ox + 43, oy + 20, 3, -1, 'rgba(231,218,119,0.20)');
+        break;
+      case Terrain.Dirt:
+        drawIsoSegment(ctx, ox + 20, oy + 12, 4, 1, 'rgba(91,62,39,0.24)');
+        drawIsoDiamond(ctx, ox + 43, oy + 20, 'rgba(224,187,126,0.20)');
+        break;
+      case Terrain.Rock:
+        drawIsoSegment(ctx, ox + 20, oy + 11, 5, 1, 'rgba(213,211,196,0.24)');
+        drawIsoSegment(ctx, ox + 44, oy + 15, 4, -1, 'rgba(61,67,69,0.28)');
+        drawIsoSegment(ctx, ox + 34, oy + 21, 3, 1, 'rgba(61,67,69,0.20)');
+        break;
+      case Terrain.Forest:
+        // 넓게 반복되는 기본 지형이라 한 타일에 작은 수관 결 두 개만 둔다.
+        drawIsoTuft(ctx, ox + 23, oy + 14, 'rgba(31,91,47,0.22)');
+        drawIsoTuft(ctx, ox + 43, oy + 20, 'rgba(143,181,83,0.16)');
+        break;
+    }
+
+    ctx.restore();
+  }
+}
+
+/** direction 1 = 오른쪽 아래, -1 = 왼쪽 아래. 한 스텝은 정확히 2:1이다. */
+function drawIsoSegment(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  steps: number,
+  direction: 1 | -1,
+  color: string,
+): void {
+  ctx.fillStyle = color;
+  for (let step = 0; step < steps; step++) {
+    ctx.fillRect(x + direction * step * 2, y + step, 2, 1);
+  }
+}
+
+/** 2:1 투영을 따르는 6x3 크기의 작은 지면 점. */
+function drawIsoDiamond(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  color: string,
+): void {
+  ctx.fillStyle = color;
+  ctx.fillRect(cx - 1, cy - 1, 2, 1);
+  ctx.fillRect(cx - 3, cy, 6, 1);
+  ctx.fillRect(cx - 1, cy + 1, 2, 1);
+}
+
+/** 정사각형 십자 대신 두 아이소 축으로 벌어지는 V자형 풀잎. */
+function drawIsoTuft(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  color: string,
+): void {
+  ctx.fillStyle = color;
+  ctx.fillRect(cx, cy - 2, 2, 1);
+  ctx.fillRect(cx - 2, cy - 1, 2, 1);
+  ctx.fillRect(cx + 2, cy - 1, 2, 1);
+  ctx.fillRect(cx, cy, 2, 1);
 }
 
 /**
