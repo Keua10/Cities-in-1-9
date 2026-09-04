@@ -11,7 +11,7 @@ import {
   MAX_HEIGHT,
   WALL_ART,
 } from '../core/constants';
-import { TERRAIN_COLORS, TERRAIN_COUNT } from '../world/terrain';
+import { Terrain, TERRAIN_COLORS, TERRAIN_COUNT } from '../world/terrain';
 
 export const ATLAS_URL = 'sprites/terrain.png';
 
@@ -99,6 +99,9 @@ export async function loadTileAtlas(): Promise<TileAtlas> {
   if (!ctx) throw new Error('2D 캔버스를 만들 수 없습니다');
   ctx.imageSmoothingEnabled = false;
   ctx.drawImage(source, 0, 0);
+  // 건물 원화가 4x4 실제 픽셀 블록으로 제작되어 있으므로 지형도 같은 시각
+  // 해상도로 다시 정리한다. 저장 데이터와 메시 구조는 건드리지 않는다.
+  drawTerrainPixelCells(ctx);
   drawShadeCells(ctx);
   drawRoadCells(ctx);
   drawZoneCells(ctx);
@@ -164,8 +167,16 @@ function drawShadeCells(ctx: CanvasRenderingContext2D): void {
     ctx.save();
     diamondPath(ctx, ox, oy);
     ctx.clip();
-    ctx.fillStyle = `rgba(255, 248, 224, ${(0.038 * h).toFixed(3)})`;
-    ctx.fillRect(ox, oy, TILE_W, TILE_H);
+    // 부드러운 그라데이션 대신 4px 디더를 써 건물과 같은 도트 밀도를 유지한다.
+    const stride = h < 4 ? ART_PIXEL * 4 : h < 7 ? ART_PIXEL * 3 : ART_PIXEL * 2;
+    ctx.fillStyle = `rgba(255, 244, 204, ${Math.min(0.22, 0.07 + h * 0.018).toFixed(3)})`;
+    for (let y = 0; y < TILE_H; y += ART_PIXEL) {
+      for (let x = 0; x < TILE_W; x += ART_PIXEL) {
+        if ((x + y + h * ART_PIXEL) % stride === 0) {
+          ctx.fillRect(ox + x, oy + y, ART_PIXEL, ART_PIXEL);
+        }
+      }
+    }
     ctx.restore();
   }
 }
@@ -176,6 +187,114 @@ function cellOrigin(index: number): { ox: number; oy: number } {
     ox: (index % ATLAS_COLUMNS) * ATLAS_CELL_W + ATLAS_PAD,
     oy: Math.floor(index / ATLAS_COLUMNS) * ATLAS_CELL_H + ATLAS_PAD,
   };
+}
+
+/** 건물 원화의 실질 픽셀 크기. 지형·도로·지구도 이 4px 격자에 맞춘다. */
+const ART_PIXEL = 4;
+
+interface TerrainPixelStyle {
+  base: string;
+  light: string;
+  dark: string;
+}
+
+const TERRAIN_PIXEL_STYLE: readonly TerrainPixelStyle[] = [
+  { base: '#2f7895', light: '#4b9ab0', dark: '#22576f' }, // 깊은 물
+  { base: '#58aab4', light: '#79c4c4', dark: '#397f91' }, // 얕은 물
+  { base: '#d9c17f', light: '#ead699', dark: '#b89d62' }, // 모래
+  { base: '#79a851', light: '#99bf62', dark: '#4f7d3d' }, // 잔디
+  { base: '#9daa51', light: '#bdc264', dark: '#747f3b' }, // 마른 잔디
+  { base: '#a17b50', light: '#be9663', dark: '#75573d' }, // 흙
+  { base: '#777878', light: '#999993', dark: '#51565a' }, // 바위
+  { base: '#487b43', light: '#639653', dark: '#315c36' }, // 숲
+];
+
+/**
+ * 지형 원화의 팔레트와 표면 결을 4px 도트 기준으로 통일한다.
+ * 타일별 무작위 점을 뿌리지 않고 재질마다 반복 가능한 작은 무늬만 써서,
+ * 멀리서 노이즈처럼 보이거나 규칙적인 바둑판이 되는 문제를 줄인다.
+ */
+function drawTerrainPixelCells(ctx: CanvasRenderingContext2D): void {
+  for (let terrain = 0; terrain < TERRAIN_COUNT; terrain++) {
+    const { ox, oy } = cellOrigin(terrain);
+    const style = TERRAIN_PIXEL_STYLE[terrain];
+    ctx.save();
+    diamondPath(ctx, ox, oy);
+    ctx.clip();
+    ctx.fillStyle = style.base;
+    ctx.fillRect(ox, oy, TILE_W, TILE_H);
+
+    if (terrain === Terrain.WaterDeep || terrain === Terrain.WaterShallow) {
+      // 수평 물결. 두 물 타일의 위치를 어긋나게 해 해안 경계가 한 줄로 붙지 않는다.
+      const shift = terrain === Terrain.WaterDeep ? 0 : ART_PIXEL;
+      pixelRect(ctx, ox + 8 + shift, oy + 8, 16, ART_PIXEL, style.light);
+      pixelRect(ctx, ox + 36 - shift, oy + 16, 20, ART_PIXEL, style.dark);
+      pixelRect(ctx, ox + 20 + shift, oy + 24, 12, ART_PIXEL, style.light);
+    } else if (terrain === Terrain.Sand) {
+      pixelRect(ctx, ox + 16, oy + 12, ART_PIXEL, ART_PIXEL, style.dark);
+      pixelRect(ctx, ox + 40, oy + 12, ART_PIXEL * 2, ART_PIXEL, style.light);
+      pixelRect(ctx, ox + 28, oy + 24, ART_PIXEL, ART_PIXEL, style.dark);
+    } else if (terrain === Terrain.Grass || terrain === Terrain.GrassDry) {
+      drawPixelTuft(ctx, ox + 20, oy + 12, style.light, style.dark);
+      drawPixelTuft(ctx, ox + 44, oy + 20, style.light, style.dark);
+      pixelRect(ctx, ox + 32, oy + 24, ART_PIXEL, ART_PIXEL, style.dark);
+    } else if (terrain === Terrain.Dirt) {
+      pixelRect(ctx, ox + 16, oy + 12, ART_PIXEL * 2, ART_PIXEL, style.dark);
+      pixelRect(ctx, ox + 40, oy + 20, ART_PIXEL, ART_PIXEL, style.light);
+      pixelRect(ctx, ox + 28, oy + 24, ART_PIXEL * 2, ART_PIXEL, style.dark);
+    } else if (terrain === Terrain.Rock) {
+      drawPixelLine(ctx, ox + 16, oy + 12, ox + 28, oy + 20, style.dark);
+      drawPixelLine(ctx, ox + 44, oy + 8, ox + 36, oy + 20, style.light);
+      pixelRect(ctx, ox + 48, oy + 20, ART_PIXEL * 2, ART_PIXEL, style.dark);
+    } else {
+      // 숲은 작은 수관 덩어리처럼 읽히게, 잔디보다 명암 덩어리를 크게 둔다.
+      pixelRect(ctx, ox + 16, oy + 8, ART_PIXEL * 3, ART_PIXEL * 2, style.dark);
+      pixelRect(ctx, ox + 20, oy + 8, ART_PIXEL, ART_PIXEL, style.light);
+      pixelRect(ctx, ox + 40, oy + 16, ART_PIXEL * 3, ART_PIXEL * 2, style.dark);
+      pixelRect(ctx, ox + 44, oy + 16, ART_PIXEL, ART_PIXEL, style.light);
+    }
+    ctx.restore();
+
+    // 건물 외곽선과 같은 굵기의 계단식 가장자리로 타일과 건물을 한 화면에 묶는다.
+    const edge = 'rgba(34, 38, 31, 0.30)';
+    drawPixelLine(ctx, ox + TILE_HW, oy, ox + TILE_W - ART_PIXEL, oy + TILE_HH, edge);
+    drawPixelLine(ctx, ox + TILE_W - ART_PIXEL, oy + TILE_HH, ox + TILE_HW, oy + TILE_H - ART_PIXEL, edge);
+    drawPixelLine(ctx, ox + TILE_HW, oy + TILE_H - ART_PIXEL, ox, oy + TILE_HH, edge);
+    drawPixelLine(ctx, ox, oy + TILE_HH, ox + TILE_HW, oy, edge);
+  }
+
+  drawPixelWallCells(ctx);
+}
+
+function drawPixelTuft(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  light: string,
+  dark: string,
+): void {
+  pixelRect(ctx, x, y, ART_PIXEL, ART_PIXEL * 2, dark);
+  pixelRect(ctx, x - ART_PIXEL, y, ART_PIXEL, ART_PIXEL, light);
+  pixelRect(ctx, x + ART_PIXEL, y, ART_PIXEL, ART_PIXEL, light);
+}
+
+function drawPixelWallCells(ctx: CanvasRenderingContext2D): void {
+  const styles: readonly TerrainPixelStyle[] = [
+    { base: '#8d6742', light: '#ad8152', dark: '#60462f' },
+    { base: '#a0784d', light: '#c0925c', dark: '#745337' },
+    { base: '#60656a', light: '#85888a', dark: '#42474c' },
+    { base: '#74787b', light: '#999b98', dark: '#505459' },
+  ];
+  const cells = [WallCell.SoilLeft, WallCell.SoilRight, WallCell.RockLeft, WallCell.RockRight];
+  for (let n = 0; n < cells.length; n++) {
+    const { ox, oy } = cellOrigin(cells[n]);
+    const style = styles[n];
+    pixelRect(ctx, ox, oy, WALL_ART, WALL_ART, style.base);
+    for (let y = ART_PIXEL; y < WALL_ART; y += ART_PIXEL * 2) {
+      const shift = n % 2 === 0 ? (y / 2) % (ART_PIXEL * 2) : ART_PIXEL;
+      pixelRect(ctx, ox + shift, oy + y, WALL_ART - shift, ART_PIXEL, y % 16 === 4 ? style.light : style.dark);
+    }
+  }
 }
 
 /**
@@ -220,44 +339,38 @@ function drawRoadCells(ctx: CanvasRenderingContext2D): void {
     ctx.clip();
 
     // 노면
-    ctx.fillStyle = '#3b4046';
+    ctx.fillStyle = '#363b40';
     ctx.fillRect(ox, oy, TILE_W, TILE_H);
-    const shade = ctx.createLinearGradient(ox, oy, ox, oy + TILE_H);
-    shade.addColorStop(0, 'rgba(255,255,255,0.06)');
-    shade.addColorStop(1, 'rgba(0,0,0,0.18)');
-    ctx.fillStyle = shade;
-    ctx.fillRect(ox, oy, TILE_W, TILE_H);
+    // 아스팔트 결도 건물과 같은 4px 블록만 쓴다.
+    pixelRect(ctx, ox + 12, oy + 8, ART_PIXEL, ART_PIXEL, '#41474d');
+    pixelRect(ctx, ox + 44, oy + 20, ART_PIXEL * 2, ART_PIXEL, '#2d3237');
+    pixelRect(ctx, ox + 28, oy + 24, ART_PIXEL, ART_PIXEL, '#484d52');
 
     // 연결되지 않은 변에는 연석을 그린다. 도로가 어디서 끊겼는지 바로 보인다.
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = '#8d9199';
     for (let d = 0; d < 4; d++) {
       if (mask & (1 << d)) continue;
       const e = EDGE_LINE[d];
-      ctx.beginPath();
-      ctx.moveTo(ox + e[0], oy + e[1]);
-      ctx.lineTo(ox + e[2], oy + e[3]);
-      ctx.stroke();
+      drawPixelLine(ctx, ox + e[0], oy + e[1], ox + e[2], oy + e[3], '#a0a196');
     }
 
     if (mask === 0) {
       // 외톨이 도로. 가운데에 점만 찍는다.
-      ctx.fillStyle = 'rgba(226,214,140,0.7)';
-      ctx.fillRect(ox + TILE_HW - 2, oy + TILE_HH - 1, 4, 2);
+      pixelRect(ctx, ox + TILE_HW - 2, oy + TILE_HH - 2, ART_PIXEL, ART_PIXEL, '#d8c878');
     } else {
       // 중앙선. 연결된 방향으로만 뻗는다.
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = 'rgba(226,214,140,0.75)';
-      ctx.setLineDash([4, 3]);
       for (let d = 0; d < 4; d++) {
         if (!(mask & (1 << d))) continue;
         const m = EDGE_MID[d];
-        ctx.beginPath();
-        ctx.moveTo(ox + TILE_HW, oy + TILE_HH);
-        ctx.lineTo(ox + m[0], oy + m[1]);
-        ctx.stroke();
+        drawPixelLine(
+          ctx,
+          ox + TILE_HW,
+          oy + TILE_HH,
+          ox + m[0],
+          oy + m[1],
+          '#d8c878',
+          true,
+        );
       }
-      ctx.setLineDash([]);
     }
 
     ctx.restore();
@@ -280,36 +393,67 @@ function drawZoneCells(ctx: CanvasRenderingContext2D): void {
       diamondPath(ctx, ox, oy);
       ctx.clip();
 
-      ctx.fillStyle = ZONE_COLORS[zone];
+      const pixelZoneColors = ['#588557', '#4f748d', '#897647'];
+      ctx.fillStyle = pixelZoneColors[zone];
       ctx.fillRect(ox, oy, TILE_W, TILE_H);
 
       if (!hasRoad) {
         // 아직 못 짓는 땅. 회색을 덮어 채도를 떨어뜨린다.
-        ctx.fillStyle = 'rgba(24,28,32,0.5)';
+        ctx.fillStyle = 'rgba(24,28,32,0.48)';
         ctx.fillRect(ox, oy, TILE_W, TILE_H);
       }
 
-      const shade = ctx.createLinearGradient(ox, oy, ox, oy + TILE_H);
-      shade.addColorStop(0, 'rgba(255,255,255,0.10)');
-      shade.addColorStop(1, 'rgba(0,0,0,0.20)');
-      ctx.fillStyle = shade;
-      ctx.fillRect(ox, oy, TILE_W, TILE_H);
+      // 지구도 매끈한 오버레이가 아니라 4px 표식으로만 구분한다.
+      pixelRect(ctx, ox + 16, oy + 12, ART_PIXEL, ART_PIXEL, 'rgba(255,255,255,0.22)');
+      pixelRect(ctx, ox + 44, oy + 20, ART_PIXEL * 2, ART_PIXEL, 'rgba(0,0,0,0.18)');
 
       // 안쪽 점선 테두리 — 지구는 "구획" 이라는 신호
-      ctx.setLineDash([5, 4]);
-      ctx.lineWidth = 1;
-      ctx.strokeStyle = hasRoad ? 'rgba(255,255,255,0.75)' : 'rgba(255,255,255,0.32)';
-      ctx.beginPath();
-      ctx.moveTo(ox + TILE_HW, oy + 5);
-      ctx.lineTo(ox + TILE_W - 10, oy + TILE_HH);
-      ctx.lineTo(ox + TILE_HW, oy + TILE_H - 5);
-      ctx.lineTo(ox + 10, oy + TILE_HH);
-      ctx.closePath();
-      ctx.stroke();
-      ctx.setLineDash([]);
+      const border = hasRoad ? 'rgba(255,255,255,0.68)' : 'rgba(255,255,255,0.28)';
+      drawPixelLine(ctx, ox + TILE_HW, oy + 4, ox + TILE_W - 12, oy + TILE_HH, border, true);
+      drawPixelLine(ctx, ox + TILE_W - 12, oy + TILE_HH, ox + TILE_HW, oy + TILE_H - 8, border, true);
+      drawPixelLine(ctx, ox + TILE_HW, oy + TILE_H - 8, ox + 12, oy + TILE_HH, border, true);
+      drawPixelLine(ctx, ox + 12, oy + TILE_HH, ox + TILE_HW, oy + 4, border, true);
 
       ctx.restore();
     }
+  }
+}
+
+function pixelRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  color: string,
+): void {
+  ctx.fillStyle = color;
+  ctx.fillRect(x, y, width, height);
+}
+
+/** 4px 격자 위에서만 움직이는 계단식 선. dashed=true면 한 블록씩 건너뛴다. */
+function drawPixelLine(
+  ctx: CanvasRenderingContext2D,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  color: string,
+  dashed = false,
+): void {
+  const dx = x1 - x0;
+  const dy = y1 - y0;
+  const steps = Math.max(1, Math.ceil(Math.max(Math.abs(dx), Math.abs(dy)) / ART_PIXEL));
+  let lastX = Number.NaN;
+  let lastY = Number.NaN;
+  for (let step = 0; step <= steps; step++) {
+    if (dashed && step % 2 === 1) continue;
+    const x = Math.round((x0 + (dx * step) / steps) / ART_PIXEL) * ART_PIXEL;
+    const y = Math.round((y0 + (dy * step) / steps) / ART_PIXEL) * ART_PIXEL;
+    if (x === lastX && y === lastY) continue;
+    pixelRect(ctx, x, y, ART_PIXEL, ART_PIXEL, color);
+    lastX = x;
+    lastY = y;
   }
 }
 
