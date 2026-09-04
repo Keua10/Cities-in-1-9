@@ -42,17 +42,9 @@ export const STATS_INTERVAL = 3;
  */
 export const PROSPERITY_FULL = 4_000;
 
-/** 작은 도시와 큰 도시의 계층별 건물 비중. 도시가 커질수록 상위 등급으로 옮겨간다. */
-export const TIER_SHARE_SMALL_R: readonly number[] = [0.7, 0.25, 0.05];
-export const TIER_SHARE_LARGE_R: readonly number[] = [0.1, 0.45, 0.45];
-export const TIER_SHARE_SMALL_C: readonly number[] = [0.65, 0.27, 0.08];
-export const TIER_SHARE_LARGE_C: readonly number[] = [0.3, 0.4, 0.3];
-export const TIER_SHARE_SMALL_I: readonly number[] = [0.55, 0.3, 0.15];
-export const TIER_SHARE_LARGE_I: readonly number[] = [0.2, 0.3, 0.5];
-
 /* ---------------- 돈 ---------------- */
 
-export const START_MONEY = 80_000;
+export const START_MONEY = 60_000;
 
 /** 건설비. 철거는 공짜다(학생이 실수를 되돌리는 걸 돈으로 막지 않는다). */
 export const COST_ROAD = 12;
@@ -84,7 +76,7 @@ export const SEED_DEMAND_I = 0.6;
 /** 일자리 1개당 필요한 거주자 수. 1보다 크면 통근 여유가 생긴다. */
 export const RESIDENTS_PER_JOB = 1.35;
 /** 거주자 1명이 필요로 하는 상업 일자리. */
-export const SHOP_JOBS_PER_RESIDENT = 0.6;
+export const SHOP_JOBS_PER_RESIDENT = 0.18;
 /** 상업 일자리 1개를 받치는 데 필요한 공업 일자리. */
 export const INDUSTRY_PER_SHOP = 0.7;
 /** 외부로 파는 몫. 도시가 작아도 공업이 굴러가게 하는 바닥값. */
@@ -134,9 +126,6 @@ export const OCCUPANCY_HEALTHY = 0.72;
  */
 export const SATISFACTION_FLOOR: readonly number[] = [0.25, 0.45, 0.62];
 
-/** 입주율이 목표치로 따라가는 속도(틱당). */
-export const OCCUPANCY_RATE = 0.04;
-
 /**
  * 통근 만족도. 직장까지의 도로 거리(타일)가 이 값을 넘어가면 점수가 0 이 된다.
  * 도로가 아예 안 닿으면 통근 점수는 0 이다.
@@ -149,6 +138,9 @@ export const INDUSTRY_NUISANCE_RADIUS = 6;
 export const INDUSTRY_NUISANCE_MAX = 0.35;
 
 /* ---------------- 성장 / 재건축 ---------------- */
+
+/** 재개발 포화 판정 단위. 자기 섹터와 인접 8개 섹터를 함께 확인한다. */
+export const REDEVELOPMENT_SECTOR_SIZE = 16;
 
 /** 매 틱 한 청크에서 새로 지을 수 있는 건물 수 상한. */
 export const MAX_BUILDS_PER_TICK = 2;

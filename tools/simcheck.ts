@@ -10,12 +10,64 @@
  * 실행:  node tools/simcheck.mjs   (esbuild 로 번들한 뒤)
  */
 import { CHUNK_SIZE } from '../src/core/constants';
+import { growParcel, sectorNeighborhoodHasEmptyLot } from '../src/sim/growth';
 import { MacroSim } from '../src/sim/macro';
-import { START_MONEY, TICKS_PER_DAY } from '../src/sim/simConstants';
+import { RoadField } from '../src/sim/roadGraph';
+import {
+  REDEVELOPMENT_SECTOR_SIZE,
+  START_MONEY,
+  TICKS_PER_DAY,
+} from '../src/sim/simConstants';
 import { isAnchor, levelOfCode, zoneOfCode } from '../src/sim/buildings';
 import { Build } from '../src/world/build';
 import { World } from '../src/world/world';
 import { isWater } from '../src/world/terrain';
+
+// 섹터 경계의 바로 옆 빈 필지도 3x3 섹터 검색에 잡히는지 먼저 확인한다.
+const sectorProbe = new World(0);
+sectorProbe.setBuild(REDEVELOPMENT_SECTOR_SIZE, 0, Build.ZoneR);
+if (!sectorNeighborhoodHasEmptyLot(sectorProbe, REDEVELOPMENT_SECTOR_SIZE - 1, 0)) {
+  throw new Error('인접 섹터의 빈 필지를 찾지 못했습니다');
+}
+sectorProbe.placeBuilding(REDEVELOPMENT_SECTOR_SIZE, 0, 0, 1, 0);
+if (sectorNeighborhoodHasEmptyLot(sectorProbe, REDEVELOPMENT_SECTOR_SIZE - 1, 0)) {
+  throw new Error('건물이 들어선 필지를 빈 필지로 잘못 판정했습니다');
+}
+console.log('16x16 섹터 + 인접 8섹터 빈 필지 판정 통과');
+
+// 꽉 찬 섹터에서는 footprint 전체가 조건을 만족할 때만 L1 묶음이 L3로 올라간다.
+const redevelopmentWorld = new World(0);
+for (let ty = 0; ty < REDEVELOPMENT_SECTOR_SIZE; ty++) {
+  for (let tx = 0; tx < REDEVELOPMENT_SECTOR_SIZE; tx++) {
+    redevelopmentWorld.setBuild(tx, ty, Build.ZoneR);
+    redevelopmentWorld.placeBuilding(tx, ty, 0, 1, 0);
+  }
+}
+for (let ty = 0; ty < 3; ty++) {
+  for (let tx = 0; tx < 3; tx++) redevelopmentWorld.setHeight(tx, ty, 0);
+}
+redevelopmentWorld.setBuild(-1, 0, Build.Road);
+const redevelopmentField = new RoadField();
+redevelopmentField.rebuild(redevelopmentWorld);
+const redevelopmentParcel = redevelopmentWorld.peekParcel(0, 0);
+if (!redevelopmentParcel) throw new Error('재개발 검증 필지가 없습니다');
+const redevelopment = growParcel(redevelopmentWorld, redevelopmentParcel, {
+  demand: [
+    [-1, -1, 1],
+    [-1, -1, -1],
+    [-1, -1, -1],
+  ],
+  field: redevelopmentField,
+  today: 31,
+  tick: 1,
+  money: 100_000,
+});
+if (redevelopment.built !== 1 || redevelopment.demolished !== 9) {
+  throw new Error(
+    `꽉 찬 섹터의 L1→L3 재개발 실패: 신축 ${redevelopment.built}, 철거 ${redevelopment.demolished}`,
+  );
+}
+console.log('꽉 찬 섹터의 footprint 전체 L1→L3 상향 재개발 통과');
 
 const world = new World(0);
 const macro = { money: START_MONEY, population: 0, tick: 0, tickedAt: Date.now() };
@@ -94,7 +146,6 @@ console.log(
     ` · 재건축 철거 ${rebuildDemolitions}채 · 최종 입주율 ${occupancyPct}%`,
 );
 if (minimumMoney <= 0) throw new Error('도시 자금이 0원 이하로 떨어졌습니다');
-if (rebuildDemolitions === 0) throw new Error('재건축이 한 번도 일어나지 않았습니다');
 if (sim.stats.occupancy < 0.7 || sim.stats.occupancy > 0.94) {
   throw new Error(`최종 입주율이 목표 범위를 크게 벗어났습니다: ${occupancyPct}%`);
 }

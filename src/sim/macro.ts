@@ -1,4 +1,5 @@
 import { CHUNK_SIZE } from '../core/constants';
+import { chunkIndexOf, localIndexOf } from '../core/iso';
 import type { MacroState } from '../net/types';
 import type { Parcel, World } from '../world/world';
 import {
@@ -27,7 +28,6 @@ import {
   MAX_CATCHUP_TICKS,
   MS_PER_TICK,
   OCCUPANCY_HEALTHY,
-  OCCUPANCY_RATE,
   OFFLINE_SPEED,
   PROSPERITY_FULL,
   RESIDENTS_PER_JOB,
@@ -42,12 +42,6 @@ import {
   STATS_INTERVAL,
   TAX_PER_JOB,
   TAX_PER_RESIDENT,
-  TIER_SHARE_LARGE_C,
-  TIER_SHARE_LARGE_I,
-  TIER_SHARE_LARGE_R,
-  TIER_SHARE_SMALL_C,
-  TIER_SHARE_SMALL_I,
-  TIER_SHARE_SMALL_R,
   TICKS_PER_DAY,
   UPKEEP_ROAD_PER_DAY,
 } from './simConstants';
@@ -134,7 +128,7 @@ export class MacroSim {
   /**
    * 건물별 입주율(0~255). 저장하지 않는다.
    * 매 틱 바뀌는 값이라 저장하면 도시의 모든 청크가 매 틱 저장 대상이 된다.
-   * 만족도와 도로망에서 언제든 다시 수렴하므로 재접속 때 잠깐 채워지면 그만이다.
+   * 현재 만족도와 도로망에서 바로 다시 계산하므로 저장 이력에 의존하지 않는다.
    */
   private occ = new Map<string, Uint8Array>();
   /** 청크별 공업 밀도. 주거 만족도를 깎는 값. evaluate 에서 갱신한다. */
@@ -162,6 +156,21 @@ export class MacroSim {
     return this.macro.money;
   }
 
+  /**
+   * 해당 타일을 덮는 건물의 현재 입주율. 물리 건물과 달리 저장하지 않는 파생값이다.
+   * 건물이 없으면 null, 건물은 있지만 만족도 기준 미달이면 0을 돌려준다.
+   */
+  occupancyAt(tx: number, ty: number): number | null {
+    const info = this.world.buildingCovering(tx, ty);
+    if (!info) return null;
+    const p = this.world.peekParcel(chunkIndexOf(info.tx), chunkIndexOf(info.ty));
+    if (!p) return 0;
+    const values = this.occ.get(p.key);
+    if (!values) return 0;
+    const i = localIndexOf(info.ty) * CHUNK_SIZE + localIndexOf(info.tx);
+    return values[i] / 255;
+  }
+
   /** 시간대(0~23). 3.2단계에서 출퇴근 러시를 만들 때 쓴다. */
   get hourOfDay(): number {
     return this.macro.tick % TICKS_PER_DAY;
@@ -179,7 +188,7 @@ export class MacroSim {
     this.catchupLeft = Math.min(ticks, MAX_CATCHUP_TICKS);
     this.macro.tickedAt = nowMs;
     // 불러온 직후에는 통계가 비어 있다. 한 번 채워야 수요가 0 에서 시작하지 않는다.
-    this.evaluate();
+    this.evaluate(true);
     this.roadField.rebuild(this.world);
   }
 
@@ -209,7 +218,9 @@ export class MacroSim {
   private step(): void {
     this.macro.tick++;
 
-    if (this.macro.tick % STATS_INTERVAL === 0) this.evaluate();
+    // occupancy/satisfaction은 저장하지 않는 파생값이므로 매 틱 다시 계산한다.
+    // 수요만 기존 STATS_INTERVAL 주기로 갱신해 성장 속도는 확정 설계를 유지한다.
+    this.evaluate(this.macro.tick % STATS_INTERVAL === 0);
     // 도로가 바뀌면 개발 가능 범위가 바뀐다. 하루를 기다리면 학생이 도로를 깔고도
     // 한참 아무 일이 없어 보이므로, 바뀐 걸 봤을 때는 몇 틱 안에 다시 만든다.
     // 최소 간격 전에 들어온 신호도 pending 에 남겨 다음 틱에 다시 확인한다.
@@ -266,7 +277,7 @@ export class MacroSim {
    *
    * STATS_INTERVAL 틱에 한 번만 돌기 때문에 매 프레임 부담이 되지 않는다.
    */
-  private evaluate(): void {
+  private evaluate(updateDemand: boolean): void {
     const parcels = this.world.developedParcels();
     this.updateNuisance(parcels);
 
@@ -310,9 +321,9 @@ export class MacroSim {
           const target =
             sat <= floor ? 0 : Math.min(1, (sat - floor) / Math.max(0.05, 1 - floor));
 
-          const cur = occArr[i] / 255;
-          const next = cur + (target - cur) * OCCUPANCY_RATE;
-          occArr[i] = Math.round(Math.max(0, Math.min(1, next)) * 255);
+          // 입주율은 저장된 과거값에 의존하지 않는 완전한 파생값이다. 같은 물리 상태,
+          // 도로망, 수요 입력이면 재접속·오프라인 계산에서도 항상 같은 결과가 나온다.
+          occArr[i] = Math.round(Math.max(0, Math.min(1, target)) * 255);
 
           const cap = capacityOf(zone, level);
           const filled = cap * (occArr[i] / 255);
@@ -344,7 +355,7 @@ export class MacroSim {
     };
     this.macro.population = Math.round(population);
 
-    this.updateDemand(tiers, population, this.stats.occupancy);
+    if (updateDemand) this.updateDemand(tiers, population, this.stats.occupancy);
   }
 
   /**
@@ -400,9 +411,9 @@ export class MacroSim {
     occupancy: number,
   ): void {
     const p = Math.min(1, population / PROSPERITY_FULL);
-    const shareLive = mixShares(TIER_SHARE_SMALL_R, TIER_SHARE_LARGE_R, p);
-    const shareWork = mixShares(TIER_SHARE_SMALL_C, TIER_SHARE_LARGE_C, p);
-    const shareInd = mixShares(TIER_SHARE_SMALL_I, TIER_SHARE_LARGE_I, p);
+    const shareLive = [0.7 - 0.45 * p, 0.25 + 0.2 * p, 0.05 + 0.25 * p];
+    const shareWork = [0.65 - 0.35 * p, 0.27 + 0.13 * p, 0.08 + 0.22 * p];
+    const shareInd = [0.55 - 0.2 * p, 0.3, 0.15 + 0.2 * p];
 
     let capC = 0;
     let capI = 0;
@@ -479,14 +490,6 @@ export class MacroSim {
     this.macro.money -= amount;
     return true;
   }
-}
-
-function mixShares(
-  small: readonly number[],
-  large: readonly number[],
-  prosperity: number,
-): number[] {
-  return small.map((v, i) => v + (large[i] - v) * prosperity);
 }
 
 /**

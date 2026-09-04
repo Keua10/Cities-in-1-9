@@ -22,6 +22,7 @@ import {
   REBUILD_DEMAND_GAP,
   REBUILD_MIN_AGE_DAYS,
   REBUILD_SCAN_BUDGET,
+  REDEVELOPMENT_SECTOR_SIZE,
 } from './simConstants';
 
 /**
@@ -32,14 +33,9 @@ import {
  *   신축   빈 부지가 남아 있는 동안. 계층별 수요 비율로 레벨을 뽑고,
  *          그 레벨의 부지(1x1 / 2x2 / 3x3)가 안 나오면 한 단계씩 낮춘다.
  *
- *   재건축 **그 청크에 빈 부지가 하나도 없을 때만.** 충분히 오래된 건물들이
- *          모여 있는 자리를 통째로 헐고 더 높은 레벨 하나를 세운다.
+ *   재건축 **16x16 자기 섹터와 인접 8개 섹터에 빈 부지가 없을 때만.**
+ *          자기 섹터에서 충분히 오래된 건물들을 찾아 더 높은 레벨 하나를 세운다.
  *          항상 상향이다. 수요가 식으면 건물은 남고 사람만 빠진다(공실).
- *
- * 판정 범위를 청크(64x64)로 잡은 이유:
- *   더 좁게 잡으면 2단계 건물 여덟 채 남짓한 범위에서 재건축이 돌아 도시가
- *   국소적으로만 촘촘해진다. 청크 단위면 "이 구역이 꽉 찼다" 는 감각이 실제
- *   도시 규모와 맞고, 나중에 4x4 이상의 큰 건물이 들어와도 범위가 남는다.
  */
 
 export interface GrowthContext {
@@ -162,6 +158,35 @@ export function rebuildFits(
   return reachable;
 }
 
+/**
+ * 후보가 속한 16x16 섹터와 인접 8개 섹터에 빈 필지가 하나라도 있는지 본다.
+ *
+ * 빈 필지는 "구역으로 지정됐지만 건물이 없는 물리 타일"이다. 도로 접근성은
+ * 여기서 보지 않는다. 도로 비인접 L1 생성 규칙은 이번 단계의 변경 범위가 아니며,
+ * 신축 가능 여부와 재개발 포화 조건을 섞으면 같은 입력의 판정이 달라질 수 있다.
+ */
+export function sectorNeighborhoodHasEmptyLot(world: World, tx: number, ty: number): boolean {
+  const sectorX = Math.floor(tx / REDEVELOPMENT_SECTOR_SIZE);
+  const sectorY = Math.floor(ty / REDEVELOPMENT_SECTOR_SIZE);
+
+  for (let sy = sectorY - 1; sy <= sectorY + 1; sy++) {
+    for (let sx = sectorX - 1; sx <= sectorX + 1; sx++) {
+      const startX = sx * REDEVELOPMENT_SECTOR_SIZE;
+      const startY = sy * REDEVELOPMENT_SECTOR_SIZE;
+      for (let dy = 0; dy < REDEVELOPMENT_SECTOR_SIZE; dy++) {
+        for (let dx = 0; dx < REDEVELOPMENT_SECTOR_SIZE; dx++) {
+          const x = startX + dx;
+          const y = startY + dy;
+          if (zoneOfBuild(world.sampleBuild(x, y)) >= 0 && world.getBld(x, y) === BLD_NONE) {
+            return true;
+          }
+        }
+      }
+    }
+  }
+  return false;
+}
+
 /* ---------------------------------------------------------------- *
  * 레벨 뽑기
  * ---------------------------------------------------------------- */
@@ -224,9 +249,12 @@ export function growParcel(
   ctx: GrowthContext,
 ): GrowthResult {
   if (!p.build) return EMPTY_RESULT;
-  // 빈 부지가 남아 있고 그중 지을 수 있는 칸이 하나라도 있으면 신축이 우선이다.
-  // 멀쩡한 건물을 허무는 건 정말로 더 지을 자리가 없을 때뿐이다.
-  if (p.emptyPlots > 0 && !p.saturated) return buildPass(world, p, ctx);
+  // 신축을 먼저 시도한다. 그 뒤에도 현재 후보 섹터 주변 9개 섹터가 꽉 찬
+  // 경우에만 재개발 패스가 실제 후보를 처리한다.
+  if (p.emptyPlots > 0) {
+    const result = buildPass(world, p, ctx);
+    if (result.built > 0 || result.spent > 0) return result;
+  }
   return rebuildPass(world, p, ctx);
 }
 
@@ -242,14 +270,6 @@ function buildPass(world: World, p: Parcel, ctx: GrowthContext): GrowthResult {
     const i = p.scanCursor;
     p.scanCursor = (p.scanCursor + 1) % CHUNK_TILES;
     scanned++;
-    // 커서가 한 바퀴 돌았다. 그동안 지을 수 있는 칸을 한 번도 못 봤다면
-    // 이 청크는 포화다 — 남은 빈 칸은 도로가 안 닿거나 물가에 걸린 칸뿐이다.
-    if (p.scanCursor === 0) {
-      p.saturated = !p.sawBuildable;
-      p.sawBuildable = false;
-      if (p.saturated) break;
-    }
-
     const zone = zoneOfBuild(p.build![i]);
     if (zone < 0) continue;
     if (p.bld && p.bld[i] !== BLD_NONE) continue;
@@ -259,10 +279,7 @@ function buildPass(world: World, p: Parcel, ctx: GrowthContext): GrowthResult {
     const tx = baseX + lx;
     const ty = baseY + ly;
 
-    // 수요와 무관하게 "지을 수 있는 칸인가" 를 먼저 본다.
-    // 수요가 없어서 안 지은 것과 아예 못 짓는 칸을 구분해야 포화 판정이 맞는다.
     if (!plotFits(world, ctx.field, tx, ty, 1, zone)) continue;
-    p.sawBuildable = true;
 
     const roll = simRandom(WORLD_SEED, ctx.tick, tx, ty);
     let level = pickLevel(ctx.demand[zone], roll);
@@ -285,7 +302,7 @@ function buildPass(world: World, p: Parcel, ctx: GrowthContext): GrowthResult {
 }
 
 /**
- * 빈 부지가 하나도 없을 때: 오래된 건물을 헐고 더 높은 등급으로 올린다.
+ * 후보가 속한 섹터 주변 9개 섹터에 빈 부지가 없을 때만 상향 재개발한다.
  *
  * 후보 우선순위는 "가장 오래된 것" 이다. 커서로 훑다가 조건에 맞는 자리를
  * 찾으면 그 자리에서 바로 처리한다. 정렬을 하지 않는 이유는 청크당 4096칸을
@@ -301,15 +318,12 @@ function rebuildPass(world: World, p: Parcel, ctx: GrowthContext): GrowthResult 
   let scanned = 0;
   const baseX = p.cx * CHUNK_SIZE;
   const baseY = p.cy * CHUNK_SIZE;
+  const sectorEmptyCache = new Map<string, boolean>();
 
   while (scanned < REBUILD_SCAN_BUDGET && built < MAX_REBUILDS_PER_TICK) {
     const i = p.scanCursor;
     p.scanCursor = (p.scanCursor + 1) % CHUNK_TILES;
     scanned++;
-    // 한 바퀴 돌 때마다 신축 가능성을 다시 열어준다. 그 사이 학생이 도로를
-    // 깔았을 수도 있고, 재건축으로 자리가 생겼을 수도 있다.
-    if (p.scanCursor === 0) p.saturated = false;
-
     const code = p.bld[i];
     if (!isAnchor(code)) continue;
 
@@ -321,6 +335,18 @@ function rebuildPass(world: World, p: Parcel, ctx: GrowthContext): GrowthResult 
     const ly = (i - lx) / CHUNK_SIZE;
     const tx = baseX + lx;
     const ty = baseY + ly;
+
+    // 후보 앵커가 속한 현재 섹터만 탐색 대상으로 삼고, 자기+인접 8개 섹터에
+    // 빈 필지가 하나라도 있으면 재개발하지 않는다.
+    const sectorX = Math.floor(tx / REDEVELOPMENT_SECTOR_SIZE);
+    const sectorY = Math.floor(ty / REDEVELOPMENT_SECTOR_SIZE);
+    const sectorKey = `${sectorX},${sectorY}`;
+    let hasEmpty = sectorEmptyCache.get(sectorKey);
+    if (hasEmpty === undefined) {
+      hasEmpty = sectorNeighborhoodHasEmptyLot(world, tx, ty);
+      sectorEmptyCache.set(sectorKey, hasEmpty);
+    }
+    if (hasEmpty) continue;
 
     // 위 등급부터 시도한다. 3x3 이 되면 3단계로, 안 되면 2단계로.
     for (let target = LEVEL_COUNT; target > level; target--) {

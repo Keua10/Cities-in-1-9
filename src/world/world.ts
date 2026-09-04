@@ -85,20 +85,6 @@ export interface Parcel {
   bldRevision: number;
   /** 재건축 후보를 훑던 자리. 매 틱 청크 전체를 훑지 않기 위한 커서. */
   scanCursor: number;
-  /**
-   * 이 청크에 **더 지을 수 있는 빈 부지가 없다.**
-   *
-   * emptyPlots 와 다르다. 지구로 지정만 하고 도로를 안 깐 칸, 물가에 걸린 칸은
-   * 영원히 비어 있으므로 emptyPlots 는 0 이 되지 않는다. 그 값으로 재건축을
-   * 판정하면 재건축이 영영 안 걸린다.
-   *
-   * 그래서 신축 패스가 청크를 한 바퀴 다 훑고도 지을 수 있는 칸을 하나도
-   * 못 찾았을 때 이 값이 켜지고, 그때부터 재건축 패스로 넘어간다.
-   * 도로나 지구가 새로 생기거나 건물이 헐리면 다시 꺼진다.
-   */
-  saturated: boolean;
-  /** 이번 한 바퀴에서 지을 수 있는 칸을 봤는가. 커서가 한 바퀴 돌 때 판정한다. */
-  sawBuildable: boolean;
 }
 
 export interface Chunk {
@@ -192,8 +178,6 @@ export class World {
         buildingCount: 0,
         bldRevision: 0,
         scanCursor: 0,
-        saturated: false,
-        sawBuildable: false,
       };
       this.parcels.set(key, p);
     }
@@ -355,9 +339,6 @@ export class World {
     // 건물이 없는 지구 칸만 "빈 부지" 다. 위에서 헐었으므로 이 시점에는 비어 있다.
     if (zoneOfBuild(cur) >= 0) p.emptyPlots--;
     if (zoneOfBuild(value) >= 0) p.emptyPlots++;
-    // 도로나 지구가 바뀌면 못 짓던 칸이 지을 수 있는 칸이 됐을지 모른다.
-    p.saturated = false;
-
     this.markDirty(p.key, byUser);
   }
 
@@ -475,7 +456,6 @@ export class World {
     }
     p.buildingCount--;
     p.bldRevision++;
-    p.saturated = false;
     this.markDirty(p.key, false);
     return info;
   }
@@ -673,8 +653,6 @@ export function recountParcel(p: Parcel): void {
   p.roadCount = roads;
   p.buildingCount = buildings;
   p.bldRevision++;
-  p.saturated = false;
-  p.sawBuildable = false;
   p.scanCursor = 0;
 }
 

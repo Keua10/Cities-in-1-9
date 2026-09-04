@@ -187,6 +187,7 @@ async function boot(): Promise<void> {
 
     const cursorBuild = cursor ? world.getBuild(cursor.tx, cursor.ty) : null;
     const here = cursor ? world.buildingCovering(cursor.tx, cursor.ty) : null;
+    const occupancy = cursor ? sim.occupancyAt(cursor.tx, cursor.ty) : null;
 
     cityPanel.update(now, sim);
 
@@ -207,7 +208,9 @@ async function boot(): Promise<void> {
         ? { cx: chunkIndexOf(cursor.tx), cy: chunkIndexOf(cursor.ty) }
         : null,
       building: here
-        ? `${ZONE_NAMES[here.zone]} ${here.level}단계 (${TIER_NAMES[here.level - 1]}) · ${sim.day - here.born}일 됨`
+        ? `${ZONE_NAMES[here.zone]} ${here.level}단계 (${TIER_NAMES[here.level - 1]}) · ` +
+          `${occupancy === null || occupancy <= 0 ? '공실' : `입주 ${Math.round(occupancy * 100)}%`} · ` +
+          `${sim.day - here.born}일 됨`
         : null,
       visibleBuildings: renderer.stats.visibleBuildings,
       parcels: world.parcelCount(),
