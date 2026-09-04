@@ -6,6 +6,7 @@ import {
   runTransaction,
 } from 'firebase/firestore';
 import { CHUNK_TILES, SCHEMA_VERSION } from '../core/constants';
+import { START_MONEY } from '../sim/simConstants';
 import { chunkKey } from '../core/iso';
 import type { ChunkOverride, ChunkSnapshot } from '../world/world';
 import { decodeOverride, encodeOverride } from './codec';
@@ -111,12 +112,18 @@ async function loadOverrides(uid: string): Promise<Map<string, ChunkOverride>> {
       tiles: string;
       heights: string;
       build: string;
+      bld: string;
+      bornLo: string;
+      bornHi: string;
     }>;
     const tiles = decodeOverride(data.tiles ?? null, CHUNK_TILES);
     const heights = decodeOverride(data.heights ?? null, CHUNK_TILES);
     const build = decodeOverride(data.build ?? null, CHUNK_TILES);
-    if (!tiles && !heights && !build) continue;
-    out.set(chunkKey(cx, cy), { tiles, heights, build });
+    const bld = decodeOverride(data.bld ?? null, CHUNK_TILES);
+    const bornLo = decodeOverride(data.bornLo ?? null, CHUNK_TILES);
+    const bornHi = decodeOverride(data.bornHi ?? null, CHUNK_TILES);
+    if (!tiles && !heights && !build && !bld) continue;
+    out.set(chunkKey(cx, cy), { tiles, heights, build, bld, bornLo, bornHi });
   }
   return out;
 }
@@ -174,7 +181,12 @@ export async function saveCity(
       const tiles = encodeOverride(chunk.tiles);
       const heights = encodeOverride(chunk.heights);
       const build = encodeOverride(chunk.build);
-      if (!tiles && !heights && !build) {
+      const bld = encodeOverride(chunk.bld);
+      // 건물이 하나도 없으면 born 배열도 통째로 비어 있다. 그때는 저장하지 않고,
+      // 불러올 때 255 로 채운 배열을 되살린다(world.setPersistedOverrides).
+      const bornLo = encodeOverride(chunk.bornLo);
+      const bornHi = encodeOverride(chunk.bornHi);
+      if (!tiles && !heights && !build && !bld) {
         // 고쳤다가 원래대로 되돌린 청크. 문서를 남길 이유가 없다.
         emptyChunks.push(id);
         continue;
@@ -183,6 +195,9 @@ export async function saveCity(
         tiles,
         heights,
         build,
+        bld,
+        bornLo,
+        bornHi,
         updatedAt: now,
       });
     }
@@ -196,6 +211,19 @@ export async function saveCity(
       /* 다음 저장 때 다시 지워진다 */
     }
   }
+}
+
+/**
+ * 2단계까지 저장된 도시는 macro.money 가 0 이고 틱도 0 이다. 그대로 두면
+ * 3.1단계에서 시작하자마자 파산 상태가 되므로, 아직 한 번도 시뮬레이션이
+ * 돌지 않은 도시에만 시작 자금을 넣어준다.
+ */
+function normalizeMacro(saved: Partial<MacroState> | undefined): MacroState {
+  const merged: MacroState = { ...emptyMacro(), ...(saved ?? {}) };
+  if (!Number.isFinite(merged.money)) merged.money = START_MONEY;
+  if (!Number.isFinite(merged.tick)) merged.tick = 0;
+  if (merged.tick === 0 && merged.money === 0) merged.money = START_MONEY;
+  return merged;
 }
 
 /**
@@ -214,7 +242,7 @@ function normalizeCity(
     displayName: saved.displayName ?? session.loginId,
     cityName: saved.cityName ?? `${session.loginId}번 도시`,
     explored: Array.isArray(saved.explored) ? saved.explored : [],
-    macro: { ...emptyMacro(), ...(saved.macro ?? {}) },
+    macro: normalizeMacro(saved.macro),
     saveToken: token,
     saveCount: Number(saved.saveCount) || 0,
     createdAt: Number(saved.createdAt) || now,
