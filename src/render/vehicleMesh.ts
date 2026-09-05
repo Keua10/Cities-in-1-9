@@ -5,7 +5,7 @@ import { simHash } from '../sim/buildings';
 import type { Vehicle } from '../sim/traffic/vehicles';
 import { DIRS } from '../world/build';
 import type { World } from '../world/world';
-import { VEHICLE_CELL, VEHICLE_VARIANTS, type VehicleAtlas } from './vehicleAtlas';
+import { VEHICLE_VARIANTS, type VehicleAtlas } from './vehicleAtlas';
 
 const LANE_OFFSET_PX = 7.25;
 const VEHICLE_RENDER_SIZE_PX = 20;
