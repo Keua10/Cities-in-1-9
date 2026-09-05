@@ -23,7 +23,7 @@ import {
   TRUCK_SPEED_MUL,
   VEHICLE_SPEED_TILES_PER_SEC,
 } from '../simConstants';
-import { daytimeAt, type DaytimeSnapshot } from '../time';
+import { sessionDaytimeAt, type DaytimeSnapshot } from '../time';
 import { canEnter, hasSignal } from './signals';
 import { Router, type Route } from './router';
 import { VehicleKind, type Vehicle } from './vehicles';
@@ -42,7 +42,7 @@ export class TrafficSim {
   private initialized = false;
   private timeMs = 0;
   private sampleMs = 0;
-  private daytime: DaytimeSnapshot = daytimeAt(0, 0);
+  private daytime: DaytimeSnapshot = sessionDaytimeAt(0, 0);
   private spawnTokens = 0;
   private readySpawns: ReadySpawn[] = [];
   private nextSpawnMs = 0;
@@ -80,7 +80,7 @@ export class TrafficSim {
     this.rebuildChunks();
   }
 
-  update(dtMs: number, wallNowMs: number = Date.now()): void {
+  update(dtMs: number): void {
     if (!this.initialized) return;
     this.timeMs += dtMs;
     this.sampleMs += dtMs;
@@ -110,7 +110,7 @@ export class TrafficSim {
     // 수백 명이 잡혀도 scanCursor가 다음 프레임부터 이어서 처리한다.
     const tripBudget = Math.min(room, ROUTE_BUDGET_PER_FRAME * 2);
     const lifeDelta = Math.min(dtMs, 250);
-    this.daytime = daytimeAt(wallNowMs, this.macro.day);
+    this.daytime = sessionDaytimeAt(this.timeMs, this.macro.day);
     const trips = this.citizens.collectTrips(this.daytime, lifeDelta, tripBudget);
     for (const trip of trips) this.queueTrip(trip);
 

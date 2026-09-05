@@ -16,6 +16,9 @@ export const enum Season {
 export const SEASON_NAMES: readonly string[] = ['봄', '여름', '가을', '겨울'];
 export const WEEKDAY_NAMES: readonly string[] = ['월', '화', '수', '목', '금', '토', '일'];
 
+/** 테스트 중에는 접속할 때마다 daytime을 월요일 07:30에서 시작한다. */
+export const TEST_DAYTIME_START_MINUTE = 7 * 60 + 30;
+
 export interface DaytimeSnapshot {
   /** Unix epoch 기준 daytime 일 번호. 저장할 필요가 없다. */
   absoluteDay: number;
@@ -44,9 +47,9 @@ export interface DaytimeSnapshot {
 }
 
 /**
- * daytime은 실제 벽시계에서 계속 흐르는 가속 생활 시계다.
- * 600초마다 하루가 정확히 한 번 돌며, 출퇴근/장보기/향후 밤낮 렌더링이
- * 모두 같은 snapshot을 읽는다. 일출/일몰은 환경 표현일 뿐 출근 시각을 바꾸지 않는다.
+ * daytime snapshot 계산기. 입력 ms를 DAYTIME_DAY_MS 주기의 가속 생활 시계로 변환한다.
+ * 테스트 빌드에서는 아래 sessionDaytimeAt()이 접속 후 경과시간을 이 함수에 넘겨
+ * 월요일 07:30에서 시작하도록 한다. 일출/일몰은 환경 표현일 뿐 출근 시각을 바꾸지 않는다.
  */
 export function daytimeAt(epochMs: number, gameDay: number): DaytimeSnapshot {
   const absoluteDay = Math.floor(epochMs / DAYTIME_DAY_MS);
@@ -84,6 +87,15 @@ export function daytimeAt(epochMs: number, gameDay: number): DaytimeSnapshot {
     isDay: hour >= sunriseHour && hour < sunsetHour,
     gameDayOfYear,
   };
+}
+
+/**
+ * 테스트용 세션 시계. 페이지에 접속할 때마다 월요일 07:30에서 시작하고,
+ * 이후에는 실제 벽시각이 아니라 앱이 실행된 경과시간만큼 진행한다.
+ */
+export function sessionDaytimeAt(sessionElapsedMs: number, gameDay: number): DaytimeSnapshot {
+  const startOffsetMs = (TEST_DAYTIME_START_MINUTE / 1440) * DAYTIME_DAY_MS;
+  return daytimeAt(Math.max(0, sessionElapsedMs) + startOffsetMs, gameDay);
 }
 
 function positiveMod(value: number, mod: number): number {
