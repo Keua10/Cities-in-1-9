@@ -117,6 +117,32 @@ export function laneFacing(route: Route, routeIdx: number, tileT: number): numbe
   return bestDir;
 }
 
+/**
+ * 현재 위치가 직선 차선이 아니라 교차로의 베지에 코너 위에 있는가.
+ *
+ * 렌더러는 회전 차량만 지형 청크보다 위에 따로 그린다. 지형은 64x64 타일을
+ * 한 메시로 묶기 때문에 코너에서 차량의 실제 위치가 앞쪽 청크로 넘어가면 그
+ * 청크의 도로가 차량을 덮을 수 있다. 코너 판정이 laneSample 과 달라지지 않도록
+ * 같은 구간 규칙을 여기서 공유한다.
+ */
+export function laneIsTurning(route: Route, routeIdx: number, tileT: number): boolean {
+  const points = route.tiles.length / 2;
+  if (points < 3) return false;
+
+  const progress = Math.max(0, Math.min(points - 1, routeIdx + Math.max(0, Math.min(1, tileT))));
+  const i = Math.min(points - 2, Math.floor(progress));
+  const u = progress - i;
+  const d = routeSegmentDir(route, i);
+
+  if (u > 1 - CORNER_R && i + 1 <= points - 2) {
+    if (routeSegmentDir(route, i + 1) !== d) return true;
+  }
+  if (u < CORNER_R && i - 1 >= 0) {
+    if (routeSegmentDir(route, i - 1) !== d) return true;
+  }
+  return false;
+}
+
 interface LaneSample {
   pos: [number, number];
   tangent: [number, number];
