@@ -33,11 +33,13 @@ import { TIER_NAMES, ZONE_NAMES } from './sim/buildings';
 import { SEASON_NAMES, WEEKDAY_NAMES } from './sim/time';
 import { CityPanel } from './ui/cityPanel';
 import { Hud } from './ui/hud';
+import { Minimap } from './ui/minimap';
 import { requireSession } from './ui/loginScreen';
 import { SaveBadge } from './ui/saveBadge';
 import { bindToolButtons, Tools, TOOL_LABELS } from './ui/tools';
 import { Build, hasRoadAccess, isZone } from './world/build';
 import { findDryTileNearBase, World } from './world/world';
+import { seedTestCityIfEmpty } from './world/testCity';
 
 /** 카메라가 base 밖으로 나갈 수 있는 거리(청크). 이웃의 안개까지는 보이게 둔다. */
 const ROAM_CHUNKS = 8;
@@ -73,6 +75,8 @@ async function boot(): Promise<void> {
     world.setExploredKeys(city.explored);
     world.setPersistedOverrides(overrides);
   }
+  // 테스트가 빈 맵에서 시작하지 않게 한다. 기존 도시가 있으면 절대 손대지 않는다.
+  const testCityCenter = seedTestCityIfEmpty(world, Math.floor((city?.macro.tick ?? 0) / 24));
 
   const app = new Application();
   await app.init({
@@ -98,7 +102,7 @@ async function boot(): Promise<void> {
   camera.zoom = DEFAULT_ZOOM;
   camera.limit = roamLimit(world);
 
-  const start = findDryTileNearBase(world);
+  const start = testCityCenter ?? findDryTileNearBase(world);
   const centerCamera = (): void => {
     camera.zoom = DEFAULT_ZOOM;
     camera.centerOnWorld(
@@ -119,6 +123,7 @@ async function boot(): Promise<void> {
   if (loadFailed) badge.set('error', '불러오기 실패 — 저장되지 않습니다');
 
   const hud = new Hud();
+  const minimap = new Minimap(world, camera);
   let cursor: { tx: number; ty: number } | null = null;
 
   // 5) 3.1단계 매크로 시뮬레이션.
@@ -198,6 +203,7 @@ async function boot(): Promise<void> {
     camera.applyTo(renderer.root);
     renderer.update(camera, now);
     renderer.flush();
+    minimap.update(now);
 
     const cursorBuild = cursor ? world.getBuild(cursor.tx, cursor.ty) : null;
     const here = cursor ? world.buildingCovering(cursor.tx, cursor.ty) : null;
