@@ -2,12 +2,25 @@ import { Mesh, MeshGeometry } from 'pixi.js';
 import { MAX_ACTIVE_VEHICLES, TILE_W, WORLD_SEED } from '../core/constants';
 import { tileToWorldX, tileToWorldY } from '../core/iso';
 import { simHash } from '../sim/buildings';
-import { lanePosition } from '../sim/traffic/laneGeometry';
+import { laneFacing, lanePosition } from '../sim/traffic/laneGeometry';
 import type { Vehicle } from '../sim/traffic/vehicles';
 import type { World } from '../world/world';
-import { VEHICLE_VARIANTS, type VehicleAtlas } from './vehicleAtlas';
+import {
+  VEHICLE_CELL,
+  VEHICLE_GROUND_DROP_PX,
+  VEHICLE_VARIANTS,
+  type VehicleAtlas,
+} from './vehicleAtlas';
 
-const VEHICLE_RENDER_SIZE_PX = 20;
+/**
+ * 차량 스프라이트를 아틀라스 셀과 1:1 픽셀로 그린다.
+ *
+ * 예전에는 32px 셀을 20px 로 줄여 그렸다. fallback 그림이 화면축 정렬 사각형이라
+ * 셀을 그대로 쓰면 반대 차선까지 덮었기 때문인데, 그 축소 때문에 차체 크기와
+ * 시뮬레이션이 쓰는 차체 길이가 서로 달라졌다. 지금은 아틀라스 쪽에서 실제
+ * 차체 길이/폭을 아이소메트릭으로 투영해 그리므로 1:1 로 두면 크기가 맞는다.
+ */
+const VEHICLE_RENDER_SIZE_PX = VEHICLE_CELL;
 
 export class VehicleMesh {
   readonly mesh: Mesh;
@@ -15,6 +28,7 @@ export class VehicleMesh {
   private positions: Float32Array;
   private uvs: Float32Array;
   private sorted: Vehicle[] = [];
+  private depths = new Map<Vehicle, number>();
 
   constructor(
     private world: World,
@@ -39,9 +53,16 @@ export class VehicleMesh {
   }
 
   update(vehicles: readonly Vehicle[]): void {
+    // 정렬 기준은 도로 중앙선이 아니라 실제 차선 위치다. 중앙선으로 정렬하면
+    // 마주 오는 두 차의 깊이가 같아져 매 프레임 앞뒤가 뒤바뀌며 깜빡인다.
     this.sorted.length = 0;
-    for (const vehicle of vehicles) this.sorted.push(vehicle);
-    this.sorted.sort((a, b) => depth(a) - depth(b));
+    this.depths.clear();
+    for (const vehicle of vehicles) {
+      const [laneTx, laneTy] = lanePosition(vehicle.route, vehicle.routeIdx, vehicle.tileT);
+      this.depths.set(vehicle, laneTx + laneTy);
+      this.sorted.push(vehicle);
+    }
+    this.sorted.sort((a, b) => (this.depths.get(a) ?? 0) - (this.depths.get(b) ?? 0));
 
     let q = 0;
     for (const vehicle of this.sorted) {
@@ -54,8 +75,7 @@ export class VehicleMesh {
       const ny = vehicle.route.tiles[ni + 1];
       const t = vehicle.tileT;
 
-      // Rendering and traffic now share one TILE-SPACE lane path.
-      // No screen-space nudging: the car's actual route point itself is the right-hand lane.
+      // 렌더링과 시뮬레이션이 laneGeometry 하나만 본다. 화면 픽셀 보정은 없다.
       const [laneTx, laneTy] = lanePosition(vehicle.route, vehicle.routeIdx, t);
       const h0 = this.world.sampleHeight(tx, ty);
       const h1 = this.world.sampleHeight(nx, ny);
@@ -63,19 +83,18 @@ export class VehicleMesh {
       const wx = tileToWorldX(laneTx, laneTy);
       const wy = tileToWorldY(laneTx, laneTy, height);
 
-      // 아틀라스 셀은 32px이지만 화면에 32px 그대로 그리면 도로 한 차선보다
-      // 차체가 커져 반대 차선까지 덮는다. UV 셀과 화면 크기를 분리한다.
+      // 아틀라스의 접지점(셀 중심에서 VEHICLE_GROUND_DROP_PX 아래)이 차선 위에 오게 붙인다.
       const half = VEHICLE_RENDER_SIZE_PX / 2;
       const x0 = wx - half;
       const x1 = wx + half;
-      const y1 = wy;
-      const y0 = wy - VEHICLE_RENDER_SIZE_PX;
+      const y0 = wy - half - VEHICLE_GROUND_DROP_PX;
+      const y1 = y0 + VEHICLE_RENDER_SIZE_PX;
       write(this.positions, q, [x0, y0, x1, y0, x1, y1, x0, y1]);
 
-      // fallback atlas는 방향별 색이 달라 보일 수 있다. 정식 vehicles.png가 들어오면
-      // 같은 variant 칸의 실제 차량 이미지를 쓰므로 이 임시 색 변화는 사라진다.
+      // 스프라이트 방향은 차선 접선에서 뽑는다. 코너에서도 실제 향한 쪽을 쓴다.
+      const facing = laneFacing(vehicle.route, vehicle.routeIdx, t);
       const variant = simHash(WORLD_SEED, vehicle.destTx, vehicle.destTy, vehicle.tier) % VEHICLE_VARIANTS;
-      const [u0, v0, u1, v1] = this.atlas.uv(vehicle.kind, vehicle.dir, variant);
+      const [u0, v0, u1, v1] = this.atlas.uv(vehicle.kind, facing, variant);
       write(this.uvs, q, [u0, v0, u1, v0, u1, v1, u0, v1]);
       q++;
     }
@@ -97,11 +116,6 @@ export class VehicleMesh {
 function write(array: Float32Array, q: number, values: number[]): void {
   let p = q * 8;
   for (let i = 0; i < 8; i++) array[p + i] = values[i];
-}
-
-function depth(vehicle: Vehicle): number {
-  const i = vehicle.routeIdx * 2;
-  return vehicle.route.tiles[i] + vehicle.route.tiles[i + 1] + vehicle.tileT;
 }
 
 export const VEHICLE_PIXEL_DENSITY_CHECK = TILE_W === 64;

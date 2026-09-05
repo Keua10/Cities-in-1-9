@@ -13,27 +13,46 @@ import {
   DECEL_TILES_PER_SEC2,
   DESIRED_GAP_TILES,
   INTERSECTION_STOP_T,
-  MAX_SPAWNS_PER_SEC,
+  MAX_SPAWNS_PER_FRAME,
   MIN_GAP_TILES,
   REROUTE_LOOKAHEAD,
   REROUTE_THRESHOLD,
   ROUTE_BUDGET_PER_FRAME,
+  SPAWN_BURST_TOKENS,
   SPAWN_GATE_HEADWAY_MS,
-  SPAWN_HEADWAY_MAX_MS,
-  SPAWN_HEADWAY_MIN_MS,
+  SPAWN_QUEUE_SPREAD_MS,
+  SPAWN_RATE_PER_SEC,
   SPAWN_READY_JITTER_MAX_MS,
+  SPAWN_SPREAD_MAX_MS,
   TRUCK_SPEED_MUL,
   VEHICLE_SPEED_TILES_PER_SEC,
   VEHICLE_BODY_LENGTH_TILES,
 } from '../simConstants';
 import { sessionDaytimeAt, type DaytimeSnapshot } from '../time';
-import { isTurnNode } from './laneGeometry';
+import {
+  isTurnNode,
+  movementsConflict,
+  nodeMovement,
+  routeSegmentDir,
+} from './laneGeometry';
 import { canEnter, hasSignal } from './signals';
 import { Router, type Route } from './router';
 import { VehicleKind, type Vehicle } from './vehicles';
 
 type ReadySpawn = { trip: Trip; route: Route; readyAtMs: number };
 const enum SpawnResult { Spawned = 0, Blocked = 1, Handled = 2 }
+
+/** 앞차를 몇 타일 앞까지 보는가. 제동거리(속도^2/2a)보다 넉넉해야 한다. */
+const GAP_LOOKAHEAD_TILES = 3;
+/** 한 프레임에 훑는 준비 대기열 최대 길이. 막힌 진입로 때문에 무한정 돌지 않게 한다. */
+const SPAWN_SCAN_LIMIT = 64;
+
+/** 교차로 타일 하나를 지금 쓰고 있는 움직임. */
+interface MovementClaim {
+  vehicle: Vehicle;
+  inDir: number;
+  outDir: number;
+}
 
 export class TrafficSim {
   private router: Router;
@@ -49,7 +68,6 @@ export class TrafficSim {
   private daytime: DaytimeSnapshot = sessionDaytimeAt(0, 0);
   private spawnTokens = 0;
   private readySpawns: ReadySpawn[] = [];
-  private nextSpawnMs = 0;
   private nextGateSpawnMs = new Map<string, number>();
   private spawnSequence = 0;
   private generation = 0;
@@ -73,7 +91,6 @@ export class TrafficSim {
     this.activeCx = cx;
     this.activeCy = cy;
     this.generation++;
-    this.nextSpawnMs = this.timeMs;
     this.nextGateSpawnMs.clear();
     this.citizens.setActiveRegion(cx, cy, SIM_RADIUS_CHUNKS);
     this.congestion.setActiveRegion(cx, cy, SIM_RADIUS_CHUNKS);
@@ -90,9 +107,10 @@ export class TrafficSim {
     if (!this.initialized) return;
     this.timeMs += dtMs;
     this.sampleMs += dtMs;
+    // 토큰 버킷. 상한이 작아야 "조용하다가 한꺼번에" 가 구조적으로 불가능하다.
     this.spawnTokens = Math.min(
-      MAX_SPAWNS_PER_SEC,
-      this.spawnTokens + (dtMs * MAX_SPAWNS_PER_SEC) / 1000,
+      SPAWN_BURST_TOKENS,
+      this.spawnTokens + (dtMs * SPAWN_RATE_PER_SEC) / 1000,
     );
 
     this.router.update(ROUTE_BUDGET_PER_FRAME);
@@ -106,7 +124,7 @@ export class TrafficSim {
       );
     }
 
-    this.retryReadySpawns();
+    this.spawnDueVehicles();
 
     const room = Math.max(
       0,
@@ -176,29 +194,55 @@ export class TrafficSim {
       // 경로가 계산된 프레임에 바로 튀어나오지 않는다. 같은 출퇴근 시각에 잡힌
       // 차량도 0~한 headway 만큼 흩어서 대기열에 넣는다.
       const jitter = this.spawnJitterMs(trip, this.spawnSequence++);
-      this.readySpawns.push({ trip, route, readyAtMs: this.timeMs + jitter });
-      this.readySpawns.sort((a, b) => a.readyAtMs - b.readyAtMs);
+      this.insertReady({ trip, route, readyAtMs: this.timeMs + jitter });
     });
   }
 
-  private retryReadySpawns(): void {
-    if (this.readySpawns.length === 0) return;
-    if (this.timeMs < this.nextSpawnMs || this.spawnTokens < 1) return;
+  /** readyAtMs 오름차순을 유지하며 넣는다. 매번 sort 하면 출근 피크에 O(n log n)이 반복된다. */
+  private insertReady(entry: ReadySpawn): void {
+    let lo = 0;
+    let hi = this.readySpawns.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (this.readySpawns[mid].readyAtMs <= entry.readyAtMs) lo = mid + 1;
+      else hi = mid;
+    }
+    this.readySpawns.splice(lo, 0, entry);
+  }
 
-    // 첫 차량의 진입로가 막혔다고 도시 전체 스폰을 막지 않는다. 한 headway에
-    // 최대 한 대만 꺼내되, 준비된 다른 진입로를 몇 개 훑는다.
-    const checks = Math.min(this.readySpawns.length, 32);
-    for (let i = 0; i < checks; i++) {
+  /**
+   * 준비된 차량을 꺼낸다.
+   *
+   * 예전에는 프레임당 한 대, 그것도 전역 380~850ms 대기를 걸었다. 그러면 실제
+   * 상한이 초당 1.6대라 출근 시각의 수백 건이 큐에 남아 하루 종일 한 줄로
+   * 흘러나온다. 지금은 평균 속도(토큰 버킷)만 제한하고, 뭉침은 진입로별
+   * 700ms 간격과 대기열 분산이 막는다.
+   */
+  private spawnDueVehicles(): void {
+    if (this.readySpawns.length === 0) return;
+    let spawned = 0;
+    let scanned = 0;
+    let i = 0;
+    while (
+      i < this.readySpawns.length &&
+      spawned < MAX_SPAWNS_PER_FRAME &&
+      scanned < SPAWN_SCAN_LIMIT &&
+      this.spawnTokens >= 1
+    ) {
       const pending = this.readySpawns[i];
-      if (pending.readyAtMs > this.timeMs) continue;
+      // 정렬돼 있으므로 아직 시간이 안 된 항목을 만나면 뒤도 전부 아직이다.
+      if (pending.readyAtMs > this.timeMs) break;
+      scanned++;
       const result = this.spawnRoute(pending.trip, pending.route);
-      if (result === SpawnResult.Blocked) continue;
+      if (result === SpawnResult.Blocked) {
+        i++;
+        continue;
+      }
       this.readySpawns.splice(i, 1);
       if (result === SpawnResult.Spawned) {
         this.spawnTokens -= 1;
-        this.nextSpawnMs = this.timeMs + this.spawnHeadwayMs(pending.trip, this.spawnSequence++);
+        spawned++;
       }
-      return;
     }
   }
 
@@ -273,15 +317,26 @@ export class TrafficSim {
 
   private moveVehicles(dt: number): void {
     const occupancy = buildLaneOccupancy(this.vehicles);
-    // Conflict reservation is shared by signal junctions AND unsignalled turn tiles.
-    // This closes the old gap where two cars could overlap at a 90-degree bend simply because
-    // their lane keys were different.
-    const conflictOwner = new Map<string, Vehicle>();
+    /*
+     * 교차로/코너 예약.
+     *
+     * 예전에는 "교차로 타일 하나에 차 한 대" 였다. 그러면 코너에서 반대 차선
+     * 차까지 서로 막아 통행량이 반토막 나고, 우측통행이 화면에서 확인되지 않는
+     * 원인이 되기도 했다(양쪽이 번갈아 정지하니 어느 차선인지 읽히지 않는다).
+     * 지금은 타일마다 "지금 지나가는 움직임(진입방향 -> 진출방향)" 목록을 두고,
+     * 궤적이 실제로 교차할 때만 막는다.
+     */
+    const claims = new Map<string, MovementClaim[]>();
+    const claim = (key: string, entry: MovementClaim): void => {
+      const list = claims.get(key);
+      if (list) list.push(entry);
+      else claims.set(key, [entry]);
+    };
     for (const vehicle of this.vehicles) {
       const [tx, ty] = tileAt(vehicle);
-      if (isConflictNode(this.world, vehicle, vehicle.routeIdx)) {
-        conflictOwner.set(`${tx},${ty}`, vehicle);
-      }
+      if (!isConflictNode(this.world, vehicle, vehicle.routeIdx)) continue;
+      const [inDir, outDir] = nodeMovement(vehicle.route, vehicle.routeIdx);
+      claim(`${tx},${ty}`, { vehicle, inDir, outDir });
     }
 
     const remove = new Set<Vehicle>();
@@ -304,7 +359,7 @@ export class TrafficSim {
       let target = VEHICLE_SPEED_TILES_PER_SEC *
         (vehicle.kind === VehicleKind.Truck ? TRUCK_SPEED_MUL : 1);
 
-      const gap = this.gapAhead(vehicle, occupancy, nextX, nextY, nextDir);
+      const gap = this.gapAhead(vehicle, occupancy);
       const minCenterGap = VEHICLE_BODY_LENGTH_TILES + MIN_GAP_TILES;
       const desiredCenterGap = VEHICLE_BODY_LENGTH_TILES + DESIRED_GAP_TILES;
       if (Number.isFinite(gap)) {
@@ -320,10 +375,19 @@ export class TrafficSim {
       }
 
       let stopAtIntersection = false;
+      const nextKey = `${nextX},${nextY}`;
+      const [nextInDir, nextOutDir] = nodeMovement(vehicle.route, nextNodeIndex);
       if (nextIsConflict) {
-        const owner = conflictOwner.get(`${nextX},${nextY}`);
         const red = nextHasSignal && !canEnter(nextX, nextY, nextDir, this.timeMs);
-        stopAtIntersection = red || (owner !== undefined && owner !== vehicle);
+        let crossed = false;
+        for (const held of claims.get(nextKey) ?? []) {
+          if (held.vehicle === vehicle) continue;
+          if (movementsConflict(nextInDir, nextOutDir, held.inDir, held.outDir)) {
+            crossed = true;
+            break;
+          }
+        }
+        stopAtIntersection = red || crossed;
         if (stopAtIntersection) target = 0;
       }
 
@@ -342,7 +406,7 @@ export class TrafficSim {
       // 첫 차량이 이번 프레임에 교차로를 건너갈 예정이면 즉시 예약한다. 같은 프레임
       // 뒤쪽 차량이 동일 교차로로 겹쳐 들어오는 것을 막는다.
       if (nextIsConflict && !stopAtIntersection && vehicle.tileT + advance >= 1) {
-        conflictOwner.set(`${nextX},${nextY}`, vehicle);
+        claim(nextKey, { vehicle, inDir: nextInDir, outDir: nextOutDir });
       }
 
       vehicle.tileT += advance;
@@ -384,23 +448,38 @@ export class TrafficSim {
     if (remove.size) this.vehicles = this.vehicles.filter((vehicle) => !remove.has(vehicle));
   }
 
-  private gapAhead(
-    vehicle: Vehicle,
-    occupancy: Map<string, Vehicle[]>,
-    nextX: number,
-    nextY: number,
-    travelDir: number,
-  ): number {
+  /**
+   * 같은 차선에서 앞차까지의 중심점 간격(타일).
+   *
+   * 예전에는 현재 타일과 바로 다음 타일까지만 봤다. 원하는 간격(차체 0.50 +
+   * 여유 0.55 = 1.05타일)에 제동거리를 더하면 2타일을 넘기므로, 신호 앞에
+   * 줄이 늘어설 때 뒤차가 앞차를 파고들 수 있었다. 지금은 3타일 앞까지 본다.
+   */
+  private gapAhead(vehicle: Vehicle, occupancy: Map<string, Vehicle[]>): number {
+    const route = vehicle.route;
+    const points = route.tiles.length / 2;
     const [x, y] = tileAt(vehicle);
     let best = Infinity;
-    for (const other of occupancy.get(laneKey(x, y, travelDir)) ?? []) {
+
+    // 같은 타일 위, 나보다 앞선 차.
+    const ownDir = routeSegmentDir(route, vehicle.routeIdx);
+    for (const other of occupancy.get(laneKey(x, y, ownDir)) ?? []) {
       if (other === vehicle) continue;
       const d = other.tileT - vehicle.tileT;
       if (d > 0) best = Math.min(best, d);
     }
-    for (const other of occupancy.get(laneKey(nextX, nextY, travelDir)) ?? []) {
-      if (other === vehicle) continue;
-      best = Math.min(best, 1 - vehicle.tileT + other.tileT);
+
+    // 앞 타일들. 그 타일에 서 있는 차는 "그 타일로 들어온 방향" 으로 등록돼 있다.
+    for (let step = 1; step <= GAP_LOOKAHEAD_TILES; step++) {
+      const idx = vehicle.routeIdx + step;
+      if (idx > points - 1) break;
+      const tx = route.tiles[idx * 2];
+      const ty = route.tiles[idx * 2 + 1];
+      const inDir = routeSegmentDir(route, idx - 1);
+      for (const other of occupancy.get(laneKey(tx, ty, inDir)) ?? []) {
+        if (other === vehicle) continue;
+        best = Math.min(best, step - vehicle.tileT + other.tileT);
+      }
     }
     return best;
   }
@@ -443,16 +522,18 @@ export class TrafficSim {
     });
   }
 
+  /**
+   * 준비 대기열에 넣을 때 흩는 시간.
+   * 큐가 깊을수록(=같은 시각에 몰릴수록) 분산 창을 넓힌다. 출근 한 틱에 300건이
+   * 잡히면 1.8초가 아니라 9초에 걸쳐 나간다.
+   */
   private spawnJitterMs(trip: Trip, seq: number): number {
+    const spread = Math.min(
+      SPAWN_SPREAD_MAX_MS,
+      SPAWN_READY_JITTER_MAX_MS + this.readySpawns.length * SPAWN_QUEUE_SPREAD_MS,
+    );
     return simHash(WORLD_SEED, trip.fromTx, trip.fromTy, trip.toTx ^ trip.toTy ^ seq) %
-      Math.max(1, SPAWN_READY_JITTER_MAX_MS);
-  }
-
-  private spawnHeadwayMs(trip: Trip, seq: number): number {
-    const span = Math.max(0, SPAWN_HEADWAY_MAX_MS - SPAWN_HEADWAY_MIN_MS);
-    const jitter = simHash(WORLD_SEED, trip.fromTx, trip.toTx, trip.fromTy ^ trip.toTy ^ seq) %
-      (span + 1);
-    return SPAWN_HEADWAY_MIN_MS + jitter;
+      Math.max(1, spread);
   }
 
   private completeVehicle(vehicle: Vehicle): void {

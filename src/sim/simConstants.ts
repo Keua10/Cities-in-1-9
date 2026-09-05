@@ -253,7 +253,7 @@ export const REROUTE_THRESHOLD = 0.35;
 export const ROUTE_MAX_NODES = 4000;
 
 /* ---------------- 3.2단계: 차량 ---------------- */
-export const VEHICLE_SPEED_TILES_PER_SEC = 8.0;
+export const VEHICLE_SPEED_TILES_PER_SEC = 6.0;
 export const TRUCK_SPEED_MUL = 0.72;
 export const ACCEL_TILES_PER_SEC2 = 16.0;
 export const DECEL_TILES_PER_SEC2 = 48.0;
@@ -261,6 +261,21 @@ export const DESIRED_GAP_TILES = 0.55;
 export const MIN_GAP_TILES = 0.22;
 /** 차량 중심점 간격 계산에서 차체 길이를 따로 더한다. 기존 MIN/DESIRED는 범퍼 간격이다. */
 export const VEHICLE_BODY_LENGTH_TILES = 0.50;
+/** 차체 폭(타일). 차선 간격 계산과 스프라이트 크기가 같은 값을 본다. */
+export const VEHICLE_WIDTH_TILES = 0.30;
+
+/* ---------------- 3.2단계: 차선 기하 ---------------- */
+/**
+ * 도로 중앙선에서 우측 차선 중심까지의 거리(타일).
+ *
+ * 도로 폭은 1타일이므로 한 차선의 중심은 0.25 가 정답이다. 이보다 작으면
+ * 마주 오는 차가 화면에서 겹쳐 보이고(예전 0.20 은 화면에서 14px 차이여서
+ * 20px 스프라이트가 서로 덮었다), 크면 차가 도로 밖으로 나간다.
+ * 차체 폭 0.30 이면 바깥쪽 끝이 0.25 + 0.15 = 0.40 으로 도로 안(0.5)에 들어온다.
+ */
+export const LANE_OFFSET_TILES = 0.25;
+/** 코너 베지에가 차지하는 길이(타일). LANE_OFFSET 보다 커야 접선이 뒤집히지 않는다. */
+export const LANE_CORNER_RADIUS_TILES = 0.45;
 
 /* ---------------- 3.2단계: 신호등 ---------------- */
 export const SIGNAL_CYCLE_MS = 16_000;
@@ -284,12 +299,36 @@ export const FREIGHT_CURVE: readonly number[] = [
   0.1, 0.1, 0.1, 0.15, 0.25, 0.4, 0.6, 0.7, 0.8, 0.9, 0.95, 1.0,
   0.95, 1.0, 1.0, 0.9, 0.8, 0.7, 0.5, 0.35, 0.25, 0.2, 0.15, 0.1,
 ];
+/**
+ * 도시 전체 평균 생성 속도(대/초).
+ *
+ * 예전에는 "한 프레임에 한 대 + 380~850ms 전역 대기" 였다. 이러면 실제 상한이
+ * 초당 1.6대로 고정돼서, 출근 시각에 잡힌 수백 건이 큐에 쌓였다가 한 줄로 계속
+ * 흘러나온다. 사람 눈에는 그게 "한꺼번에 생성" 으로 보인다.
+ * 지금은 토큰 버킷으로 평균 속도를 정하고, 뭉침 방지는 아래 진입로별 간격과
+ * 대기열 분산이 맡는다.
+ */
+export const SPAWN_RATE_PER_SEC = 14;
+/**
+ * 토큰 버킷 상한. 이 값이 곧 "한 번에 튀어나올 수 있는 최대 대수" 다.
+ * 예전 MAX_SPAWNS_PER_SEC=90 은 버킷 상한도 90이어서, 잠깐 조용하다가
+ * 큐가 차면 90대가 동시에 나갈 수 있는 구조였다.
+ */
+export const SPAWN_BURST_TOKENS = 3;
+/** 한 프레임에 생성하는 최대 대수. 프레임 하나에 몰리는 것을 막는다. */
+export const MAX_SPAWNS_PER_FRAME = 3;
+/** 하위호환용. 비상 상한으로만 쓴다. */
 export const MAX_SPAWNS_PER_SEC = 90;
-/** 정상 스폰은 이 간격 사이에서 결정론적으로 흩어진다. 90/s는 비상 상한일 뿐이다. */
-export const SPAWN_HEADWAY_MIN_MS = 380;
-export const SPAWN_HEADWAY_MAX_MS = 850;
 /** A* 완료 시점도 차량 생성 시점이 되지 않도록 준비 대기열에서 한 번 더 흩는다. */
 export const SPAWN_READY_JITTER_MAX_MS = 1_800;
+/**
+ * 대기열 깊이 1건당 늘어나는 추가 분산(ms).
+ * 출근 피크처럼 한 틱에 수백 건이 잡히면 분산 창을 같이 넓혀서
+ * 큐가 "끊기지 않는 한 줄" 이 되지 않게 한다.
+ */
+export const SPAWN_QUEUE_SPREAD_MS = 25;
+/** 대기열 분산 창의 상한(ms). daytime 기준 하루가 600초라 10초면 충분히 길다. */
+export const SPAWN_SPREAD_MAX_MS = 9_000;
 /** 같은 건물/경계 진입로에서 연속 차량이 한 덩어리로 튀어나오지 않게 하는 최소 간격. */
 export const SPAWN_GATE_HEADWAY_MS = 700;
 /** 교차로 정지선. 다음 타일이 교차로일 때 이 진행도보다 앞으로 나가지 않는다. */
