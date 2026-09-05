@@ -7,7 +7,10 @@ import { DIRS } from '../world/build';
 import type { World } from '../world/world';
 import { VEHICLE_VARIANTS, type VehicleAtlas } from './vehicleAtlas';
 
-const LANE_OFFSET_PX = 7.25;
+// 차선 오프셋은 화면 픽셀의 직각 법선으로 계산하면 안 된다.
+// 아이소메트릭 투영에서는 도로 폭도 타일 평면에서 투영되므로,
+// 진행방향의 '오른쪽' 타일 축으로 0.22칸 이동한 위치가 실제 차선 중심이다.
+const LANE_OFFSET_TILES = 0.22;
 const VEHICLE_RENDER_SIZE_PX = 20;
 
 export class VehicleMesh {
@@ -62,14 +65,15 @@ export class VehicleMesh {
       let wx = startX + (endX - startX) * t;
       let wy = startY + (endY - startY) * t;
 
-      // Canvas/Pixi 화면 좌표는 y가 아래로 증가한다.
-      // 따라서 진행 벡터 (dx,dy)의 화면상 오른쪽 법선은 (-dy,+dx)다.
-      // 코너에서는 현재 세그먼트 우측 차선에서 다음 세그먼트 우측 차선으로 연속 보간한다.
+      // 우측 차선은 화면 공간의 수직 벡터가 아니라 '타일 평면의 오른쪽 축'을
+      // 아이소메트릭으로 투영해서 계산한다. 화면 수직벡터를 쓰면 대각선 도로에서
+      // 어떤 방향은 중앙선을 타고, 반대 방향은 도로 가장자리에 붙는 왜곡이 생긴다.
+      // 코너에서는 현재 우측 차선에서 다음 우측 차선으로만 부드럽게 연결한다.
       const curDir = dirBetween(tx, ty, nx, ny);
       const nextDir = routeNextDir(vehicle, curDir);
       const a = rightLaneOffset(curDir);
       const b = rightLaneOffset(nextDir);
-      const blend = smoothstep(0.72, 1, t);
+      const blend = smoothstep(0.82, 1, t);
       wx += a[0] + (b[0] - a[0]) * blend;
       wy += a[1] + (b[1] - a[1]) * blend;
 
@@ -118,11 +122,14 @@ function routeNextDir(vehicle: Vehicle, fallback: number): number {
 }
 
 function rightLaneOffset(dir: number): [number, number] {
-  const d = DIRS[dir] ?? DIRS[0];
-  const dx = tileToWorldX(d[0], d[1]) - tileToWorldX(0, 0);
-  const dy = tileToWorldY(d[0], d[1], 0) - tileToWorldY(0, 0, 0);
-  const len = Math.hypot(dx, dy) || 1;
-  return [(-dy / len) * LANE_OFFSET_PX, (dx / len) * LANE_OFFSET_PX];
+  // DIRS 순서가 +tx, +ty, -tx, -ty 이므로 진행방향의 오른쪽은 다음 방향이다.
+  // 예: +tx로 달리면 +ty 쪽이 오른쪽 차선이다.
+  const right = DIRS[(dir + 1) & 3] ?? DIRS[1];
+  const dx =
+    (tileToWorldX(right[0], right[1]) - tileToWorldX(0, 0)) * LANE_OFFSET_TILES;
+  const dy =
+    (tileToWorldY(right[0], right[1], 0) - tileToWorldY(0, 0, 0)) * LANE_OFFSET_TILES;
+  return [dx, dy];
 }
 
 function dirBetween(x: number, y: number, nx: number, ny: number): number {
