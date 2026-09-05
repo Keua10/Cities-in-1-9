@@ -1,7 +1,7 @@
 import { CHUNK_SIZE, WORLD_SEED } from '../core/constants';
 import { Build } from '../world/build';
 import type { World } from '../world/world';
-import { capacityOf, isAnchor, levelOfCode, simHash, ZONE_C, ZONE_I, ZONE_R, zoneOfCode } from './buildings';
+import { capacityOf, isAnchor, levelOfCode, simHash, ZONE_C, ZONE_R, zoneOfCode } from './buildings';
 import type { CityStats } from './macro';
 import { edgeNeighbors, type RoadField } from './roadGraph';
 import { COMMUTE_RANGE_BY_TIER, JOB_FIT, SHOP_LINKS_MAX, SHOP_RANGE_BY_TIER } from './simConstants';
@@ -14,6 +14,7 @@ export class AssignmentTable {
   private table = new Map<string, ParcelAssignment>();
 
   rebuild(world: World, field: RoadField, stats: CityStats): void {
+    void field;
     this.table.clear();
     const jobs: Building[] = [];
     const shops: Building[] = [];

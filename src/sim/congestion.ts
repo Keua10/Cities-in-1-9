@@ -1,6 +1,6 @@
 import { CHUNK_SIZE, CHUNK_TILES } from '../core/constants';
 import { chunkIndexOf, chunkKey, localIndexOf } from '../core/iso';
-import { Build, DIRS, roadMask } from '../world/build';
+import { Build, DIRS } from '../world/build';
 import type { World } from '../world/world';
 import type { AssignmentTable, DestLink } from './assignment';
 import { edgeNeighbors, roadTileCapacity, type RoadField } from './roadGraph';
@@ -225,10 +225,6 @@ function idx(tx: number, ty: number): number {
 }
 function u8(v: number): number {
   return Math.max(0, Math.min(255, Math.round(v * 255)));
-}
-function pop4(v: number): number {
-  v &= 15;
-  return (v & 1) + ((v >> 1) & 1) + ((v >> 2) & 1) + ((v >> 3) & 1);
 }
 function entry(world: World, tx: number, ty: number, span: number): [number, number] | null {
   for (const point of edgeNeighbors(tx, ty, span)) {
