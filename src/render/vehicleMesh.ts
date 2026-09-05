@@ -7,7 +7,8 @@ import { DIRS } from '../world/build';
 import type { World } from '../world/world';
 import { VEHICLE_CELL, VEHICLE_VARIANTS, type VehicleAtlas } from './vehicleAtlas';
 
-const LANE_OFFSET_PX = 4;
+const LANE_OFFSET_PX = 7.25;
+const VEHICLE_RENDER_SIZE_PX = 20;
 
 export class VehicleMesh {
   readonly mesh: Mesh;
@@ -68,15 +69,17 @@ export class VehicleMesh {
       const nextDir = routeNextDir(vehicle, curDir);
       const a = rightLaneOffset(curDir);
       const b = rightLaneOffset(nextDir);
-      const blend = smoothstep(0.35, 1, t);
+      const blend = smoothstep(0.72, 1, t);
       wx += a[0] + (b[0] - a[0]) * blend;
       wy += a[1] + (b[1] - a[1]) * blend;
 
-      const half = VEHICLE_CELL / 2;
+      // 아틀라스 셀은 32px이지만 화면에 32px 그대로 그리면 도로 한 차선보다
+      // 차체가 커져 반대 차선까지 덮는다. UV 셀과 화면 크기를 분리한다.
+      const half = VEHICLE_RENDER_SIZE_PX / 2;
       const x0 = wx - half;
       const x1 = wx + half;
       const y1 = wy;
-      const y0 = wy - VEHICLE_CELL;
+      const y0 = wy - VEHICLE_RENDER_SIZE_PX;
       write(this.positions, q, [x0, y0, x1, y0, x1, y1, x0, y1]);
 
       // fallback atlas는 방향별 색이 달라 보일 수 있다. 정식 vehicles.png가 들어오면

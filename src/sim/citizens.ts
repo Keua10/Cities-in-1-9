@@ -17,6 +17,7 @@ import {
   AFTER_WORK_STAY_MAX_MINUTES,
   AFTER_WORK_STAY_MINUTES,
   COMMUTE_BUFFER_MINUTES,
+  COMMUTE_EARLY_SPREAD_MINUTES,
   DAYTIME_DAY_MS,
   FREIGHT_CURVE,
   FRIDAY_AFTER_WORK_COMMERCIAL_SHARE,
@@ -33,6 +34,7 @@ import {
   WEEKEND_FREIGHT_MUL,
   WORK_START_0830_SHARE,
   WORKPLACE_PRESENCE_MINUTES,
+  WORK_EXIT_SPREAD_MINUTES,
 } from './simConstants';
 import type { DaytimeSnapshot } from './time';
 
@@ -324,7 +326,10 @@ export class CitizenPool {
     const job = this.assignment.jobForSlot(home.tx, home.ty, slot);
     if (!job) return;
     const startMinute = workStartMinute(home.tx, home.ty, slot);
-    const endMinute = startMinute + WORKPLACE_PRESENCE_MINUTES;
+    const endMinute =
+      startMinute +
+      WORKPLACE_PRESENCE_MINUTES +
+      workExitSpreadMinutes(home.tx, home.ty, slot, life.absoluteDay);
     let dueLifeSlot = life.absoluteDay * SLOTS_PER_DAY + minuteToLifeSlot(endMinute);
     // 정상 범위에서는 여기에 걸리지 않는다. 심한 정체에서도 다음날까지 직장에 묶지 않는다.
     if (dueLifeSlot < life.absoluteLifeSlot) dueLifeSlot = life.absoluteLifeSlot;
@@ -469,7 +474,10 @@ export class CitizenPool {
           slot,
           flow.link,
         );
-        const endMinute = workStartMinute(flow.homeTx, flow.homeTy, slot) + WORKPLACE_PRESENCE_MINUTES;
+        const endMinute =
+          workStartMinute(flow.homeTx, flow.homeTy, slot) +
+          WORKPLACE_PRESENCE_MINUTES +
+          workExitSpreadMinutes(flow.homeTx, flow.homeTy, slot, life.absoluteDay);
         if (life.lifeSlotOfDay === minuteToLifeSlot(departMinute)) {
           out.push({
             purpose: TripPurpose.Commute,
@@ -510,7 +518,12 @@ export class CitizenPool {
     while (this.freightCursor < industries.length && out.length < budget) {
       const business = industries[this.freightCursor++];
       const gate = simRandom(WORLD_SEED, business.tx, business.ty, life.absoluteLifeSlot);
-      if (gate > (FREIGHT_CURVE[life.hourOfDay] ?? 0) * 0.03 * weekendMul) continue;
+      // LIFE_SLOT_MINUTES를 15->5로 낮춰도 시간당 화물 총량은 늘지 않게 확률을 보정한다.
+      const slotRateScale = LIFE_SLOT_MINUTES / 15;
+      if (
+        gate >
+        (FREIGHT_CURVE[life.hourOfDay] ?? 0) * 0.03 * slotRateScale * weekendMul
+      ) continue;
       const dest =
         destinations[
           simHash(WORLD_SEED, business.tx, business.ty, life.absoluteDay) % destinations.length
@@ -560,7 +573,19 @@ function commuteDepartureMinute(
   const realSeconds = job.dist / VEHICLE_SPEED_TILES_PER_SEC;
   const daytimeMinutes = realSeconds * (1440 / (DAYTIME_DAY_MS / 1000));
   const estimate = Math.ceil(daytimeMinutes + COMMUTE_BUFFER_MINUTES);
-  return Math.max(0, start - estimate);
+  // 08:30/09:00은 "도착 목표"로 유지하고, 출발만 0~20분 더 일찍 흩는다.
+  // 같은 집/직장/시민이면 매번 같은 값이라 재현 가능하다.
+  const earlySpread = Math.floor(
+    simRandom(WORLD_SEED, home.tx ^ job.tx, home.ty ^ job.ty, slot ^ 0x6c31) *
+      (COMMUTE_EARLY_SPREAD_MINUTES + 1),
+  );
+  return Math.max(0, start - estimate - earlySpread);
+}
+
+function workExitSpreadMinutes(tx: number, ty: number, slot: number, day: number): number {
+  return Math.floor(
+    simRandom(WORLD_SEED, tx, ty, slot ^ day ^ 0x5e17) * (WORK_EXIT_SPREAD_MINUTES + 1),
+  );
 }
 
 function minuteToLifeSlot(minute: number): number {

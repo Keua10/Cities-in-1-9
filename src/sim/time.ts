@@ -32,7 +32,7 @@ export interface DaytimeSnapshot {
   hourOfDay: number;
   /** 0~1439. */
   minuteOfDay: number;
-  /** 0~95 (LIFE_SLOT_MINUTES=15 기준). */
+  /** 0~287 (LIFE_SLOT_MINUTES=5 기준). */
   lifeSlotOfDay: number;
   /** 0=월 ... 6=일. accelerated daytime 달력의 요일이다. */
   weekday: number;

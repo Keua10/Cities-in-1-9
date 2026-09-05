@@ -259,6 +259,8 @@ export const ACCEL_TILES_PER_SEC2 = 16.0;
 export const DECEL_TILES_PER_SEC2 = 48.0;
 export const DESIRED_GAP_TILES = 0.55;
 export const MIN_GAP_TILES = 0.22;
+/** 차량 중심점 간격 계산에서 차체 길이를 따로 더한다. 기존 MIN/DESIRED는 범퍼 간격이다. */
+export const VEHICLE_BODY_LENGTH_TILES = 0.50;
 
 /* ---------------- 3.2단계: 신호등 ---------------- */
 export const SIGNAL_CYCLE_MS = 16_000;
@@ -284,20 +286,24 @@ export const FREIGHT_CURVE: readonly number[] = [
 ];
 export const MAX_SPAWNS_PER_SEC = 90;
 /** 정상 스폰은 이 간격 사이에서 결정론적으로 흩어진다. 90/s는 비상 상한일 뿐이다. */
-export const SPAWN_HEADWAY_MIN_MS = 55;
-export const SPAWN_HEADWAY_MAX_MS = 140;
+export const SPAWN_HEADWAY_MIN_MS = 220;
+export const SPAWN_HEADWAY_MAX_MS = 520;
 /** 교차로 정지선. 다음 타일이 교차로일 때 이 진행도보다 앞으로 나가지 않는다. */
 export const INTERSECTION_STOP_T = 0.94;
 
 /* ---------------- 3.2단계: 생활 스케줄 ---------------- */
-/** daytime 생활 스케줄 해상도. 15분 단위라 08:30 / 09:00을 정확히 나눌 수 있다. */
-export const LIFE_SLOT_MINUTES = 15;
+/** daytime 생활 스케줄 해상도. 5분 단위로 통행을 분산하되 08:30 / 09:00은 정확히 유지한다. */
+export const LIFE_SLOT_MINUTES = 5;
 /** 직장인의 출근 시각 분포. 나머지는 09:00 출근이다. */
 export const WORK_START_0830_SHARE = 0.45;
 /** 08:30 -> 17:30, 09:00 -> 18:00. 점심 1시간을 포함한 체류시간이다. */
 export const WORKPLACE_PRESENCE_MINUTES = 9 * 60;
 /** 예상 통근시간에 더해 미리 출발하는 여유시간. */
 export const COMMUTE_BUFFER_MINUTES = 10;
+/** 같은 출근조가 한 슬롯에 몰리지 않도록 시민마다 이 범위만큼 추가로 일찍 출발한다. */
+export const COMMUTE_EARLY_SPREAD_MINUTES = 20;
+/** 공식 퇴근시각 뒤 실제 주차장/건물에서 빠져나오는 시간을 자연스럽게 분산한다. */
+export const WORK_EXIT_SPREAD_MINUTES = 10;
 /** 토/일 정상 출근 비율. 공업은 교대근무가 있어 상업보다 조금 높다. */
 export const SATURDAY_WORK_SHARE_C = 0.22;
 export const SATURDAY_WORK_SHARE_I = 0.32;

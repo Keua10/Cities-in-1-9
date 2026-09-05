@@ -22,6 +22,7 @@ import {
   SPAWN_HEADWAY_MIN_MS,
   TRUCK_SPEED_MUL,
   VEHICLE_SPEED_TILES_PER_SEC,
+  VEHICLE_BODY_LENGTH_TILES,
 } from '../simConstants';
 import { sessionDaytimeAt, type DaytimeSnapshot } from '../time';
 import { canEnter, hasSignal } from './signals';
@@ -240,12 +241,17 @@ export class TrafficSim {
   }
 
   private spawnBlocked(tx: number, ty: number, dir: number): boolean {
+    const desiredCenterGap = VEHICLE_BODY_LENGTH_TILES + DESIRED_GAP_TILES;
+    const next = DIRS[dir] ?? DIRS[0];
+    const nx = tx + next[0];
+    const ny = ty + next[1];
     for (const vehicle of this.vehicles) {
       const [x, y] = tileAt(vehicle);
-      if (x !== tx || y !== ty) continue;
       if (!vehicleUsesDirection(vehicle, dir)) continue;
-      // 스폰점 바로 앞을 지나가는 차가 충분히 빠져나간 뒤 생성한다.
-      if (vehicle.tileT < DESIRED_GAP_TILES) return true;
+      // 차체 길이까지 포함한 중심점 간격으로 막는다. 기존에는 0.55타일만 보고
+      // 새 차를 만들어 32px fallback 차량이 서로 포개질 수 있었다.
+      if (x === tx && y === ty && vehicle.tileT < desiredCenterGap) return true;
+      if (x === nx && y === ny && 1 + vehicle.tileT < desiredCenterGap) return true;
     }
     return false;
   }
@@ -279,12 +285,17 @@ export class TrafficSim {
         (vehicle.kind === VehicleKind.Truck ? TRUCK_SPEED_MUL : 1);
 
       const gap = this.gapAhead(vehicle, occupancy, nextX, nextY, nextDir);
+      const minCenterGap = VEHICLE_BODY_LENGTH_TILES + MIN_GAP_TILES;
+      const desiredCenterGap = VEHICLE_BODY_LENGTH_TILES + DESIRED_GAP_TILES;
       if (Number.isFinite(gap)) {
-        const usable = Math.max(0, gap - MIN_GAP_TILES);
+        const usable = Math.max(0, gap - minCenterGap);
         // 속도가 높아도 앞차를 관통하지 않도록 제동거리로 가능한 속도를 제한한다.
         target = Math.min(target, Math.sqrt(2 * DECEL_TILES_PER_SEC2 * usable));
-        if (gap < DESIRED_GAP_TILES) {
-          target *= Math.max(0, usable / Math.max(0.001, DESIRED_GAP_TILES - MIN_GAP_TILES));
+        if (gap < desiredCenterGap) {
+          target *= Math.max(
+            0,
+            usable / Math.max(0.001, desiredCenterGap - minCenterGap),
+          );
         }
       }
 
@@ -301,7 +312,7 @@ export class TrafficSim {
       let advance = vehicle.speed * dt;
 
       if (Number.isFinite(gap)) {
-        advance = Math.min(advance, Math.max(0, gap - MIN_GAP_TILES));
+        advance = Math.min(advance, Math.max(0, gap - minCenterGap));
       }
       if (stopAtIntersection) {
         advance = Math.min(advance, Math.max(0, INTERSECTION_STOP_T - vehicle.tileT));
