@@ -420,8 +420,10 @@ export class CitizenPool {
       start = 19 * 60;
       end = 21 * 60;
     } else {
-      start = 10 * 60;
-      end = 17 * 60;
+      // 10:00 정각을 생활 통행의 경계로 만들지 않는다. 무직/비근무 시민의 장보기는
+      // 09:30부터 17:30까지 넓게 분산되어 오전 10시에 차량이 갑자기 늘지 않는다.
+      start = 9 * 60 + 30;
+      end = 17 * 60 + 30;
     }
     const r = simRandom(WORLD_SEED, home.tx, home.ty, slot ^ life.absoluteDay ^ 0x2244);
     const slots = Math.max(1, Math.floor((end - start) / LIFE_SLOT_MINUTES) + 1);

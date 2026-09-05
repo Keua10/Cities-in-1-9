@@ -2,15 +2,11 @@ import { Mesh, MeshGeometry } from 'pixi.js';
 import { MAX_ACTIVE_VEHICLES, TILE_W, WORLD_SEED } from '../core/constants';
 import { tileToWorldX, tileToWorldY } from '../core/iso';
 import { simHash } from '../sim/buildings';
+import { lanePosition } from '../sim/traffic/laneGeometry';
 import type { Vehicle } from '../sim/traffic/vehicles';
-import { DIRS } from '../world/build';
 import type { World } from '../world/world';
 import { VEHICLE_VARIANTS, type VehicleAtlas } from './vehicleAtlas';
 
-// 차선 오프셋은 화면 픽셀의 직각 법선으로 계산하면 안 된다.
-// 아이소메트릭 투영에서는 도로 폭도 타일 평면에서 투영되므로,
-// 진행방향의 '오른쪽' 타일 축으로 0.22칸 이동한 위치가 실제 차선 중심이다.
-const LANE_OFFSET_TILES = 0.22;
 const VEHICLE_RENDER_SIZE_PX = 20;
 
 export class VehicleMesh {
@@ -58,24 +54,14 @@ export class VehicleMesh {
       const ny = vehicle.route.tiles[ni + 1];
       const t = vehicle.tileT;
 
-      const startX = tileToWorldX(tx, ty);
-      const startY = tileToWorldY(tx, ty, this.world.sampleHeight(tx, ty));
-      const endX = tileToWorldX(nx, ny);
-      const endY = tileToWorldY(nx, ny, this.world.sampleHeight(nx, ny));
-      let wx = startX + (endX - startX) * t;
-      let wy = startY + (endY - startY) * t;
-
-      // 우측 차선은 화면 공간의 수직 벡터가 아니라 '타일 평면의 오른쪽 축'을
-      // 아이소메트릭으로 투영해서 계산한다. 화면 수직벡터를 쓰면 대각선 도로에서
-      // 어떤 방향은 중앙선을 타고, 반대 방향은 도로 가장자리에 붙는 왜곡이 생긴다.
-      // 코너에서는 현재 우측 차선에서 다음 우측 차선으로만 부드럽게 연결한다.
-      const curDir = dirBetween(tx, ty, nx, ny);
-      const nextDir = routeNextDir(vehicle, curDir);
-      const a = rightLaneOffset(curDir);
-      const b = rightLaneOffset(nextDir);
-      const blend = smoothstep(0.82, 1, t);
-      wx += a[0] + (b[0] - a[0]) * blend;
-      wy += a[1] + (b[1] - a[1]) * blend;
+      // Rendering and traffic now share one TILE-SPACE lane path.
+      // No screen-space nudging: the car's actual route point itself is the right-hand lane.
+      const [laneTx, laneTy] = lanePosition(vehicle.route, vehicle.routeIdx, t);
+      const h0 = this.world.sampleHeight(tx, ty);
+      const h1 = this.world.sampleHeight(nx, ny);
+      const height = h0 + (h1 - h0) * t;
+      const wx = tileToWorldX(laneTx, laneTy);
+      const wy = tileToWorldY(laneTx, laneTy, height);
 
       // 아틀라스 셀은 32px이지만 화면에 32px 그대로 그리면 도로 한 차선보다
       // 차체가 커져 반대 차선까지 덮는다. UV 셀과 화면 크기를 분리한다.
@@ -106,44 +92,6 @@ export class VehicleMesh {
     this.mesh.destroy();
     try { this.geometry.destroy(true); } catch {}
   }
-}
-
-function routeNextDir(vehicle: Vehicle, fallback: number): number {
-  const nextIndex = vehicle.routeIdx + 1;
-  const points = vehicle.route.tiles.length / 2;
-  if (nextIndex >= points - 1) return fallback;
-  const i = nextIndex * 2;
-  return dirBetween(
-    vehicle.route.tiles[i],
-    vehicle.route.tiles[i + 1],
-    vehicle.route.tiles[i + 2],
-    vehicle.route.tiles[i + 3],
-  );
-}
-
-function rightLaneOffset(dir: number): [number, number] {
-  // DIRS 순서가 +tx, +ty, -tx, -ty 이므로 진행방향의 오른쪽은 다음 방향이다.
-  // 예: +tx로 달리면 +ty 쪽이 오른쪽 차선이다.
-  const right = DIRS[(dir + 1) & 3] ?? DIRS[1];
-  const dx =
-    (tileToWorldX(right[0], right[1]) - tileToWorldX(0, 0)) * LANE_OFFSET_TILES;
-  const dy =
-    (tileToWorldY(right[0], right[1], 0) - tileToWorldY(0, 0, 0)) * LANE_OFFSET_TILES;
-  return [dx, dy];
-}
-
-function dirBetween(x: number, y: number, nx: number, ny: number): number {
-  for (let i = 0; i < DIRS.length; i++) {
-    if (x + DIRS[i][0] === nx && y + DIRS[i][1] === ny) return i;
-  }
-  return 0;
-}
-
-function smoothstep(a: number, b: number, value: number): number {
-  if (value <= a) return 0;
-  if (value >= b) return 1;
-  const t = (value - a) / (b - a);
-  return t * t * (3 - 2 * t);
 }
 
 function write(array: Float32Array, q: number, values: number[]): void {

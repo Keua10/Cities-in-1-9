@@ -286,8 +286,12 @@ export const FREIGHT_CURVE: readonly number[] = [
 ];
 export const MAX_SPAWNS_PER_SEC = 90;
 /** 정상 스폰은 이 간격 사이에서 결정론적으로 흩어진다. 90/s는 비상 상한일 뿐이다. */
-export const SPAWN_HEADWAY_MIN_MS = 220;
-export const SPAWN_HEADWAY_MAX_MS = 520;
+export const SPAWN_HEADWAY_MIN_MS = 380;
+export const SPAWN_HEADWAY_MAX_MS = 850;
+/** A* 완료 시점도 차량 생성 시점이 되지 않도록 준비 대기열에서 한 번 더 흩는다. */
+export const SPAWN_READY_JITTER_MAX_MS = 1_800;
+/** 같은 건물/경계 진입로에서 연속 차량이 한 덩어리로 튀어나오지 않게 하는 최소 간격. */
+export const SPAWN_GATE_HEADWAY_MS = 700;
 /** 교차로 정지선. 다음 타일이 교차로일 때 이 진행도보다 앞으로 나가지 않는다. */
 export const INTERSECTION_STOP_T = 0.94;
 

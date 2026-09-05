@@ -18,13 +18,16 @@ import {
   REROUTE_LOOKAHEAD,
   REROUTE_THRESHOLD,
   ROUTE_BUDGET_PER_FRAME,
+  SPAWN_GATE_HEADWAY_MS,
   SPAWN_HEADWAY_MAX_MS,
   SPAWN_HEADWAY_MIN_MS,
+  SPAWN_READY_JITTER_MAX_MS,
   TRUCK_SPEED_MUL,
   VEHICLE_SPEED_TILES_PER_SEC,
   VEHICLE_BODY_LENGTH_TILES,
 } from '../simConstants';
 import { sessionDaytimeAt, type DaytimeSnapshot } from '../time';
+import { isTurnNode } from './laneGeometry';
 import { canEnter, hasSignal } from './signals';
 import { Router, type Route } from './router';
 import { VehicleKind, type Vehicle } from './vehicles';
@@ -47,6 +50,7 @@ export class TrafficSim {
   private spawnTokens = 0;
   private readySpawns: ReadySpawn[] = [];
   private nextSpawnMs = 0;
+  private nextGateSpawnMs = new Map<string, number>();
   private spawnSequence = 0;
   private generation = 0;
   private lastMacroTick = -1;
@@ -70,6 +74,7 @@ export class TrafficSim {
     this.activeCy = cy;
     this.generation++;
     this.nextSpawnMs = this.timeMs;
+    this.nextGateSpawnMs.clear();
     this.citizens.setActiveRegion(cx, cy, SIM_RADIUS_CHUNKS);
     this.congestion.setActiveRegion(cx, cy, SIM_RADIUS_CHUNKS);
     const kept: Vehicle[] = [];
@@ -109,7 +114,7 @@ export class TrafficSim {
     );
     // A*가 프레임당 5건이므로 발생 쪽도 작은 묶음만 넘긴다. 출근 시각 한 틱에
     // 수백 명이 잡혀도 scanCursor가 다음 프레임부터 이어서 처리한다.
-    const tripBudget = Math.min(room, ROUTE_BUDGET_PER_FRAME * 2);
+    const tripBudget = Math.min(room, ROUTE_BUDGET_PER_FRAME);
     const lifeDelta = Math.min(dtMs, 250);
     this.daytime = sessionDaytimeAt(this.timeMs, this.macro.day);
     const trips = this.citizens.collectTrips(this.daytime, lifeDelta, tripBudget);
@@ -172,6 +177,7 @@ export class TrafficSim {
       // 차량도 0~한 headway 만큼 흩어서 대기열에 넣는다.
       const jitter = this.spawnJitterMs(trip, this.spawnSequence++);
       this.readySpawns.push({ trip, route, readyAtMs: this.timeMs + jitter });
+      this.readySpawns.sort((a, b) => a.readyAtMs - b.readyAtMs);
     });
   }
 
@@ -181,7 +187,7 @@ export class TrafficSim {
 
     // 첫 차량의 진입로가 막혔다고 도시 전체 스폰을 막지 않는다. 한 headway에
     // 최대 한 대만 꺼내되, 준비된 다른 진입로를 몇 개 훑는다.
-    const checks = Math.min(this.readySpawns.length, 12);
+    const checks = Math.min(this.readySpawns.length, 32);
     for (let i = 0; i < checks; i++) {
       const pending = this.readySpawns[i];
       if (pending.readyAtMs > this.timeMs) continue;
@@ -219,6 +225,8 @@ export class TrafficSim {
     const dir = sliced.tiles.length >= 4
       ? dirBetween(sliced.tiles[0], sliced.tiles[1], sliced.tiles[2], sliced.tiles[3])
       : 0;
+    const gateKey = `${sx},${sy},${dir}`;
+    if ((this.nextGateSpawnMs.get(gateKey) ?? 0) > this.timeMs) return SpawnResult.Blocked;
     if (this.spawnBlocked(sx, sy, dir)) return SpawnResult.Blocked;
 
     const kind = trip.purpose === TripPurpose.Freight ? VehicleKind.Truck : VehicleKind.Car;
@@ -237,6 +245,13 @@ export class TrafficSim {
     };
     this.vehicles.push(vehicle);
     this.trips.set(vehicle, trip);
+    const gateJitter = simHash(
+      WORLD_SEED,
+      trip.fromTx ^ trip.toTx,
+      trip.fromTy ^ trip.toTy,
+      this.spawnSequence++,
+    ) % 251;
+    this.nextGateSpawnMs.set(gateKey, this.timeMs + SPAWN_GATE_HEADWAY_MS + gateJitter);
     return SpawnResult.Spawned;
   }
 
@@ -258,12 +273,15 @@ export class TrafficSim {
 
   private moveVehicles(dt: number): void {
     const occupancy = buildLaneOccupancy(this.vehicles);
-    // 교차로 하나에는 동시에 한 차량만 진입시킨다. 신호 위상과 별개로 좌/우회전
-    // 궤적 충돌을 막는 reservation 역할을 한다.
-    const intersectionOwner = new Map<string, Vehicle>();
+    // Conflict reservation is shared by signal junctions AND unsignalled turn tiles.
+    // This closes the old gap where two cars could overlap at a 90-degree bend simply because
+    // their lane keys were different.
+    const conflictOwner = new Map<string, Vehicle>();
     for (const vehicle of this.vehicles) {
       const [tx, ty] = tileAt(vehicle);
-      if (hasSignal(this.world, tx, ty)) intersectionOwner.set(`${tx},${ty}`, vehicle);
+      if (isConflictNode(this.world, vehicle, vehicle.routeIdx)) {
+        conflictOwner.set(`${tx},${ty}`, vehicle);
+      }
     }
 
     const remove = new Set<Vehicle>();
@@ -280,7 +298,9 @@ export class TrafficSim {
       const nextX = vehicle.route.tiles[(vehicle.routeIdx + 1) * 2];
       const nextY = vehicle.route.tiles[(vehicle.routeIdx + 1) * 2 + 1];
       const nextDir = dirBetween(curX, curY, nextX, nextY);
-      const nextIsIntersection = hasSignal(this.world, nextX, nextY);
+      const nextNodeIndex = vehicle.routeIdx + 1;
+      const nextHasSignal = hasSignal(this.world, nextX, nextY);
+      const nextIsConflict = nextHasSignal || isTurnNode(vehicle.route, nextNodeIndex);
       let target = VEHICLE_SPEED_TILES_PER_SEC *
         (vehicle.kind === VehicleKind.Truck ? TRUCK_SPEED_MUL : 1);
 
@@ -300,9 +320,9 @@ export class TrafficSim {
       }
 
       let stopAtIntersection = false;
-      if (nextIsIntersection) {
-        const owner = intersectionOwner.get(`${nextX},${nextY}`);
-        const red = !canEnter(nextX, nextY, nextDir, this.timeMs);
+      if (nextIsConflict) {
+        const owner = conflictOwner.get(`${nextX},${nextY}`);
+        const red = nextHasSignal && !canEnter(nextX, nextY, nextDir, this.timeMs);
         stopAtIntersection = red || (owner !== undefined && owner !== vehicle);
         if (stopAtIntersection) target = 0;
       }
@@ -321,8 +341,8 @@ export class TrafficSim {
 
       // 첫 차량이 이번 프레임에 교차로를 건너갈 예정이면 즉시 예약한다. 같은 프레임
       // 뒤쪽 차량이 동일 교차로로 겹쳐 들어오는 것을 막는다.
-      if (nextIsIntersection && !stopAtIntersection && vehicle.tileT + advance >= 1) {
-        intersectionOwner.set(`${nextX},${nextY}`, vehicle);
+      if (nextIsConflict && !stopAtIntersection && vehicle.tileT + advance >= 1) {
+        conflictOwner.set(`${nextX},${nextY}`, vehicle);
       }
 
       vehicle.tileT += advance;
@@ -425,7 +445,7 @@ export class TrafficSim {
 
   private spawnJitterMs(trip: Trip, seq: number): number {
     return simHash(WORLD_SEED, trip.fromTx, trip.fromTy, trip.toTx ^ trip.toTy ^ seq) %
-      Math.max(1, SPAWN_HEADWAY_MAX_MS);
+      Math.max(1, SPAWN_READY_JITTER_MAX_MS);
   }
 
   private spawnHeadwayMs(trip: Trip, seq: number): number {
@@ -521,6 +541,14 @@ function buildLaneOccupancy(vehicles: readonly Vehicle[]): Map<string, Vehicle[]
   }
   for (const list of occupancy.values()) list.sort((a, b) => b.tileT - a.tileT);
   return occupancy;
+}
+
+function isConflictNode(world: World, vehicle: Vehicle, nodeIndex: number): boolean {
+  const points = vehicle.route.tiles.length / 2;
+  if (nodeIndex < 0 || nodeIndex >= points) return false;
+  const x = vehicle.route.tiles[nodeIndex * 2];
+  const y = vehicle.route.tiles[nodeIndex * 2 + 1];
+  return hasSignal(world, x, y) || isTurnNode(vehicle.route, nodeIndex);
 }
 
 function dirBetween(x: number, y: number, nx: number, ny: number): number {
