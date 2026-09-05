@@ -26,6 +26,8 @@ import { BuildingMesh } from './buildingMesh';
 import type { TrafficSim } from '../sim/traffic/trafficSim';
 import type { VehicleAtlas } from './vehicleAtlas';
 import { VehicleMesh } from './vehicleMesh';
+import { hasSignal, phaseAt, SignalPhase } from '../sim/traffic/signals';
+import { Build } from '../world/build';
 import { ChunkMesh } from './chunkMesh';
 
 export interface RenderStats {
@@ -60,6 +62,8 @@ export class WorldRenderer {
   private fogLayer = new Container();
   private gridLayer = new Graphics();
   private cursorLayer = new Graphics();
+  private signalLayer = new Graphics();
+  private lastSignalDrawMs = -1;
 
   private meshes = new Map<string, ChunkMesh>();
   /**
@@ -92,7 +96,7 @@ export class WorldRenderer {
     private atlas: TileAtlas,
     private buildingAtlas: BuildingAtlas,
   ) {
-    this.root.addChild(this.groundLayer, this.fogLayer, this.gridLayer, this.cursorLayer);
+    this.root.addChild(this.groundLayer, this.fogLayer, this.signalLayer, this.gridLayer, this.cursorLayer);
     this.groundLayer.interactiveChildren = false;
     this.fogLayer.interactiveChildren = false;
     // 고도가 있으면 청크끼리도 겹친다. 뒤쪽 청크부터 그려야 한다.
@@ -191,10 +195,47 @@ export class WorldRenderer {
     this.evict(now, range);
     for (const key of [...this.vehicleMeshes.keys()]) if (!usedVehicleMeshes.has(key)) this.dropVehicles(key);
 
+    if (this.traffic && (this.lastSignalDrawMs < 0 || now - this.lastSignalDrawMs >= 120)) {
+      this.lastSignalDrawMs = now;
+      this.drawSignals(range);
+    }
+
     this.stats.visibleChunks = visible;
     this.stats.loadedMeshes = this.meshes.size;
     this.stats.foggedChunks = fogged;
     this.stats.visibleBuildings = buildingsShown;
+  }
+
+  private drawSignals(range: { cx0: number; cy0: number; cx1: number; cy1: number }): void {
+    this.signalLayer.clear();
+    if (!this.traffic) return;
+    const signalTime = this.traffic.signalTimeMs;
+    for (let cy = range.cy0; cy <= range.cy1; cy++) {
+      for (let cx = range.cx0; cx <= range.cx1; cx++) {
+        if (this.showFog && !this.world.isExplored(cx, cy)) continue;
+        const parcel = this.world.peekParcel(cx, cy);
+        if (!parcel?.build) continue;
+        const bx = cx * CHUNK_SIZE;
+        const by = cy * CHUNK_SIZE;
+        for (let ly = 0; ly < CHUNK_SIZE; ly++) {
+          for (let lx = 0; lx < CHUNK_SIZE; lx++) {
+            if (parcel.build[ly * CHUNK_SIZE + lx] !== Build.Road) continue;
+            const tx = bx + lx;
+            const ty = by + ly;
+            if (!hasSignal(this.world, tx, ty)) continue;
+            const x = tileToWorldX(tx, ty);
+            const y = tileToWorldY(tx, ty, this.world.sampleHeight(tx, ty));
+            const phase = phaseAt(tx, ty, signalTime);
+            const nsGo = phase === SignalPhase.NSGreen;
+            const ewGo = phase === SignalPhase.EWGreen;
+            // 임시 신호등 표현. 정식 도로/신호 스프라이트가 들어오기 전에도
+            // 교차로에 신호가 존재하고 어느 축이 열려 있는지 눈으로 확인할 수 있다.
+            this.signalLayer.rect(x - 8, y - 13, 4, 4).fill({ color: nsGo ? 0x6fe27e : 0xe25f5f, alpha: 0.95 });
+            this.signalLayer.rect(x + 4, y - 13, 4, 4).fill({ color: ewGo ? 0x6fe27e : 0xe25f5f, alpha: 0.95 });
+          }
+        }
+      }
+    }
   }
 
   private ensureMesh(key: string, cx: number, cy: number): ChunkMesh {

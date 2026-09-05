@@ -38,13 +38,14 @@ export class AssignmentTable {
       const filled=home.capacity;
       const out:ParcelAssignment={jobs:[],shops:[],unemployed:filled};
       let left=filled;
-      const distances=roadDistances(world,home.roadTx,home.roadTy,COMMUTE_RANGE_BY_TIER[home.level-1]);
+      const commuteMax=COMMUTE_RANGE_BY_TIER[home.level-1];
+      const shopMax=SHOP_RANGE_BY_TIER[home.level-1];
+      const distances=roadDistances(world,home.roadTx,home.roadTy,Math.max(commuteMax,shopMax));
       const candidates=jobs.map(j=>({j,dist:distances.get(key(j.roadTx,j.roadTy))??-1}))
-        .filter(x=>x.dist>=0 && x.j.remaining>0)
+        .filter(x=>x.dist>=0 && x.dist<=commuteMax && x.j.remaining>0)
         .sort((a,b)=>jobScore(home.level,b.j.level,b.dist)-jobScore(home.level,a.j.level,a.dist) || coordSort(a.j,b.j));
       for(const {j,dist} of candidates){ if(left<=0)break; const take=Math.min(left,j.remaining); if(take<=0)continue; pushLink(out.jobs,j,take,dist); j.remaining-=take; left-=take; }
       out.unemployed=left;
-      const shopMax=SHOP_RANGE_BY_TIER[home.level-1];
       const shopCandidates=shops.map(s=>({s,dist:distances.get(key(s.roadTx,s.roadTy))??-1}))
         .filter(x=>x.dist>=0 && x.dist<=shopMax)
         .sort((a,b)=>shopScore(home.level,b.s.level,b.dist)-shopScore(home.level,a.s.level,a.dist) || coordSort(a.s,b.s))

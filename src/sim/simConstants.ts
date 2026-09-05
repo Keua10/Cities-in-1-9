@@ -256,7 +256,7 @@ export const ROUTE_MAX_NODES = 4000;
 export const VEHICLE_SPEED_TILES_PER_SEC = 8.0;
 export const TRUCK_SPEED_MUL = 0.72;
 export const ACCEL_TILES_PER_SEC2 = 16.0;
-export const DECEL_TILES_PER_SEC2 = 22.0;
+export const DECEL_TILES_PER_SEC2 = 48.0;
 export const DESIRED_GAP_TILES = 0.55;
 export const MIN_GAP_TILES = 0.22;
 
@@ -283,6 +283,11 @@ export const FREIGHT_CURVE: readonly number[] = [
   0.95, 1.0, 1.0, 0.9, 0.8, 0.7, 0.5, 0.35, 0.25, 0.2, 0.15, 0.1,
 ];
 export const MAX_SPAWNS_PER_SEC = 90;
+/** 정상 스폰은 이 간격 사이에서 결정론적으로 흩어진다. 90/s는 비상 상한일 뿐이다. */
+export const SPAWN_HEADWAY_MIN_MS = 55;
+export const SPAWN_HEADWAY_MAX_MS = 140;
+/** 교차로 정지선. 다음 타일이 교차로일 때 이 진행도보다 앞으로 나가지 않는다. */
+export const INTERSECTION_STOP_T = 0.94;
 
 /* ---------------- 3.2단계: 생활 스케줄 ---------------- */
 /** daytime 생활 스케줄 해상도. 15분 단위라 08:30 / 09:00을 정확히 나눌 수 있다. */

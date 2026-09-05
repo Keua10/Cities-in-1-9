@@ -127,6 +127,8 @@ export class CongestionMap {
   }
 
   rebuildEstimate(world: World, _field: RoadField, table: AssignmentTable): void {
+    // 도로/직장이 바뀐 뒤 예전 추정치가 유령 혼잡으로 남지 않게 먼저 비운다.
+    for (const chunk of this.chunks.values()) chunk.estimate.fill(0);
     const flow = new Map<string, number>();
     const distanceCache = new Map<string, Map<string, number>>();
     const linkInfo: Array<{
