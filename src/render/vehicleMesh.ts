@@ -61,9 +61,9 @@ export class VehicleMesh {
       let wx = startX + (endX - startX) * t;
       let wy = startY + (endY - startY) * t;
 
-      // 진행방향 기준 오른쪽 차선. 기존 (-dy,+dx)는 화면 좌표에서 왼쪽이었다.
-      // 코너에서는 현재 세그먼트의 우측 오프셋에서 다음 세그먼트의 우측 오프셋으로
-      // 연속 보간해, 회전 순간 차가 옆으로 튀는 현상을 없앤다.
+      // Canvas/Pixi 화면 좌표는 y가 아래로 증가한다.
+      // 따라서 진행 벡터 (dx,dy)의 화면상 오른쪽 법선은 (-dy,+dx)다.
+      // 코너에서는 현재 세그먼트 우측 차선에서 다음 세그먼트 우측 차선으로 연속 보간한다.
       const curDir = dirBetween(tx, ty, nx, ny);
       const nextDir = routeNextDir(vehicle, curDir);
       const a = rightLaneOffset(curDir);
@@ -119,8 +119,7 @@ function rightLaneOffset(dir: number): [number, number] {
   const dx = tileToWorldX(d[0], d[1]) - tileToWorldX(0, 0);
   const dy = tileToWorldY(d[0], d[1], 0) - tileToWorldY(0, 0, 0);
   const len = Math.hypot(dx, dy) || 1;
-  // 화면 좌표(y가 아래로 증가)에서 진행 벡터의 오른쪽 법선은 (+dy,-dx).
-  return [(dy / len) * LANE_OFFSET_PX, (-dx / len) * LANE_OFFSET_PX];
+  return [(-dy / len) * LANE_OFFSET_PX, (dx / len) * LANE_OFFSET_PX];
 }
 
 function dirBetween(x: number, y: number, nx: number, ny: number): number {
