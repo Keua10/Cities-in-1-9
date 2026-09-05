@@ -1,0 +1,10 @@
+import { Texture } from 'pixi.js';
+export const VEHICLE_ATLAS_URL='sprites/vehicles.png';
+export const VEHICLE_CELL=32;
+export const VEHICLE_VARIANTS=2;
+export const VEHICLE_ATLAS_W=256;
+export const VEHICLE_ATLAS_H=64;
+export interface VehicleAtlas{texture:Texture;placeholder:boolean;uv(kind:number,dir:number,variant:number):[number,number,number,number];}
+export async function loadVehicleAtlas():Promise<VehicleAtlas>{const art=await loadImage(VEHICLE_ATLAS_URL);const canvas=document.createElement('canvas');canvas.width=VEHICLE_ATLAS_W;canvas.height=VEHICLE_ATLAS_H;const ctx=canvas.getContext('2d');if(!ctx)throw new Error('2D 캔버스를 만들 수 없습니다');ctx.imageSmoothingEnabled=false;if(art)ctx.drawImage(art,0,0);else drawPlaceholder(ctx);const texture=Texture.from(canvas);texture.source.scaleMode='nearest';texture.source.autoGenerateMipmaps=false;return{texture,placeholder:!art,uv(kind,dir,variant){const x=(dir*VEHICLE_VARIANTS+(variant%VEHICLE_VARIANTS))*VEHICLE_CELL,y=(kind&1)*VEHICLE_CELL;return[x/VEHICLE_ATLAS_W,y/VEHICLE_ATLAS_H,(x+VEHICLE_CELL)/VEHICLE_ATLAS_W,(y+VEHICLE_CELL)/VEHICLE_ATLAS_H];}};}
+async function loadImage(url:string):Promise<HTMLImageElement|null>{try{const h=await fetch(url,{method:'HEAD'});if(!h.ok||!(h.headers.get('content-type')??'').startsWith('image'))return null;}catch{return null;}return new Promise(r=>{const i=new Image();i.onload=()=>r(i);i.onerror=()=>r(null);i.src=url;});}
+function drawPlaceholder(ctx:CanvasRenderingContext2D){const palettes=[['#6d9fd3','#d9e4ee','#263746'],['#cc8a56','#ead2b8','#3c2d22'],['#70a36a','#dce6d7','#2b3b29']];for(let kind=0;kind<2;kind++)for(let dir=0;dir<4;dir++)for(let v=0;v<2;v++){const ox=(dir*2+v)*32,oy=kind*32,p=palettes[(dir+v)%palettes.length];ctx.fillStyle=p[2];ctx.fillRect(ox+5,oy+12,22+(kind?4:0),12);ctx.fillStyle=p[0];ctx.fillRect(ox+7,oy+10,18+(kind?5:0),10);ctx.fillStyle=p[1];ctx.fillRect(ox+10,oy+11,7,4);ctx.fillStyle='#111';ctx.fillRect(ox+8,oy+22,4,3);ctx.fillRect(ox+21+(kind?3:0),oy+22,4,3);}}

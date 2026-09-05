@@ -86,6 +86,25 @@ export class RoadField {
     return best;
   }
 
+  /** 마지막 rebuild 에 포함된 개발 청크의 도로 타일을 전부 노출한다. */
+  *roads(world: World): Generator<[number, number]> {
+    for (const p of world.developedParcels()) {
+      if (!p.build) continue;
+      const baseX = p.cx * CHUNK_SIZE;
+      const baseY = p.cy * CHUNK_SIZE;
+      for (let ly = 0; ly < CHUNK_SIZE; ly++) {
+        for (let lx = 0; lx < CHUNK_SIZE; lx++) {
+          if (p.build[ly * CHUNK_SIZE + lx] === Build.Road) yield [baseX + lx, baseY + ly];
+        }
+      }
+    }
+  }
+
+  /** 도로 연결 형태만으로 계산한 기본 용량 배율. 경사 보정은 congestion.ts 에서 곱한다. */
+  roadCapacity(world: World, tx: number, ty: number): number {
+    return roadTileCapacity(world, tx, ty);
+  }
+
   /** 전체 재계산. 하루에 한 번(ROAD_FIELD_INTERVAL) 돈다. */
   rebuild(world: World): void {
     this.fields.clear();
@@ -252,4 +271,22 @@ export function touchesRoad(
     if (world.getBuild(rx, ry) === Build.Road) return true;
   }
   return false;
+}
+
+/** 도로 연결 수/형태로 계산한 기본 용량 배율. */
+export function roadTileCapacity(world: World, tx: number, ty: number): number {
+  if (world.getBuild(tx, ty) !== Build.Road) return 0;
+  let mask = 0;
+  let count = 0;
+  for (let d = 0; d < DIRS.length; d++) {
+    const [dx, dy] = DIRS[d];
+    if (world.getBuild(tx + dx, ty + dy) === Build.Road) {
+      mask |= 1 << d;
+      count++;
+    }
+  }
+  if (count <= 1) return 0.5;
+  if (count === 2) return mask === 0b0101 || mask === 0b1010 ? 1.0 : 0.8;
+  if (count === 3) return 0.6;
+  return 0.5;
 }

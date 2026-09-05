@@ -42,7 +42,7 @@ export const PAN_MIN_SPEED = 0.02; // 이하로 떨어지면 관성 정지 (px/m
 export const RENDER_MARGIN_PX = 192; // 화면 밖으로 미리 채워두는 여유
 export const CHUNK_MESH_BUDGET = 28; // 동시에 메모리에 올려두는 청크 메시 상한
 export const SIM_RADIUS_CHUNKS = 1; // 마이크로 시뮬 반경 (카메라 기준 3x3)
-export const MAX_ACTIVE_VEHICLES = 1000; // 4단계에서 사용
+export const MAX_ACTIVE_VEHICLES = 1000; // 3.2단계에서 사용
 
 /* ---------- 저장(1단계) ---------- */
 /** Firestore 문서 구조 버전. 구조를 바꾸면 올리고 마이그레이션 코드를 붙인다. */

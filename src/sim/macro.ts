@@ -14,10 +14,14 @@ import {
   zoneOfCode,
 } from './buildings';
 import { growParcel, type GrowthContext } from './growth';
+import { AssignmentTable } from './assignment';
+import { CongestionMap } from './congestion';
 import { RoadField } from './roadGraph';
 import {
   COMMUTE_BAD_DIST,
   COMMUTE_GOOD_DIST,
+  CONGESTION_PENALTY_R,
+  CONGESTION_PENALTY_W,
   DEMAND_SCALE,
   DEMAND_SMOOTH,
   EXPORT_PER_SQRT_POP,
@@ -115,6 +119,8 @@ export class MacroSim {
     dailyUpkeep: 0,
   };
   readonly roadField = new RoadField();
+  private assignment: AssignmentTable | null = null;
+  private congestion: CongestionMap | null = null;
 
   /** 이번 접속에서 따라잡아야 할 남은 틱. 0 이면 실시간으로 돈다. */
   catchupLeft = 0;
@@ -128,7 +134,7 @@ export class MacroSim {
   /**
    * 건물별 입주율(0~255). 저장하지 않는다.
    * 매 틱 바뀌는 값이라 저장하면 도시의 모든 청크가 매 틱 저장 대상이 된다.
-   * 현재 만족도와 도로망에서 바로 다시 계산하므로 저장 이력에 의존하지 않는다.
+   * 만족도와 도로망에서 언제든 다시 수렴하므로 재접속 때 잠깐 채워지면 그만이다.
    */
   private occ = new Map<string, Uint8Array>();
   /** 청크별 공업 밀도. 주거 만족도를 깎는 값. evaluate 에서 갱신한다. */
@@ -143,6 +149,12 @@ export class MacroSim {
     private world: World,
     private macro: MacroState,
   ) {}
+
+  /** STEP 3.2 파생 레이어를 연결한다. 저장 상태에는 포함하지 않는다. */
+  attachTraffic(congestion: CongestionMap, assignment: AssignmentTable): void {
+    this.congestion = congestion;
+    this.assignment = assignment;
+  }
 
   get tick(): number {
     return this.macro.tick;
@@ -190,6 +202,9 @@ export class MacroSim {
     // 불러온 직후에는 통계가 비어 있다. 한 번 채워야 수요가 0 에서 시작하지 않는다.
     this.evaluate(true);
     this.roadField.rebuild(this.world);
+    // 거리장이 생긴 뒤 입주율을 한 번 더 계산해야 첫 배정이 0명으로 굳지 않는다.
+    this.evaluate(false);
+    this.rebuildTrafficFields();
   }
 
   /** 실시간 프레임에서 부른다. 지나간 만큼 틱을 돌린다. */
@@ -218,9 +233,8 @@ export class MacroSim {
   private step(): void {
     this.macro.tick++;
 
-    // occupancy/satisfaction은 저장하지 않는 파생값이므로 매 틱 다시 계산한다.
-    // 수요만 기존 STATS_INTERVAL 주기로 갱신해 성장 속도는 확정 설계를 유지한다.
     this.evaluate(this.macro.tick % STATS_INTERVAL === 0);
+    if (this.catchupLeft > 0) this.congestion?.decayAll();
     // 도로가 바뀌면 개발 가능 범위가 바뀐다. 하루를 기다리면 학생이 도로를 깔고도
     // 한참 아무 일이 없어 보이므로, 바뀐 걸 봤을 때는 몇 틱 안에 다시 만든다.
     // 최소 간격 전에 들어온 신호도 pending 에 남겨 다음 틱에 다시 확인한다.
@@ -231,6 +245,9 @@ export class MacroSim {
       this.macro.tick - this.lastFieldTick >= ROAD_FIELD_MIN_INTERVAL;
     if (periodicRebuild || changedAndReady) {
       this.roadField.rebuild(this.world);
+      // 새 도로망을 배정표가 읽기 전에 입주율/통근 상태도 같은 거리장으로 맞춘다.
+      this.evaluate(false);
+      this.rebuildTrafficFields();
       this.lastFieldTick = this.macro.tick;
       this.roadChangePending = false;
     }
@@ -265,6 +282,12 @@ export class MacroSim {
         ctx.money = this.macro.money;
       }
     }
+  }
+
+  private rebuildTrafficFields(): void {
+    if (!this.assignment || !this.congestion) return;
+    this.assignment.rebuild(this.world, this.roadField, this.stats);
+    this.congestion.rebuildEstimate(this.world, this.roadField, this.assignment);
   }
 
   /* ---------------- 통계 · 만족도 · 수요 ---------------- */
@@ -316,7 +339,8 @@ export class MacroSim {
           const dist = this.roadField.commuteFor(tx, ty, level, zone);
           if (dist >= ROAD_DIST_UNREACHABLE) stranded++;
 
-          const sat = satisfaction(zone, dist, nui);
+          const congestion = this.congestion?.routeCongestionFor(tx, ty) ?? 0;
+          const sat = satisfaction(zone, dist, nui, congestion);
           const floor = SATISFACTION_FLOOR[level - 1];
           const target =
             sat <= floor ? 0 : Math.min(1, (sat - floor) / Math.max(0.05, 1 - floor));
@@ -500,7 +524,7 @@ export class MacroSim {
  * 계층별 기준선(SATISFACTION_FLOOR)은 호출한 쪽에서 적용한다 —
  * 같은 자리라도 고소득 건물이 더 까다롭게 군다.
  */
-function satisfaction(zone: number, commuteDist: number, nuisance: number): number {
+function satisfaction(zone: number, commuteDist: number, nuisance: number, congestion: number): number {
   if (commuteDist >= ROAD_DIST_UNREACHABLE) return 0;
 
   let commute: number;
@@ -510,7 +534,7 @@ function satisfaction(zone: number, commuteDist: number, nuisance: number): numb
     commute = 1 - (commuteDist - COMMUTE_GOOD_DIST) / (COMMUTE_BAD_DIST - COMMUTE_GOOD_DIST);
   }
 
-  if (zone === ZONE_R) return Math.max(0, 0.35 + 0.65 * commute - nuisance);
-  if (zone === ZONE_C) return 0.3 + 0.7 * commute;
-  return 0.45 + 0.55 * commute;
+  if (zone === ZONE_R) return Math.max(0, 0.35 + 0.65 * commute - nuisance - CONGESTION_PENALTY_R * congestion);
+  if (zone === ZONE_C) return Math.max(0, 0.3 + 0.7 * commute - CONGESTION_PENALTY_W * congestion);
+  return Math.max(0, 0.45 + 0.55 * commute - CONGESTION_PENALTY_W * congestion);
 }

@@ -190,3 +190,71 @@ export const ROAD_REACH = 2;
 
 /** 도로가 바뀐 뒤 거리장을 다시 만들기까지 기다리는 최소 틱. 드래그 중 폭주 방지. */
 export const ROAD_FIELD_MIN_INTERVAL = 3;
+
+/* ---------------- 3.2단계: 배정 ---------------- */
+export const COMMUTE_RANGE_BY_TIER: readonly number[] = [40, 80, 140];
+export const SHOP_RANGE_BY_TIER: readonly number[] = [16, 28, 45];
+export const SHOP_LINKS_MAX = 3;
+export const JOB_FIT: readonly (readonly number[])[] = [
+  [1.0, 0.6, 0.15],
+  [0.5, 1.0, 0.7],
+  [0.1, 0.6, 1.0],
+];
+
+/* ---------------- 3.2단계: 혼잡 ---------------- */
+export const VEHICLES_PER_TILE = 4;
+export const CONGESTION_ALPHA = 0.25;
+export const CONGESTION_DECAY = 0.08;
+export const CONGESTION_ESTIMATE_BIAS = 1.15;
+export const ESTIMATE_CAPACITY = 260;
+export const CONGESTION_PENALTY_R = 0.30;
+export const CONGESTION_PENALTY_W = 0.20;
+
+/* ---------------- 3.2단계: 생필품 ---------------- */
+export const SUPPLY_USE_PER_HOUR: readonly number[] = [3, 5, 8];
+export const SUPPLY_START = 160;
+
+/* ---------------- 3.2단계: 경로 ---------------- */
+export const BASE_TILE_COST = 10;
+export const CONGESTION_WEIGHT: readonly number[] = [0.6, 1.2, 2.2];
+export const SLOPE_COST_MUL = 1.25;
+export const TURN_COST_STRAIGHT = 0;
+export const TURN_COST_RIGHT = 3;
+export const TURN_COST_LEFT = 9;
+export const SIGNAL_WAIT_COST = 6;
+export const ROUTE_BUDGET_PER_FRAME = 5;
+export const REROUTE_LOOKAHEAD = 8;
+export const REROUTE_THRESHOLD = 0.35;
+export const ROUTE_MAX_NODES = 4000;
+
+/* ---------------- 3.2단계: 차량 ---------------- */
+export const VEHICLE_SPEED_TILES_PER_SEC = 2.6;
+export const TRUCK_SPEED_MUL = 0.75;
+export const ACCEL_TILES_PER_SEC2 = 3.0;
+export const DECEL_TILES_PER_SEC2 = 5.0;
+export const DESIRED_GAP_TILES = 0.55;
+export const MIN_GAP_TILES = 0.22;
+
+/* ---------------- 3.2단계: 신호등 ---------------- */
+export const SIGNAL_CYCLE_MS = 16_000;
+export const SIGNAL_GREEN_MS = 7_000;
+export const SIGNAL_YELLOW_MS = 1_000;
+
+/* ---------------- 3.2단계: 통행 발생 ---------------- */
+export const RUSH_TO_WORK: readonly number[] = [
+  0, 0, 0, 0, 0, 0.05, 0.35, 0.8, 1.0, 0.6, 0.2, 0.05,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+];
+export const RUSH_TO_HOME: readonly number[] = [
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0.1, 0.5, 0.9, 1.0, 0.7, 0.3, 0.08, 0, 0,
+];
+export const RUSH_TO_SHOP: readonly number[] = [
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.2, 0.35,
+  0.45, 0.4, 0.4, 0.45, 0.55, 0.7, 0.85, 1.0, 0.7, 0.3, 0.05, 0,
+];
+export const FREIGHT_CURVE: readonly number[] = [
+  0.1, 0.1, 0.1, 0.15, 0.25, 0.4, 0.6, 0.7, 0.8, 0.9, 0.95, 1.0,
+  0.95, 1.0, 1.0, 0.9, 0.8, 0.7, 0.5, 0.35, 0.25, 0.2, 0.15, 0.1,
+];
+export const MAX_SPAWNS_PER_SEC = 90;

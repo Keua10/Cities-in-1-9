@@ -23,6 +23,9 @@ import type { World } from '../world/world';
 import type { TileAtlas } from './atlas';
 import type { BuildingAtlas } from './buildingAtlas';
 import { BuildingMesh } from './buildingMesh';
+import type { TrafficSim } from '../sim/traffic/trafficSim';
+import type { VehicleAtlas } from './vehicleAtlas';
+import { VehicleMesh } from './vehicleMesh';
 import { ChunkMesh } from './chunkMesh';
 
 export interface RenderStats {
@@ -65,6 +68,9 @@ export class WorldRenderer {
    * 뒤쪽 청크의 건물을 제대로 가린다.
    */
   private buildings = new Map<string, BuildingMesh>();
+  private vehicleMeshes = new Map<string, VehicleMesh>();
+  private traffic: TrafficSim | null = null;
+  private vehicleAtlas: VehicleAtlas | null = null;
   private fog = new Map<string, Graphics>();
 
   private lastRangeKey = '';
@@ -94,6 +100,8 @@ export class WorldRenderer {
     this.sampleHeight = (tx, ty) => this.world.sampleHeight(tx, ty);
     this.resolveTop = makeTopResolver(world);
   }
+
+  attachTraffic(traffic: TrafficSim, atlas: VehicleAtlas): void { this.traffic = traffic; this.vehicleAtlas = atlas; }
 
   private sampleHeight: (tx: number, ty: number) => number;
   private resolveTop: TopResolver;
@@ -145,6 +153,7 @@ export class WorldRenderer {
     let visible = 0;
     let fogged = 0;
     let buildingsShown = 0;
+    const usedVehicleMeshes = new Set<string>();
 
     for (let cy = range.cy0; cy <= range.cy1; cy++) {
       for (let cx = range.cx0; cx <= range.cx1; cx++) {
@@ -162,6 +171,13 @@ export class WorldRenderer {
         const mesh = this.ensureMesh(key, cx, cy);
         mesh.lastUsed = now;
         buildingsShown += this.ensureBuildings(key, cx, cy);
+        if (this.traffic && this.vehicleAtlas) {
+          const vehicles = this.traffic.vehiclesInChunk(cx, cy);
+          if (vehicles.length > 0 || this.vehicleMeshes.has(key)) {
+            this.ensureVehicles(key, cx, cy, vehicles);
+            usedVehicleMeshes.add(key);
+          }
+        }
       }
     }
 
@@ -173,6 +189,7 @@ export class WorldRenderer {
     }
 
     this.evict(now, range);
+    for (const key of [...this.vehicleMeshes.keys()]) if (!usedVehicleMeshes.has(key)) this.dropVehicles(key);
 
     this.stats.visibleChunks = visible;
     this.stats.loadedMeshes = this.meshes.size;
@@ -206,6 +223,7 @@ export class WorldRenderer {
       this.meshes.delete(key);
     }
     this.dropBuildings(key);
+    this.dropVehicles(key);
   }
 
   /**
@@ -233,6 +251,26 @@ export class WorldRenderer {
       this.groundLayer.addChild(bm.mesh);
     }
     return bm.count;
+  }
+
+  private ensureVehicles(key: string, cx: number, cy: number, vehicles: readonly import('../sim/traffic/vehicles').Vehicle[]): void {
+    if (!this.vehicleAtlas) return;
+    let vm = this.vehicleMeshes.get(key);
+    if (!vm) {
+      vm = new VehicleMesh(this.world, this.vehicleAtlas);
+      vm.mesh.zIndex = cx + cy + 0.75;
+      this.vehicleMeshes.set(key, vm);
+      this.groundLayer.addChild(vm.mesh);
+    }
+    vm.update(vehicles);
+  }
+
+  private dropVehicles(key: string): void {
+    const vm = this.vehicleMeshes.get(key);
+    if (!vm) return;
+    this.groundLayer.removeChild(vm.mesh);
+    vm.destroy();
+    this.vehicleMeshes.delete(key);
   }
 
   private dropBuildings(key: string): void {

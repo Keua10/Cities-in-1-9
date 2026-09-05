@@ -9,7 +9,7 @@ import {
 } from './core/constants';
 import { Camera } from './core/camera';
 import { attachInput } from './core/input';
-import { chunkIndexOf, tileToWorldX, tileToWorldY } from './core/iso';
+import { chunkIndexOf, tileToWorldX, tileToWorldY, worldToTile } from './core/iso';
 import { pickTile } from './core/pick';
 import { signOut } from './net/auth';
 import { loadCity } from './net/citySave';
@@ -22,8 +22,12 @@ import type { ChunkOverride } from './world/world';
 import type { CityDoc } from './net/types';
 import { loadTileAtlas } from './render/atlas';
 import { loadBuildingAtlas } from './render/buildingAtlas';
+import { loadVehicleAtlas } from './render/vehicleAtlas';
 import { WorldRenderer } from './render/worldRenderer';
 import { MacroSim } from './sim/macro';
+import { AssignmentTable } from './sim/assignment';
+import { CongestionMap } from './sim/congestion';
+import { TrafficSim } from './sim/traffic/trafficSim';
 import { CATCHUP_TICKS_PER_FRAME, START_MONEY } from './sim/simConstants';
 import { TIER_NAMES, ZONE_NAMES } from './sim/buildings';
 import { CityPanel } from './ui/cityPanel';
@@ -84,6 +88,7 @@ async function boot(): Promise<void> {
 
   const atlas = await loadTileAtlas();
   const buildingAtlas = await loadBuildingAtlas();
+  const vehicleAtlas = await loadVehicleAtlas();
   const renderer = new WorldRenderer(world, atlas, buildingAtlas);
   app.stage.addChild(renderer.root);
 
@@ -123,7 +128,12 @@ async function boot(): Promise<void> {
     city?.macro ?? { money: START_MONEY, population: 0, tick: 0, tickedAt: Date.now() },
   );
   sim.onMacroChange = () => saver.noteMacroChange();
+  const congestion = new CongestionMap();
+  const assignment = new AssignmentTable();
+  sim.attachTraffic(congestion, assignment);
   sim.primeCatchup(Date.now());
+  const traffic = new TrafficSim(world, sim, congestion, assignment);
+  renderer.attachTraffic(traffic, vehicleAtlas);
 
   const cityPanel = new CityPanel();
 
@@ -180,6 +190,9 @@ async function boot(): Promise<void> {
   app.ticker.add((ticker) => {
     const now = performance.now();
     sim.update(ticker.deltaMS, CATCHUP_TICKS_PER_FRAME);
+    const camTile = worldToTile(camera.x, camera.y);
+    traffic.setActiveChunk(chunkIndexOf(camTile.tx), chunkIndexOf(camTile.ty));
+    traffic.update(ticker.deltaMS);
     camera.update(ticker.deltaMS);
     camera.applyTo(renderer.root);
     renderer.update(camera, now);
@@ -213,6 +226,8 @@ async function boot(): Promise<void> {
           `${sim.day - here.born}일 됨`
         : null,
       visibleBuildings: renderer.stats.visibleBuildings,
+      activeVehicles: traffic.activeCount,
+      averageCongestion: congestion.average(),
       parcels: world.parcelCount(),
       visibleChunks: renderer.stats.visibleChunks,
       loadedMeshes: renderer.stats.loadedMeshes,

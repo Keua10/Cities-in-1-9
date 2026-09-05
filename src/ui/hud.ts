@@ -29,6 +29,9 @@ export interface HudData {
   visibleBuildings: number;
   /** 메모리에 남아 있는 필지 수. 지형 청크와 따로 센다. */
   parcels: number;
+  /* ---------- 3.2단계 ---------- */
+  activeVehicles: number;
+  averageCongestion: number;
 }
 
 /** 개발용 상태 표시. 학생용 UI 는 2단계에서 따로 만든다. */
@@ -67,6 +70,7 @@ export class Hud {
       `건물 ${data.building ?? '—'}`,
       `화면 청크 ${data.visibleChunks}   메시 ${data.loadedMeshes}   필지 ${data.parcels}`,
       `화면 건물 ${data.visibleBuildings}`,
+      `차량 ${data.activeVehicles}   평균 혼잡 ${Math.round(data.averageCongestion * 100)}%`,
     ];
     if (data.placeholderArt) lines.push('그림: 임시 타일 사용 중');
     if (data.message) lines.push(`<b class="warn">${data.message}</b>`);
