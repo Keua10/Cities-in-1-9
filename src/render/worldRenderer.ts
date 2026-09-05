@@ -27,6 +27,8 @@ import type { TrafficSim } from '../sim/traffic/trafficSim';
 import type { VehicleAtlas } from './vehicleAtlas';
 import { VehicleMesh } from './vehicleMesh';
 import { hasSignal, phaseAt, SignalPhase } from '../sim/traffic/signals';
+import { laneIsTurning } from '../sim/traffic/laneGeometry';
+import type { Vehicle } from '../sim/traffic/vehicles';
 import { Build } from '../world/build';
 import { ChunkMesh } from './chunkMesh';
 
@@ -59,6 +61,8 @@ function chunkDiamond(cx: number, cy: number): number[] {
 export class WorldRenderer {
   readonly root = new Container();
   private groundLayer = new Container();
+  /** 회전 차량은 큰 지형 청크 사이에 끼지 않도록 지형 합성 뒤에 그린다. */
+  private turningVehicleLayer = new Container();
   private fogLayer = new Container();
   private gridLayer = new Graphics();
   private cursorLayer = new Graphics();
@@ -73,6 +77,7 @@ export class WorldRenderer {
    */
   private buildings = new Map<string, BuildingMesh>();
   private vehicleMeshes = new Map<string, VehicleMesh>();
+  private turningVehicleMesh: VehicleMesh | null = null;
   private traffic: TrafficSim | null = null;
   private vehicleAtlas: VehicleAtlas | null = null;
   private fog = new Map<string, Graphics>();
@@ -96,8 +101,16 @@ export class WorldRenderer {
     private atlas: TileAtlas,
     private buildingAtlas: BuildingAtlas,
   ) {
-    this.root.addChild(this.groundLayer, this.fogLayer, this.signalLayer, this.gridLayer, this.cursorLayer);
+    this.root.addChild(
+      this.groundLayer,
+      this.turningVehicleLayer,
+      this.fogLayer,
+      this.signalLayer,
+      this.gridLayer,
+      this.cursorLayer,
+    );
     this.groundLayer.interactiveChildren = false;
+    this.turningVehicleLayer.interactiveChildren = false;
     this.fogLayer.interactiveChildren = false;
     // 고도가 있으면 청크끼리도 겹친다. 뒤쪽 청크부터 그려야 한다.
     this.groundLayer.sortableChildren = true;
@@ -158,6 +171,7 @@ export class WorldRenderer {
     let fogged = 0;
     let buildingsShown = 0;
     const usedVehicleMeshes = new Set<string>();
+    const turningVehicles: Vehicle[] = [];
 
     for (let cy = range.cy0; cy <= range.cy1; cy++) {
       for (let cx = range.cx0; cx <= range.cx1; cx++) {
@@ -178,7 +192,15 @@ export class WorldRenderer {
         if (this.traffic && this.vehicleAtlas) {
           const vehicles = this.traffic.vehiclesInChunk(cx, cy);
           if (vehicles.length > 0 || this.vehicleMeshes.has(key)) {
-            this.ensureVehicles(key, cx, cy, vehicles);
+            const groundVehicles: Vehicle[] = [];
+            for (const vehicle of vehicles) {
+              if (laneIsTurning(vehicle.route, vehicle.routeIdx, vehicle.tileT)) {
+                turningVehicles.push(vehicle);
+              } else {
+                groundVehicles.push(vehicle);
+              }
+            }
+            this.ensureVehicles(key, cx, cy, groundVehicles);
             usedVehicleMeshes.add(key);
           }
         }
@@ -194,6 +216,7 @@ export class WorldRenderer {
 
     this.evict(now, range);
     for (const key of [...this.vehicleMeshes.keys()]) if (!usedVehicleMeshes.has(key)) this.dropVehicles(key);
+    this.updateTurningVehicles(turningVehicles);
 
     if (this.traffic && (this.lastSignalDrawMs < 0 || now - this.lastSignalDrawMs >= 120)) {
       this.lastSignalDrawMs = now;
@@ -312,6 +335,19 @@ export class WorldRenderer {
     this.groundLayer.removeChild(vm.mesh);
     vm.destroy();
     this.vehicleMeshes.delete(key);
+  }
+
+  private updateTurningVehicles(vehicles: readonly Vehicle[]): void {
+    if (!this.vehicleAtlas) return;
+    if (vehicles.length === 0) {
+      if (this.turningVehicleMesh) this.turningVehicleMesh.update(vehicles);
+      return;
+    }
+    if (!this.turningVehicleMesh) {
+      this.turningVehicleMesh = new VehicleMesh(this.world, this.vehicleAtlas);
+      this.turningVehicleLayer.addChild(this.turningVehicleMesh.mesh);
+    }
+    this.turningVehicleMesh.update(vehicles);
   }
 
   private dropBuildings(key: string): void {
