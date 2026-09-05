@@ -4,8 +4,15 @@ import { VEHICLE_BODY_LENGTH_TILES, VEHICLE_WIDTH_TILES } from '../sim/simConsta
 
 export const VEHICLE_ATLAS_URL = 'sprites/vehicles.png';
 export const VEHICLE_CELL = 32;
-export const VEHICLE_VARIANTS = 2;
-export const VEHICLE_ATLAS_W = 256; // 8칸 = 방향 4 x 변형 2
+/**
+ * 차량 색/모양 변형 수.
+ *
+ * 색은 반드시 variant 로만 정해야 한다. 예전에는 팔레트를 방향(dir)으로 골라서
+ * 차가 회전할 때마다 색이 바뀌었다. 한 대의 차는 목적지 해시로 variant 를
+ * 한 번 정하고 도착할 때까지 유지하므로, 색이 여기에만 묶여 있어야 한다.
+ */
+export const VEHICLE_VARIANTS = 4;
+export const VEHICLE_ATLAS_W = 512; // 16칸 = 방향 4 x 변형 4
 export const VEHICLE_ATLAS_H = 64; // 2줄 = 승용차 / 트럭
 /**
  * 셀 중심에서 아래로 이만큼 내려간 점이 차량의 접지점이다.
@@ -98,7 +105,8 @@ export function drawPlaceholder(ctx: CanvasRenderingContext2D): void {
       for (let variant = 0; variant < VEHICLE_VARIANTS; variant++) {
         const ox = (dir * VEHICLE_VARIANTS + variant) * VEHICLE_CELL;
         const oy = kind * VEHICLE_CELL;
-        const palette = palettes[(dir * VEHICLE_VARIANTS + variant + kind) % palettes.length];
+        // 방향은 팔레트에 영향을 주지 않는다. 같은 차가 돌아도 색이 그대로여야 한다.
+        const palette = palettes[variant % palettes.length];
         drawCar(ctx, ox, oy, dir, length, width, bodyHeight, palette, truck);
       }
     }

@@ -20,7 +20,14 @@ import {
   movementsConflict,
 } from '../../src/sim/traffic/laneGeometry';
 import type { Route } from '../../src/sim/traffic/router';
-import { drawPlaceholder, VEHICLE_CELL, VEHICLE_GROUND_DROP_PX } from '../../src/render/vehicleAtlas';
+import {
+  drawPlaceholder,
+  VEHICLE_ATLAS_H,
+  VEHICLE_ATLAS_W,
+  VEHICLE_CELL,
+  VEHICLE_GROUND_DROP_PX,
+  VEHICLE_VARIANTS,
+} from '../../src/render/vehicleAtlas';
 
 const DIRS: ReadonlyArray<readonly [number, number]> = [[1, 0], [0, 1], [-1, 0], [0, -1]];
 
@@ -175,21 +182,21 @@ check('L자 코너에서 양방향이 서로 막지 않음', !movementsConflict(
 
 /* ---------------- 4. 그림 ---------------- */
 
-const atlasCanvas = createCanvas(256, 64);
+const atlasCanvas = createCanvas(VEHICLE_ATLAS_W, VEHICLE_ATLAS_H);
 const atlasCtx = atlasCanvas.getContext('2d');
 drawPlaceholder(atlasCtx as unknown as CanvasRenderingContext2D);
-const zoom = 6;
-const bigAtlas = createCanvas(256 * zoom, 64 * zoom + 30);
+const zoom = 3;
+const bigAtlas = createCanvas(VEHICLE_ATLAS_W * zoom, VEHICLE_ATLAS_H * zoom + 30);
 const bigCtx = bigAtlas.getContext('2d');
 bigCtx.fillStyle = '#2c3138';
 bigCtx.fillRect(0, 0, bigAtlas.width, bigAtlas.height);
 bigCtx.imageSmoothingEnabled = false;
-bigCtx.drawImage(atlasCanvas, 0, 30, 256 * zoom, 64 * zoom);
+bigCtx.drawImage(atlasCanvas, 0, 30, VEHICLE_ATLAS_W * zoom, VEHICLE_ATLAS_H * zoom);
 bigCtx.fillStyle = '#fff';
 bigCtx.font = '18px sans-serif';
 const dirNames = ['+tx (RD)', '+ty (LD)', '-tx (LU)', '-ty (RU)'];
 for (let d = 0; d < 4; d++) {
-  bigCtx.fillText(dirNames[d], d * 2 * VEHICLE_CELL * zoom + 8, 22);
+  bigCtx.fillText(dirNames[d], d * VEHICLE_VARIANTS * VEHICLE_CELL * zoom + 8, 22);
 }
 writeFileSync('/tmp/vehicle_atlas.png', bigAtlas.toBuffer('image/png'));
 
@@ -281,7 +288,7 @@ for (const { r, color } of scenarios) {
     const sc = toScreen(p[0], p[1]);
     ctx.drawImage(
       atlasCanvas,
-      facing * 2 * VEHICLE_CELL, 0, VEHICLE_CELL, VEHICLE_CELL,
+      facing * VEHICLE_VARIANTS * VEHICLE_CELL, 0, VEHICLE_CELL, VEHICLE_CELL,
       sc[0] - VEHICLE_CELL / 2, sc[1] - VEHICLE_CELL / 2 - VEHICLE_GROUND_DROP_PX, VEHICLE_CELL, VEHICLE_CELL,
     );
   }
