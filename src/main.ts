@@ -30,6 +30,7 @@ import { CongestionMap } from './sim/congestion';
 import { TrafficSim } from './sim/traffic/trafficSim';
 import { CATCHUP_TICKS_PER_FRAME, START_MONEY } from './sim/simConstants';
 import { TIER_NAMES, ZONE_NAMES } from './sim/buildings';
+import { SEASON_NAMES, WEEKDAY_NAMES } from './sim/time';
 import { CityPanel } from './ui/cityPanel';
 import { Hud } from './ui/hud';
 import { requireSession } from './ui/loginScreen';
@@ -192,7 +193,7 @@ async function boot(): Promise<void> {
     sim.update(ticker.deltaMS, CATCHUP_TICKS_PER_FRAME);
     const camTile = worldToTile(camera.x, camera.y);
     traffic.setActiveChunk(chunkIndexOf(camTile.tx), chunkIndexOf(camTile.ty));
-    traffic.update(ticker.deltaMS);
+    traffic.update(ticker.deltaMS, Date.now());
     camera.update(ticker.deltaMS);
     camera.applyTo(renderer.root);
     renderer.update(camera, now);
@@ -228,6 +229,14 @@ async function boot(): Promise<void> {
       visibleBuildings: renderer.stats.visibleBuildings,
       activeVehicles: traffic.activeCount,
       averageCongestion: congestion.average(),
+      daytimeHour: traffic.daytimeState.hour,
+      daytimeIsDay: traffic.daytimeState.isDay,
+      sunriseHour: traffic.daytimeState.sunriseHour,
+      sunsetHour: traffic.daytimeState.sunsetHour,
+      season: SEASON_NAMES[traffic.daytimeState.season] ?? '—',
+      weekday: WEEKDAY_NAMES[traffic.daytimeState.weekday] ?? '—',
+      gametimeDay: sim.day,
+      gametimeHour: sim.hourOfDay,
       parcels: world.parcelCount(),
       visibleChunks: renderer.stats.visibleChunks,
       loadedMeshes: renderer.stats.loadedMeshes,

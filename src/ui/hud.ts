@@ -32,6 +32,14 @@ export interface HudData {
   /* ---------- 3.2단계 ---------- */
   activeVehicles: number;
   averageCongestion: number;
+  daytimeHour: number;
+  daytimeIsDay: boolean;
+  sunriseHour: number;
+  sunsetHour: number;
+  season: string;
+  weekday: string;
+  gametimeDay: number;
+  gametimeHour: number;
 }
 
 /** 개발용 상태 표시. 학생용 UI 는 2단계에서 따로 만든다. */
@@ -71,10 +79,18 @@ export class Hud {
       `화면 청크 ${data.visibleChunks}   메시 ${data.loadedMeshes}   필지 ${data.parcels}`,
       `화면 건물 ${data.visibleBuildings}`,
       `차량 ${data.activeVehicles}   평균 혼잡 ${Math.round(data.averageCongestion * 100)}%`,
+      `daytime ${data.weekday}요일 · ${data.season} ${formatHour(data.daytimeHour)} (${data.daytimeIsDay ? '낮' : '밤'})   일출 ${formatHour(data.sunriseHour)} / 일몰 ${formatHour(data.sunsetHour)}`,
+      `gametime ${data.gametimeDay}일 ${String(data.gametimeHour).padStart(2, '0')}:00` ,
     ];
     if (data.placeholderArt) lines.push('그림: 임시 타일 사용 중');
     if (data.message) lines.push(`<b class="warn">${data.message}</b>`);
 
     this.el.innerHTML = lines.join('\n');
   }
+}
+
+function formatHour(hour: number): string {
+  const h = Math.floor(hour) % 24;
+  const m = Math.floor((hour - Math.floor(hour)) * 60);
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }

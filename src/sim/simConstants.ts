@@ -9,9 +9,34 @@
 
 /* ---------------- 시간 ---------------- */
 
-/** 실시간 1초 = 게임 1시간. 틱 하나가 곧 게임 1시간이다. */
-export const MS_PER_TICK = 1000;
+/**
+ * gametime: 성장·재정·수요처럼 빠르게 돌아야 하는 게임 규칙의 시간.
+ * 실시간 60초 = gametime 1일, 즉 2.5초 = gametime 1시간.
+ */
+export const MS_PER_TICK = 2_500;
 export const TICKS_PER_DAY = 24;
+export const GAMETIME_DAY_MS = MS_PER_TICK * TICKS_PER_DAY; // 60,000ms
+export const GAMETIME_DAYS_PER_MONTH = 30;
+export const GAMETIME_MONTHS_PER_YEAR = 12;
+export const GAMETIME_DAYS_PER_YEAR = GAMETIME_DAYS_PER_MONTH * GAMETIME_MONTHS_PER_YEAR;
+
+/**
+ * daytime: 밤낮·출퇴근·장보기처럼 화면에서 체감하는 실제시간 축.
+ * 실시간 600초 = daytime 1일. 10분 플레이에 정확히 하루가 돈다.
+ * gametime 1일(60초)과의 최소공배수도 정확히 600초(10분)다.
+ */
+export const DAYTIME_DAY_MS = 600_000;
+export const DAYTIME_ALIGNMENT_MS = 600_000;
+
+/** gametime 계절: 30일 x 3개월 = 계절 90일, 1년 360일. */
+export const SEASON_DAYS = GAMETIME_DAYS_PER_MONTH * 3;
+/** 춘분/추분 12시간, 하지 15시간, 동지 9시간이 되도록 ±3시간. */
+export const DAYLIGHT_SWING_HOURS = 3;
+
+/** 출근차가 늦게 도착해도 곧바로 다음날까지 직장에 묶이지 않게 하는 최소 근무시간. */
+export const MIN_WORK_HOURS_AFTER_ARRIVAL = 2;
+/** 극심한 정체로 늦게 도착했을 때도 자정 이후 퇴근 예약을 만들지 않는다. */
+export const LATEST_HOME_DEPARTURE_HOUR = 22;
 
 /**
  * 아무도 접속해 있지 않은 동안 시간이 흐르는 속도.
@@ -192,7 +217,7 @@ export const ROAD_REACH = 2;
 export const ROAD_FIELD_MIN_INTERVAL = 3;
 
 /* ---------------- 3.2단계: 배정 ---------------- */
-export const COMMUTE_RANGE_BY_TIER: readonly number[] = [40, 80, 140];
+export const COMMUTE_RANGE_BY_TIER: readonly number[] = [28, 36, 44];
 export const SHOP_RANGE_BY_TIER: readonly number[] = [16, 28, 45];
 export const SHOP_LINKS_MAX = 3;
 export const JOB_FIT: readonly (readonly number[])[] = [
@@ -228,10 +253,10 @@ export const REROUTE_THRESHOLD = 0.35;
 export const ROUTE_MAX_NODES = 4000;
 
 /* ---------------- 3.2단계: 차량 ---------------- */
-export const VEHICLE_SPEED_TILES_PER_SEC = 2.6;
-export const TRUCK_SPEED_MUL = 0.75;
-export const ACCEL_TILES_PER_SEC2 = 3.0;
-export const DECEL_TILES_PER_SEC2 = 5.0;
+export const VEHICLE_SPEED_TILES_PER_SEC = 8.0;
+export const TRUCK_SPEED_MUL = 0.72;
+export const ACCEL_TILES_PER_SEC2 = 16.0;
+export const DECEL_TILES_PER_SEC2 = 22.0;
 export const DESIRED_GAP_TILES = 0.55;
 export const MIN_GAP_TILES = 0.22;
 
@@ -258,3 +283,29 @@ export const FREIGHT_CURVE: readonly number[] = [
   0.95, 1.0, 1.0, 0.9, 0.8, 0.7, 0.5, 0.35, 0.25, 0.2, 0.15, 0.1,
 ];
 export const MAX_SPAWNS_PER_SEC = 90;
+
+/* ---------------- 3.2단계: 생활 스케줄 ---------------- */
+/** daytime 생활 스케줄 해상도. 15분 단위라 08:30 / 09:00을 정확히 나눌 수 있다. */
+export const LIFE_SLOT_MINUTES = 15;
+/** 직장인의 출근 시각 분포. 나머지는 09:00 출근이다. */
+export const WORK_START_0830_SHARE = 0.45;
+/** 08:30 -> 17:30, 09:00 -> 18:00. 점심 1시간을 포함한 체류시간이다. */
+export const WORKPLACE_PRESENCE_MINUTES = 9 * 60;
+/** 예상 통근시간에 더해 미리 출발하는 여유시간. */
+export const COMMUTE_BUFFER_MINUTES = 10;
+/** 토/일 정상 출근 비율. 공업은 교대근무가 있어 상업보다 조금 높다. */
+export const SATURDAY_WORK_SHARE_C = 0.22;
+export const SATURDAY_WORK_SHARE_I = 0.32;
+export const SUNDAY_WORK_SHARE_C = 0.10;
+export const SUNDAY_WORK_SHARE_I = 0.20;
+/** 퇴근 뒤 바로 귀가하지 않고 상업지대를 들르는 비율. 금요일은 더 높다. */
+export const AFTER_WORK_COMMERCIAL_SHARE = 0.30;
+export const FRIDAY_AFTER_WORK_COMMERCIAL_SHARE = 0.46;
+export const WEEKEND_AFTER_WORK_COMMERCIAL_SHARE = 0.20;
+/** 상업지대 체류시간 범위. */
+export const AFTER_WORK_STAY_MINUTES = 45;
+export const AFTER_WORK_STAY_MAX_MINUTES = 90;
+/** 생필품이 이 이하이면 장보기 후보가 된다. 0까지 기다리지 않는다. */
+export const SHOP_SUPPLY_TRIGGER = 72;
+/** 주말 화물 통행 감소 배율. */
+export const WEEKEND_FREIGHT_MUL = 0.55;
