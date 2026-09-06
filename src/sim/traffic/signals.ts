@@ -64,7 +64,16 @@ export function signalState(
   return SignalState.Red; // 전적색
 }
 
-/** 지금 녹색인 축. 렌더러가 신호등 색을 칠할 때 쓴다. -1 이면 전적색이다. */
+/**
+ * 지금 녹색인 축. -1 이면 "녹색인 축이 없다" — 황색과 전적색 구간 둘 다에서
+ * -1 이 나온다(황색은 이미 녹색이 끝난 상태이므로 별도 취급하지 않는다).
+ *
+ * 현재는 어디서도 호출하지 않는 죽은 코드다. 렌더러(worldRenderer.ts)는 신호등을
+ * 진입로 단위로 그리므로 signalState() 를 진입로별로 직접 불러 Green/Yellow/Red
+ * 를 구분해 쓴다 — 축 단위로 뭉뚱그린 이 함수로는 황색을 표현할 수 없어서다.
+ * 나중에 축 전체를 한 번에 다뤄야 하는 자리(예: 교차로 전체를 한 색으로 표시하는
+ * 디버그 오버레이)가 생기면 그때 다시 쓸 수 있어 남겨둔다.
+ */
 export function greenAxis(junction: Junction, timeMs: number): number {
   if (!junction.signalized) return -1;
   const t = cycleTime(junction, timeMs);

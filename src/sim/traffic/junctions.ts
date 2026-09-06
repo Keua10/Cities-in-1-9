@@ -89,12 +89,17 @@ export class JunctionIndex {
     return this.list.length ? this.list : EMPTY_JUNCTIONS;
   }
 
-  /** 이 타일이 속한 교차로 id. 없으면 -1. 색인 밖도 -1이다. */
-  idAt(tx: number, ty: number): number {
+  /** tx, ty 가 색인이 실제로 계산한 사각형 안에 있는가. */
+  private inBounds(tx: number, ty: number): boolean {
     const lx = tx - this.x0;
     const ly = ty - this.y0;
-    if (lx < 0 || ly < 0 || lx >= this.w || ly >= this.h) return -1;
-    return this.ids[ly * this.w + lx];
+    return lx >= 0 && ly >= 0 && lx < this.w && ly < this.h;
+  }
+
+  /** 이 타일이 속한 교차로 id. 없으면 -1. 색인 밖도 -1이다. */
+  idAt(tx: number, ty: number): number {
+    if (!this.inBounds(tx, ty)) return -1;
+    return this.ids[(ty - this.y0) * this.w + (tx - this.x0)];
   }
 
   at(tx: number, ty: number): Junction | null {
@@ -108,9 +113,7 @@ export class JunctionIndex {
 
   /** 색인이 이 타일을 실제로 계산했는가(=밖이면 판정을 믿으면 안 된다). */
   covers(tx: number, ty: number): boolean {
-    const lx = tx - this.x0;
-    const ly = ty - this.y0;
-    return lx >= 0 && ly >= 0 && lx < this.w && ly < this.h;
+    return this.inBounds(tx, ty);
   }
 
   /**
@@ -296,8 +299,8 @@ export class JunctionIndex {
       if (widths[d] === 0) continue;
       legs.push({ enterDir: d, length: lengths[d], width: widths[d] });
       mask |= 1 << d;
-      if (widths[d] > maxWidth) maxWidth = widths[d];
       if (lengths[d] >= JUNCTION_LEG_MIN_TILES) {
+        if (widths[d] > maxWidth) maxWidth = widths[d];
         realLegs++;
         if ((d & 1) === 0) axisX = true;
         else axisY = true;
