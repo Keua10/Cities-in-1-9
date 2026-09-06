@@ -215,7 +215,7 @@ export class CitizenPool {
         if (this.schedules.has(scheduleKey)) continue;
 
         const job = this.assignment.jobForSlot(home.tx, home.ty, slot);
-        if (job && this.worksToday(home, slot, job, life)) {
+        if (job && worksOnWeekendDay(home.tx, home.ty, job.zone, slot, life)) {
           const departMinute = commuteDepartureMinute(home, slot, job);
           if (life.lifeSlotOfDay === minuteToLifeSlot(departMinute)) {
             const trip = this.makeCitizenTrip(home, slot, TripPurpose.Commute, home.tx, home.ty, job.tx, job.ty);
@@ -397,19 +397,6 @@ export class CitizenPool {
     return simRandom(WORLD_SEED, home.tx, home.ty, slot ^ life.absoluteDay ^ 0x3311) < share;
   }
 
-  private worksToday(home: HomeState, slot: number, job: DestLink, life: DaytimeSnapshot): boolean {
-    if (!life.isWeekend) return true;
-    const share =
-      life.weekday === 5
-        ? job.zone === ZONE_I
-          ? SATURDAY_WORK_SHARE_I
-          : SATURDAY_WORK_SHARE_C
-        : job.zone === ZONE_I
-          ? SUNDAY_WORK_SHARE_I
-          : SUNDAY_WORK_SHARE_C;
-    return simRandom(WORLD_SEED, home.tx, home.ty, slot ^ life.absoluteDay ^ 0x7721) < share;
-  }
-
   private shoppingMinute(home: HomeState, slot: number, employed: boolean, life: DaytimeSnapshot): number {
     let start: number;
     let end: number;
@@ -470,7 +457,7 @@ export class CitizenPool {
       const flow = this.boundaryJobs[this.boundaryLinkCursor];
       while (this.boundarySlotCursor < flow.link.count && out.length < budget) {
         const slot = flow.baseSlot + this.boundarySlotCursor++;
-        if (!boundaryWorksToday(flow, slot, life)) continue;
+        if (!worksOnWeekendDay(flow.homeTx, flow.homeTy, flow.link.zone, slot, life)) continue;
         const departMinute = commuteDepartureMinute(
           { tx: flow.homeTx, ty: flow.homeTy } as HomeState,
           slot,
@@ -594,15 +581,26 @@ function minuteToLifeSlot(minute: number): number {
   return Math.max(0, Math.min(SLOTS_PER_DAY - 1, Math.floor(minute / LIFE_SLOT_MINUTES)));
 }
 
-function boundaryWorksToday(flow: BoundaryJob, slot: number, life: DaytimeSnapshot): boolean {
+/**
+ * 주말 출근 확률. 평일은 항상 출근이다.
+ * 일반 통근(HomeState/DestLink)과 경계 통근(BoundaryJob) 양쪽에서 같은 계산을
+ * 쓰므로 호출자 모양과 무관하게 원시값(홈 좌표, 직장 zone)만 받는다.
+ */
+function worksOnWeekendDay(
+  homeTx: number,
+  homeTy: number,
+  zone: number,
+  slot: number,
+  life: DaytimeSnapshot,
+): boolean {
   if (!life.isWeekend) return true;
   const share =
     life.weekday === 5
-      ? flow.link.zone === ZONE_I
+      ? zone === ZONE_I
         ? SATURDAY_WORK_SHARE_I
         : SATURDAY_WORK_SHARE_C
-      : flow.link.zone === ZONE_I
+      : zone === ZONE_I
         ? SUNDAY_WORK_SHARE_I
         : SUNDAY_WORK_SHARE_C;
-  return simRandom(WORLD_SEED, flow.homeTx, flow.homeTy, slot ^ life.absoluteDay ^ 0x7721) < share;
+  return simRandom(WORLD_SEED, homeTx, homeTy, slot ^ life.absoluteDay ^ 0x7721) < share;
 }

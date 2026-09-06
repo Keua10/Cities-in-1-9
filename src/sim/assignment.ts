@@ -3,7 +3,7 @@ import { Build } from '../world/build';
 import type { World } from '../world/world';
 import { capacityOf, isAnchor, levelOfCode, simHash, ZONE_C, ZONE_R, zoneOfCode } from './buildings';
 import type { CityStats } from './macro';
-import { edgeNeighbors, type RoadField } from './roadGraph';
+import { edgeNeighbors, roadDistancesFrom, type RoadField } from './roadGraph';
 import { COMMUTE_RANGE_BY_TIER, JOB_FIT, SHOP_LINKS_MAX, SHOP_RANGE_BY_TIER } from './simConstants';
 
 export interface DestLink { tx: number; ty: number; count: number; level: number; zone: number; dist: number; }
@@ -40,7 +40,7 @@ export class AssignmentTable {
       let left=filled;
       const commuteMax=COMMUTE_RANGE_BY_TIER[home.level-1];
       const shopMax=SHOP_RANGE_BY_TIER[home.level-1];
-      const distances=roadDistances(world,home.roadTx,home.roadTy,Math.max(commuteMax,shopMax));
+      const distances=roadDistancesFrom(world,home.roadTx,home.roadTy,Math.max(commuteMax,shopMax));
       const candidates=jobs.map(j=>({j,dist:distances.get(key(j.roadTx,j.roadTy))??-1}))
         .filter(x=>x.dist>=0 && x.dist<=commuteMax && x.j.remaining>0)
         .sort((a,b)=>jobScore(home.level,b.j.level,b.dist)-jobScore(home.level,a.j.level,a.dist) || coordSort(a.j,b.j));
@@ -72,11 +72,3 @@ function pushLink(out:DestLink[],b:Building,count:number,dist:number){if(count>0
 function jobScore(homeLevel:number,jobLevel:number,dist:number){return JOB_FIT[homeLevel-1][jobLevel-1]*10000-dist;}
 function shopScore(homeLevel:number,shopLevel:number,dist:number){const levelBias=homeLevel===3?shopLevel*1800:shopLevel*500; const distanceWeight=homeLevel===3?15:40; return levelBias-dist*distanceWeight;}
 function firstRoad(world:World,tx:number,ty:number,span:number):[number,number]|null{for(const [x,y] of edgeNeighbors(tx,ty,span))if(world.getBuild(x,y)===Build.Road)return[x,y];return null;}
-function roadDistances(world:World,sx:number,sy:number,max:number):Map<string,number>{
-  const out=new Map<string,number>();
-  if(world.getBuild(sx,sy)!==Build.Road)return out;
-  const qx=[sx],qy=[sy],qd=[0];let h=0;out.set(key(sx,sy),0);
-  const dirs=[[1,0],[0,1],[-1,0],[0,-1]] as const;
-  while(h<qx.length){const x=qx[h],y=qy[h],d=qd[h++];if(d>=max)continue;for(const [dx,dy] of dirs){const nx=x+dx,ny=y+dy,k=key(nx,ny);if(out.has(k)||world.getBuild(nx,ny)!==Build.Road)continue;out.set(k,d+1);qx.push(nx);qy.push(ny);qd.push(d+1);}}
-  return out;
-}

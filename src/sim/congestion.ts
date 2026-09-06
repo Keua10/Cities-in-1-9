@@ -5,6 +5,7 @@ import type { World } from '../world/world';
 import type { AssignmentTable, DestLink } from './assignment';
 import {
   edgeNeighbors,
+  roadDistancesFrom,
   roadTileCapacity,
   type JunctionLookup,
   type RoadField,
@@ -164,7 +165,7 @@ export class CongestionMap {
       const goalKey = `${goal[0]},${goal[1]}`;
       let distances = distanceCache.get(goalKey);
       if (!distances) {
-        distances = distanceField(world, goal[0], goal[1], ROAD_FIELD_MAX_DIST);
+        distances = roadDistancesFrom(world, goal[0], goal[1], ROAD_FIELD_MAX_DIST);
         distanceCache.set(goalKey, distances);
       }
       if (!distances.has(`${start[0]},${start[1]}`)) continue;
@@ -244,37 +245,6 @@ function entry(world: World, tx: number, ty: number, span: number): [number, num
     if (world.getBuild(point[0], point[1]) === Build.Road) return point;
   }
   return null;
-}
-function distanceField(
-  world: World,
-  gx: number,
-  gy: number,
-  maxDist: number,
-): Map<string, number> {
-  const out = new Map<string, number>();
-  if (world.getBuild(gx, gy) !== Build.Road) return out;
-  const qx = [gx];
-  const qy = [gy];
-  const qd = [0];
-  let head = 0;
-  out.set(`${gx},${gy}`, 0);
-  while (head < qx.length) {
-    const x = qx[head];
-    const y = qy[head];
-    const d = qd[head++];
-    if (d >= maxDist) continue;
-    for (const [dx, dy] of DIRS) {
-      const nx = x + dx;
-      const ny = y + dy;
-      const key = `${nx},${ny}`;
-      if (out.has(key) || world.getBuild(nx, ny) !== Build.Road) continue;
-      out.set(key, d + 1);
-      qx.push(nx);
-      qy.push(ny);
-      qd.push(d + 1);
-    }
-  }
-  return out;
 }
 function pathFromField(
   start: [number, number],

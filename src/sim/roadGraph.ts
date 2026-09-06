@@ -261,6 +261,42 @@ export function* edgeNeighbors(
   }
 }
 
+/**
+ * sx, sy 도로 칸에서 시작해 max 칸까지의 도로 전용 BFS 거리.
+ * sx, sy 가 도로가 아니면 빈 맵을 돌려준다.
+ */
+export function roadDistancesFrom(
+  world: World,
+  sx: number,
+  sy: number,
+  max: number,
+): Map<string, number> {
+  const out = new Map<string, number>();
+  if (world.getBuild(sx, sy) !== Build.Road) return out;
+  const qx = [sx];
+  const qy = [sy];
+  const qd = [0];
+  let head = 0;
+  out.set(`${sx},${sy}`, 0);
+  while (head < qx.length) {
+    const x = qx[head];
+    const y = qy[head];
+    const d = qd[head++];
+    if (d >= max) continue;
+    for (const [dx, dy] of DIRS) {
+      const nx = x + dx;
+      const ny = y + dy;
+      const key = `${nx},${ny}`;
+      if (out.has(key) || world.getBuild(nx, ny) !== Build.Road) continue;
+      out.set(key, d + 1);
+      qx.push(nx);
+      qy.push(ny);
+      qd.push(d + 1);
+    }
+  }
+  return out;
+}
+
 /** 부지가 도로에 한 칸이라도 접해 있는가. */
 export function touchesRoad(
   world: World,
