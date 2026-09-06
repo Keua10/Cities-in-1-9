@@ -380,7 +380,15 @@ export class IntersectionControl {
       for (const other of all) {
         if (other.vehicle === vehicle) continue;
         if (other.path.enterDir !== oncoming) continue;
-        if (other.path.turn === TurnKind.Left) continue; // 마주 보는 좌회전끼리는 서로 지나간다
+        // 마주 보는 좌회전끼리는 이 양보 규칙에서 뺀다. 실제로는 이 둘의 궤적도
+        // 가깝게 붙어(0.354타일, MOVEMENT_CLEARANCE_TILES=0.40보다 가까움)
+        // pathsConflict() 가 충돌로 잡는다 — "서로 지나간다"는 뜻이 아니라, 둘
+        // 다 상대를 "양보해야 할 오는 차"로 보면 서로 무한정 기다려 교착되므로
+        // 여기서는 강제 양보를 시키지 않는다는 뜻이다. 실제 통행 순서는 아래
+        // arbitrate() 의 점수 순 배분과 예약 충돌 검사가 정한다 — 점수가 높은
+        // 쪽이 먼저 예약을 받고, 낮은 쪽은 pathsConflict() 에 막혀 대기하다가
+        // 앞차가 빠지면 이어서 들어간다.
+        if (other.path.turn === TurnKind.Left) continue;
         if (other.distance > LEFT_YIELD_LOOKAHEAD_TILES) continue;
         if (other.speed < YIELD_MOVING_SPEED && other.distance > ENTRY_REQUEST_DIST_TILES) continue;
         if (signalState(junction, other.path.enterDir, timeMs) === SignalState.Red) continue;

@@ -75,17 +75,9 @@ export class SpatialGrid {
     else this.cells.set(key, [index]);
   }
 
-  /** (x, y) 주변 3x3 셀의 항목을 훑는다. */
+  /** (x, y) 주변 3x3 셀의 항목을 훑는다. forEachWithin(x, y, 1, fn) 과 같다. */
   forEachNear(x: number, y: number, fn: (index: number) => void): void {
-    const cx = Math.floor(x);
-    const cy = Math.floor(y);
-    for (let dy = -1; dy <= 1; dy++) {
-      for (let dx = -1; dx <= 1; dx++) {
-        const list = this.cells.get(cellKey(cx + dx, cy + dy));
-        if (!list) continue;
-        for (const index of list) fn(index);
-      }
-    }
+    this.forEachWithin(x, y, 1, fn);
   }
 
   /** 반경이 1타일보다 클 때 쓰는 확장 훑기. */
