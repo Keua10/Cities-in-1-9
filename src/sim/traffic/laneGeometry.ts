@@ -37,20 +37,21 @@ export { LANE_OFFSET_TILES, MOVEMENT_CLEARANCE_TILES };
 /** 코너 베지에가 차지하는 구간 길이(타일). 0.5 를 넘으면 이웃 코너와 겹친다. */
 const CORNER_R = Math.min(0.5, Math.max(LANE_OFFSET_TILES + 0.05, LANE_CORNER_RADIUS_TILES));
 
-/** 경로 세그먼트(노드 i -> i+1)의 진행 방향 인덱스. */
-export function routeSegmentDir(route: Route, segmentIndex: number): number {
-  const points = route.tiles.length / 2;
-  if (points < 2) return 0;
-  const i = Math.max(0, Math.min(points - 2, segmentIndex)) * 2;
-  const x = route.tiles[i];
-  const y = route.tiles[i + 1];
-  const nx = route.tiles[i + 2];
-  const ny = route.tiles[i + 3];
+/** 인접한 두 타일 (x,y) -> (nx,ny) 사이의 이동 방향. 인접하지 않으면 0. */
+export function dirBetween(x: number, y: number, nx: number, ny: number): number {
   for (let d = 0; d < DIRS.length; d++) {
     const dir = DIRS[d];
     if (x + dir[0] === nx && y + dir[1] === ny) return d;
   }
   return 0;
+}
+
+/** 경로 세그먼트(노드 i -> i+1)의 진행 방향 인덱스. */
+export function routeSegmentDir(route: Route, segmentIndex: number): number {
+  const points = route.tiles.length / 2;
+  if (points < 2) return 0;
+  const i = Math.max(0, Math.min(points - 2, segmentIndex)) * 2;
+  return dirBetween(route.tiles[i], route.tiles[i + 1], route.tiles[i + 2], route.tiles[i + 3]);
 }
 
 /** 노드에서 방향이 바뀌는가(=회전 노드인가). */

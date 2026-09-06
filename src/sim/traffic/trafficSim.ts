@@ -43,6 +43,7 @@ import {
 } from '../simConstants';
 import { sessionDaytimeAt, type DaytimeSnapshot } from '../time';
 import {
+  dirBetween,
   isTurnNode,
   laneHeading,
   lanePosition,
@@ -1137,13 +1138,6 @@ function buildLaneOccupancy(vehicles: readonly Vehicle[]): Map<string, Vehicle[]
   }
   for (const list of occupancy.values()) list.sort((a, b) => b.tileT - a.tileT);
   return occupancy;
-}
-
-function dirBetween(x: number, y: number, nx: number, ny: number): number {
-  for (let i = 0; i < DIRS.length; i++) {
-    if (x + DIRS[i][0] === nx && y + DIRS[i][1] === ny) return i;
-  }
-  return 0;
 }
 
 function pop4(mask: number): number {
