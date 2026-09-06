@@ -1,6 +1,5 @@
 import {
   BASE_CHUNK_SPAN,
-  BASE_SPACING_CHUNKS,
   CHUNK_SIZE,
   CHUNK_TILES,
   OVERRIDE_NONE,
@@ -16,10 +15,10 @@ import {
   zoneOfCode,
 } from '../sim/buildings';
 import { Build } from './build';
+import { baseOriginChunk } from './spawn';
 import {
   generateChunk,
   heightAt,
-  Terrain,
   type TerrainId,
 } from './terrain';
 
@@ -656,75 +655,3 @@ export function recountParcel(p: Parcel): void {
   p.scanCursor = 0;
 }
 
-/**
- * 도시 index 를 육각 격자 위의 base 청크 좌표로 바꾼다.
- * 0번은 원점, 이후는 원점을 둘러싸는 링을 시계 방향으로 채운다.
- * 이웃 도시와는 항상 BASE_SPACING_CHUNKS 만큼 떨어지고, 그 사이가 중립 완충지대다.
- */
-export function baseOriginChunk(cityIndex: number): { cx: number; cy: number } {
-  const { q, r } = hexSpiral(cityIndex);
-  const cx = Math.round(BASE_SPACING_CHUNKS * (q + r / 2));
-  const cy = Math.round(BASE_SPACING_CHUNKS * r);
-  return { cx, cy };
-}
-
-function hexSpiral(index: number): { q: number; r: number } {
-  if (index <= 0) return { q: 0, r: 0 };
-  const dirs = [
-    [1, 0],
-    [0, 1],
-    [-1, 1],
-    [-1, 0],
-    [0, -1],
-    [1, -1],
-  ] as const;
-
-  let ring = 1;
-  let i = index;
-  while (i > ring * 6) {
-    i -= ring * 6;
-    ring++;
-  }
-  i -= 1;
-
-  let q = dirs[4][0] * ring;
-  let r = dirs[4][1] * ring;
-  const side = Math.floor(i / ring);
-  const step = i % ring;
-  for (let s = 0; s < side; s++) {
-    q += dirs[s][0] * ring;
-    r += dirs[s][1] * ring;
-  }
-  q += dirs[side][0] * step;
-  r += dirs[side][1] * step;
-  return { q, r };
-}
-
-/** base 영역 한가운데의 타일 좌표. 첫 카메라 위치로 쓴다. */
-export function baseCenterTile(world: World): { tx: number; ty: number } {
-  const half = (BASE_CHUNK_SPAN * CHUNK_SIZE) / 2;
-  return {
-    tx: world.baseCx * CHUNK_SIZE + half,
-    ty: world.baseCy * CHUNK_SIZE + half,
-  };
-}
-
-/** base 안에서 물이 아닌 첫 타일. 시작 지점 안내용. */
-export function findDryTileNearBase(world: World): { tx: number; ty: number } {
-  const c = baseCenterTile(world);
-  const limit = BASE_CHUNK_SPAN * CHUNK_SIZE;
-  for (let radius = 0; radius < limit; radius += 2) {
-    for (let dy = -radius; dy <= radius; dy += 2) {
-      for (let dx = -radius; dx <= radius; dx += 2) {
-        if (Math.abs(dx) !== radius && Math.abs(dy) !== radius) continue;
-        const tx = c.tx + dx;
-        const ty = c.ty + dy;
-        const t = world.getTile(tx, ty);
-        if (t !== Terrain.WaterDeep && t !== Terrain.WaterShallow) {
-          return { tx, ty };
-        }
-      }
-    }
-  }
-  return c;
-}

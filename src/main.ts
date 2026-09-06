@@ -38,7 +38,8 @@ import { requireSession } from './ui/loginScreen';
 import { SaveBadge } from './ui/saveBadge';
 import { bindToolButtons, Tools, TOOL_LABELS } from './ui/tools';
 import { Build, hasRoadAccess, isZone } from './world/build';
-import { findDryTileNearBase, World } from './world/world';
+import { findDryTileNearBase } from './world/spawn';
+import { World } from './world/world';
 import { seedTestCityIfEmpty } from './world/testCity';
 
 /** 카메라가 base 밖으로 나갈 수 있는 거리(청크). 이웃의 안개까지는 보이게 둔다. */

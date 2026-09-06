@@ -221,14 +221,6 @@ export function pickLevel(demandForZone: readonly number[], roll: number): numbe
  * ---------------------------------------------------------------- */
 
 /**
- * 필지 하나에서 이번 틱에 할 일을 한다.
- *
- * 매 틱 4096칸을 다 훑으면 청크가 늘어날수록 감당이 안 되므로, 필지마다
- * 커서(scanCursor)를 들고 REBUILD_SCAN_BUDGET 칸씩만 이어서 훑는다.
- * 몇 틱에 걸쳐 청크를 한 바퀴 도는 셈이고, 틱은 1초에 한 번이라 학생 눈에는
- * 도시가 자연스럽게 자라는 것으로 보인다.
- */
-/**
  * 지은 만큼 수요를 **그 자리에서** 깎는다.
  *
  * 이게 없으면 과잉 건설이 난다. 수요는 STATS_INTERVAL 틱에 한 번만 다시
@@ -243,6 +235,14 @@ function chargeDemand(ctx: GrowthContext, zone: number, level: number, sign: num
   d[level - 1] = Math.max(-1, Math.min(1, d[level - 1] - (sign * capacityOf(zone, level)) / DEMAND_SCALE));
 }
 
+/**
+ * 필지 하나에서 이번 틱에 할 일을 한다.
+ *
+ * 매 틱 4096칸을 다 훑으면 청크가 늘어날수록 감당이 안 되므로, 필지마다
+ * 커서(scanCursor)를 들고 REBUILD_SCAN_BUDGET 칸씩만 이어서 훑는다(buildPass,
+ * rebuildPass 둘 다). 몇 틱에 걸쳐 청크를 한 바퀴 도는 셈이고, 틱은 1초에
+ * 한 번이라 학생 눈에는 도시가 자연스럽게 자라는 것으로 보인다.
+ */
 export function growParcel(
   world: World,
   p: Parcel,
