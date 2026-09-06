@@ -171,7 +171,10 @@ const R = (d: number) => (d + 1) & 3; // 우회전
 const L = (d: number) => (d + 3) & 3; // 좌회전
 
 check('마주 오는 직진끼리는 통과', !movementsConflict(0, S(0), 2, S(2)));
-check('마주 오는 좌회전끼리는 통과', !movementsConflict(0, L(0), 2, L(2)));
+// 마주 보는 좌회전은 FIX13 까지 "통과" 로 봤지만 틀렸다. 두 좌회전 곡선은
+// 교차로 한가운데를 서로 반대로 파고들어 중심 간격이 0.21타일까지 좁아진다.
+// 차 폭이 0.30이므로 실제로는 차체가 겹친다. 지금은 막는다.
+check('마주 오는 좌회전끼리는 충돌', movementsConflict(0, L(0), 2, L(2)));
 check('마주 오는 우회전끼리는 통과', !movementsConflict(0, R(0), 2, R(2)));
 check('직교 직진끼리는 충돌', movementsConflict(0, S(0), 1, S(1)));
 check('좌회전과 마주 오는 직진은 충돌', movementsConflict(0, L(0), 2, S(2)));

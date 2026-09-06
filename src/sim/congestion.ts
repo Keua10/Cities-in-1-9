@@ -3,7 +3,12 @@ import { chunkIndexOf, chunkKey, localIndexOf } from '../core/iso';
 import { Build, DIRS } from '../world/build';
 import type { World } from '../world/world';
 import type { AssignmentTable, DestLink } from './assignment';
-import { edgeNeighbors, roadTileCapacity, type RoadField } from './roadGraph';
+import {
+  edgeNeighbors,
+  roadTileCapacity,
+  type JunctionLookup,
+  type RoadField,
+} from './roadGraph';
 import {
   CONGESTION_ALPHA,
   CONGESTION_DECAY,
@@ -27,6 +32,12 @@ export class CongestionMap {
   private activeCx = 0;
   private activeCy = 0;
   private activeRadius = 1;
+  /** 넓은 도로의 직선 구간을 교차로로 오인하지 않기 위한 색인. */
+  private junctions: JunctionLookup | null = null;
+
+  setJunctions(index: JunctionLookup): void {
+    this.junctions = index;
+  }
 
   at(tx: number, ty: number): number {
     const c = this.chunks.get(chunkKey(chunkIndexOf(tx), chunkIndexOf(ty)));
@@ -34,7 +45,7 @@ export class CongestionMap {
   }
 
   capacityAt(world: World, tx: number, ty: number): number {
-    let cap = roadTileCapacity(world, tx, ty);
+    let cap = roadTileCapacity(world, tx, ty, this.junctions);
     if (cap <= 0) return 0;
     const h = world.sampleHeight(tx, ty);
     for (const [dx, dy] of DIRS) {

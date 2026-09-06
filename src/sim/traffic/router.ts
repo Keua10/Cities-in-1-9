@@ -4,6 +4,7 @@ import type { CongestionMap } from '../congestion';
 import {
   BASE_TILE_COST,
   CONGESTION_WEIGHT,
+  LANE_CHANGE_COST,
   ROUTE_MAX_NODES,
   SIGNAL_WAIT_COST,
   SLOPE_COST_MUL,
@@ -11,7 +12,7 @@ import {
   TURN_COST_RIGHT,
   TURN_COST_STRAIGHT,
 } from '../simConstants';
-import { hasSignal } from './signals';
+import type { JunctionIndex } from './junctions';
 
 export interface Route {
   /** 도로 타일 나열. tx, ty 가 번갈아 들어간다. */
@@ -40,11 +41,17 @@ interface HeapNode {
 
 export class Router {
   private queue: Pending[] = [];
+  /** 신호 대기 비용을 교차로 단위로 매기기 위한 색인. 없으면 비용을 매기지 않는다. */
+  private junctions: JunctionIndex | null = null;
   private cache = new Map<string, Route>();
   /** Route 인터페이스를 늘리지 않고 재탐색용 계획 당시 타일별 혼잡을 보관한다. */
   private planSamples = new WeakMap<Route, Float32Array>();
 
   constructor(private world: World, private congestion: CongestionMap) {}
+
+  setJunctions(index: JunctionIndex): void {
+    this.junctions = index;
+  }
 
   update(budget: number): void {
     for (let i = 0; i < budget && this.queue.length > 0; i++) {
@@ -156,7 +163,27 @@ export class Router {
           step *= SLOPE_COST_MUL;
         }
         step += turnCost(cur.dir, nextDir);
-        if (hasSignal(this.world, nx, ny)) step += SIGNAL_WAIT_COST;
+        // 신호 대기 비용은 **교차로에 들어갈 때 한 번만** 붙인다. 예전에는
+        // "이웃 도로가 3개 이상인 타일" 마다 붙였는데, 폭 2타일 도로는 직선
+        // 구간의 모든 타일이 여기 걸려서 넓은 도로일수록 경로 비용이 폭등했다.
+        if (this.junctions) {
+          const jid = this.junctions.idAt(nx, ny);
+          if (jid >= 0 && jid !== this.junctions.idAt(cur.x, cur.y)) {
+            if (this.junctions.byId(jid)?.signalized) step += SIGNAL_WAIT_COST;
+          }
+          // 교차로가 아닌 칸에서의 방향 전환 = 넓은 도로 위의 차선 변경이다.
+          // (L자 코너는 교차로로 잡히므로 여기 걸리지 않는다.)
+          // 값싸게 두면 A*가 넓은 도로에서 지그재그로 차선을 갈아타는 경로를
+          // 만들고, 그 지그재그가 마주 오는 차선을 가로질러 겹침의 원인이 된다.
+          if (
+            jid < 0 &&
+            cur.dir !== 4 &&
+            cur.dir !== nextDir &&
+            this.junctions.covers(nx, ny)
+          ) {
+            step += LANE_CHANGE_COST;
+          }
+        }
 
         const ng = cur.g + step;
         const nk = stateKey(nx, ny, nextDir);

@@ -105,6 +105,7 @@ export class RoadField {
     return roadTileCapacity(world, tx, ty);
   }
 
+
   /** 전체 재계산. 하루에 한 번(ROAD_FIELD_INTERVAL) 돈다. */
   rebuild(world: World): void {
     this.fields.clear();
@@ -273,8 +274,28 @@ export function touchesRoad(
   return false;
 }
 
-/** 도로 연결 수/형태로 계산한 기본 용량 배율. */
-export function roadTileCapacity(world: World, tx: number, ty: number): number {
+/**
+ * 교차로 판정을 빌려 쓰기 위한 최소 인터페이스.
+ * roadGraph 가 traffic 쪽을 import 하지 않도록 구조적 타입만 받는다.
+ */
+export interface JunctionLookup {
+  covers(tx: number, ty: number): boolean;
+  idAt(tx: number, ty: number): number;
+}
+
+/**
+ * 도로 연결 수/형태로 계산한 기본 용량 배율.
+ *
+ * 이웃 도로 수만 세면 **폭이 2타일인 도로(4차로)의 직선 구간**이 전부 "이웃 3개"
+ * 가 되어 용량 0.6 으로 깎였다. 넓은 도로를 깔수록 혼잡도가 올라가고 경로가
+ * 그 도로를 피하는, 정반대의 결과가 나왔다. 교차로 색인이 있으면 그것을 먼저 본다.
+ */
+export function roadTileCapacity(
+  world: World,
+  tx: number,
+  ty: number,
+  junctions?: JunctionLookup | null,
+): number {
   if (world.getBuild(tx, ty) !== Build.Road) return 0;
   let mask = 0;
   let count = 0;
@@ -284,6 +305,15 @@ export function roadTileCapacity(world: World, tx: number, ty: number): number {
       mask |= 1 << d;
       count++;
     }
+  }
+  if (junctions && junctions.covers(tx, ty)) {
+    if (junctions.idAt(tx, ty) < 0) {
+      // 교차로가 아니면 직선/코너 구간이다. 도로가 넓어 이웃이 많은 것뿐이므로
+      // 용량을 깎지 않는다.
+      if (count <= 1) return 0.5;
+      return mask === 0b0101 || mask === 0b1010 || count >= 3 ? 1.0 : 0.8;
+    }
+    return count >= 4 ? 0.5 : 0.6;
   }
   if (count <= 1) return 0.5;
   if (count === 2) return mask === 0b0101 || mask === 0b1010 ? 1.0 : 0.8;

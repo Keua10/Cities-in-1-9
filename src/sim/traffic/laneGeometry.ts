@@ -2,6 +2,7 @@ import { DIRS } from '../../world/build';
 import {
   LANE_CORNER_RADIUS_TILES,
   LANE_OFFSET_TILES,
+  MOVEMENT_CLEARANCE_TILES,
 } from '../simConstants';
 import type { Route } from './router';
 
@@ -31,7 +32,7 @@ import type { Route } from './router';
  * 바깥으로 넓게 돌아 나간다.
  */
 
-export { LANE_OFFSET_TILES };
+export { LANE_OFFSET_TILES, MOVEMENT_CLEARANCE_TILES };
 
 /** 코너 베지에가 차지하는 구간 길이(타일). 0.5 를 넘으면 이웃 코너와 겹친다. */
 const CORNER_R = Math.min(0.5, Math.max(LANE_OFFSET_TILES + 0.05, LANE_CORNER_RADIUS_TILES));
@@ -254,16 +255,81 @@ export function movementChord(dIn: number, dOut: number): [number, number, numbe
 }
 
 /**
- * 같은 타일 위 두 움직임이 서로 막아야 하는 사이인가.
+ * 궤적의 중간점(코너에서는 실제 베지에의 중점).
  *
- * 우측통행이면 마주 오는 직진끼리, 마주 오는 좌회전끼리는 서로 지나갈 수 있다.
- * 예전 코드처럼 "교차로 타일 하나에 차 한 대" 로 잠그면 코너에서 반대 차선까지
- * 멈춰 서서 통행량이 반토막 난다. 그래서 실제 궤적(선분)이 만나는지로 판정한다.
+ * 직선 하나로만 궤적을 나타내면 회전이 실제로 어느 쪽으로 부풀어 도는지가
+ * 사라진다. L자 코너의 양방향은 곡선이 서로 **반대쪽으로** 부풀어 실제로는
+ * 0.48타일 떨어져 지나가는데, 직선(현)으로 재면 0.35타일로 나와 서로 막게 된다.
+ * 반대로 마주 보는 좌회전끼리는 곡선이 가운데로 파고들어 실제로는 0.21타일까지
+ * 붙는데 현으로 재면 0.35타일로 나와 "지나가도 된다" 는 잘못된 답이 나온다.
+ * 중간점 하나를 끼워 꺾은선으로 만들면 두 경우가 모두 맞는다.
+ */
+export function movementMid(dIn: number, dOut: number): [number, number] {
+  const [rix, riy] = rightOffset(dIn);
+  if (dIn === dOut) return [rix, riy];
+  const a = DIRS[dIn];
+  const b = DIRS[dOut];
+  const [rox, roy] = rightOffset(dOut);
+  const q0x = -a[0] * CORNER_R + rix;
+  const q0y = -a[1] * CORNER_R + riy;
+  const cx = rix + rox;
+  const cy = riy + roy;
+  const q2x = b[0] * CORNER_R + rox;
+  const q2y = b[1] * CORNER_R + roy;
+  return [
+    0.25 * q0x + 0.5 * cx + 0.25 * q2x,
+    0.25 * q0y + 0.5 * cy + 0.25 * q2y,
+  ];
+}
+
+/**
+ * 한 칸에서의 궤적을 타일 절대 좌표의 꺾은선(점 3개)으로. 교차로가 여러 칸일 때
+ * 칸별 상대 좌표로는 이웃 칸에 걸친 차를 볼 수 없어 절대 좌표가 필요하다.
+ * 반환값은 [x0, y0, xm, ym, x1, y1].
+ */
+export function movementPathAt(
+  tx: number,
+  ty: number,
+  dIn: number,
+  dOut: number,
+): [number, number, number, number, number, number] {
+  const c = movementChord(dIn, dOut);
+  const m = movementMid(dIn, dOut);
+  return [tx + c[0], ty + c[1], tx + m[0], ty + m[1], tx + c[2], ty + c[3]];
+}
+
+/** 두 꺾은선 사이의 최단거리. */
+export function pathDistance(
+  a: readonly number[],
+  b: readonly number[],
+): number {
+  let best = Infinity;
+  for (let i = 0; i + 3 < a.length; i += 2) {
+    for (let j = 0; j + 3 < b.length; j += 2) {
+      const d = segmentDistance(
+        a[i], a[i + 1], a[i + 2], a[i + 3],
+        b[j], b[j + 1], b[j + 2], b[j + 3],
+      );
+      if (d < best) best = d;
+      if (best === 0) return 0;
+    }
+  }
+  return best;
+}
+
+/**
+ * 두 움직임이 서로 막아야 하는 사이인가(같은 타일 안에서).
  *
- *  - 진입 방향이 같으면: 같은 차선을 줄서서 가는 것이므로 예약이 아니라
- *    앞차 간격(gapAhead)이 처리한다.
- *  - 진출 방향이 같으면: 같은 차선으로 합류하므로 무조건 충돌이다.
- *  - 그 외에는 두 궤적 선분이 교차할 때만 충돌이다.
+ * ── 왜 "교차하는가" 가 아니라 "얼마나 가까운가" 인가 ────────────────
+ * 예전에는 두 선분이 실제로 **교차할 때만** 충돌로 봤다. 그런데 차에는 폭이
+ * 있다. 선분이 교차하지 않아도 0.1타일 옆을 스쳐 가면 차체는 겹친다. 실제로
+ * 넓은 교차로에서 "충돌하지 않는다" 고 판정된 두 대가 화면에서는 서로를 뚫고
+ * 지나가려다 둘 다 굳어 버렸다(겹침 방지 장치가 둘 다 세워서).
+ *
+ * 그래서 두 궤적 사이의 **최단거리**가 차 폭보다 가까우면 충돌로 본다.
+ *   - 마주 오는 직진끼리는 중심 간격이 0.5타일이라 그대로 통과한다.
+ *   - 마주 보는 좌회전끼리는 0.354타일까지 붙는다. 차 폭이 0.30이므로 이건
+ *     실제로 스치는 거리다. 예전에는 통과시켰지만 지금은 막는다.
  */
 export function movementsConflict(
   inA: number,
@@ -273,9 +339,34 @@ export function movementsConflict(
 ): boolean {
   if (inA === inB) return false;
   if (outA === outB) return true;
-  const [ax0, ay0, ax1, ay1] = movementChord(inA, outA);
-  const [bx0, by0, bx1, by1] = movementChord(inB, outB);
-  return segmentsCross(ax0, ay0, ax1, ay1, bx0, by0, bx1, by1);
+  return pathDistance(movementPathAt(0, 0, inA, outA), movementPathAt(0, 0, inB, outB)) <
+    MOVEMENT_CLEARANCE_TILES;
+}
+
+/** 두 선분 사이의 최단거리. */
+export function segmentDistance(
+  ax0: number, ay0: number, ax1: number, ay1: number,
+  bx0: number, by0: number, bx1: number, by1: number,
+): number {
+  if (segmentsCross(ax0, ay0, ax1, ay1, bx0, by0, bx1, by1)) return 0;
+  return Math.min(
+    pointSegment(ax0, ay0, bx0, by0, bx1, by1),
+    pointSegment(ax1, ay1, bx0, by0, bx1, by1),
+    pointSegment(bx0, by0, ax0, ay0, ax1, ay1),
+    pointSegment(bx1, by1, ax0, ay0, ax1, ay1),
+  );
+}
+
+function pointSegment(
+  px: number, py: number,
+  x0: number, y0: number, x1: number, y1: number,
+): number {
+  const dx = x1 - x0;
+  const dy = y1 - y0;
+  const len2 = dx * dx + dy * dy;
+  let t = len2 > 1e-9 ? ((px - x0) * dx + (py - y0) * dy) / len2 : 0;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(px - (x0 + dx * t), py - (y0 + dy * t));
 }
 
 function segmentsCross(

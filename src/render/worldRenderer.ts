@@ -18,7 +18,7 @@ import {
   tileToWorldY,
   visibleChunkRange,
 } from '../core/iso';
-import { makeTopResolver, type TopResolver } from '../world/build';
+import { DIRS, makeTopResolver, type TopResolver } from '../world/build';
 import type { World } from '../world/world';
 import type { TileAtlas } from './atlas';
 import type { BuildingAtlas } from './buildingAtlas';
@@ -26,10 +26,10 @@ import { BuildingMesh } from './buildingMesh';
 import type { TrafficSim } from '../sim/traffic/trafficSim';
 import type { VehicleAtlas } from './vehicleAtlas';
 import { VehicleMesh } from './vehicleMesh';
-import { hasSignal, phaseAt, SignalPhase } from '../sim/traffic/signals';
+import { SignalState, signalState } from '../sim/traffic/signals';
 import { laneIsTurning } from '../sim/traffic/laneGeometry';
+import { JUNCTION_LEG_MIN_TILES } from '../sim/simConstants';
 import type { Vehicle } from '../sim/traffic/vehicles';
-import { Build } from '../world/build';
 import { ChunkMesh } from './chunkMesh';
 
 export interface RenderStats {
@@ -229,34 +229,48 @@ export class WorldRenderer {
     this.stats.visibleBuildings = buildingsShown;
   }
 
+  /**
+   * 신호등을 **교차로 영역마다 한 벌**, 진입로마다 한 등씩 그린다.
+   *
+   * 예전에는 "이웃 도로가 3개 이상인 타일" 마다 두 칸짜리 사각형을 찍었다.
+   * 그래서 폭 2타일 도로를 깔면 도로 전체에 신호등이 깔려 보였다. 지금은
+   * 진짜 교차로에만, 그것도 차가 들어오는 방향 쪽에 등이 하나씩 붙는다.
+   */
   private drawSignals(range: { cx0: number; cy0: number; cx1: number; cy1: number }): void {
     this.signalLayer.clear();
     if (!this.traffic) return;
     const signalTime = this.traffic.signalTimeMs;
-    for (let cy = range.cy0; cy <= range.cy1; cy++) {
-      for (let cx = range.cx0; cx <= range.cx1; cx++) {
-        if (this.showFog && !this.world.isExplored(cx, cy)) continue;
-        const parcel = this.world.peekParcel(cx, cy);
-        if (!parcel?.build) continue;
-        const bx = cx * CHUNK_SIZE;
-        const by = cy * CHUNK_SIZE;
-        for (let ly = 0; ly < CHUNK_SIZE; ly++) {
-          for (let lx = 0; lx < CHUNK_SIZE; lx++) {
-            if (parcel.build[ly * CHUNK_SIZE + lx] !== Build.Road) continue;
-            const tx = bx + lx;
-            const ty = by + ly;
-            if (!hasSignal(this.world, tx, ty)) continue;
-            const x = tileToWorldX(tx, ty);
-            const y = tileToWorldY(tx, ty, this.world.sampleHeight(tx, ty));
-            const phase = phaseAt(tx, ty, signalTime);
-            const nsGo = phase === SignalPhase.NSGreen;
-            const ewGo = phase === SignalPhase.EWGreen;
-            // 임시 신호등 표현. 정식 도로/신호 스프라이트가 들어오기 전에도
-            // 교차로에 신호가 존재하고 어느 축이 열려 있는지 눈으로 확인할 수 있다.
-            this.signalLayer.rect(x - 8, y - 13, 4, 4).fill({ color: nsGo ? 0x6fe27e : 0xe25f5f, alpha: 0.95 });
-            this.signalLayer.rect(x + 4, y - 13, 4, 4).fill({ color: ewGo ? 0x6fe27e : 0xe25f5f, alpha: 0.95 });
-          }
-        }
+    const tx0 = range.cx0 * CHUNK_SIZE;
+    const ty0 = range.cy0 * CHUNK_SIZE;
+    const tx1 = (range.cx1 + 1) * CHUNK_SIZE - 1;
+    const ty1 = (range.cy1 + 1) * CHUNK_SIZE - 1;
+
+    for (const junction of this.traffic.junctions.junctions) {
+      if (!junction.signalized) continue;
+      if (junction.maxX < tx0 || junction.minX > tx1) continue;
+      if (junction.maxY < ty0 || junction.minY > ty1) continue;
+      if (this.showFog && !this.world.isExplored(chunkIndexOf(junction.minX), chunkIndexOf(junction.minY))) {
+        continue;
+      }
+      const cx = (junction.minX + junction.maxX) / 2;
+      const cy = (junction.minY + junction.maxY) / 2;
+      for (const leg of junction.legs) {
+        if (leg.length < JUNCTION_LEG_MIN_TILES) continue;
+        const dir = DIRS[leg.enterDir];
+        // 진입 방향의 반대쪽(=운전자가 보는 맞은편)에 등을 세운다.
+        const spanX = (junction.maxX - junction.minX + 1) / 2 + 0.55;
+        const spanY = (junction.maxY - junction.minY + 1) / 2 + 0.55;
+        const lx = cx + dir[0] * spanX;
+        const ly = cy + dir[1] * spanY;
+        const x = tileToWorldX(lx, ly);
+        const y = tileToWorldY(lx, ly, this.world.sampleHeight(junction.minX, junction.minY));
+        const state = signalState(junction, leg.enterDir, signalTime);
+        const color = state === SignalState.Green
+          ? 0x6fe27e
+          : state === SignalState.Yellow
+            ? 0xe8c15a
+            : 0xe25f5f;
+        this.signalLayer.rect(x - 2.5, y - 15, 5, 5).fill({ color, alpha: 0.95 });
       }
     }
   }
