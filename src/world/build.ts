@@ -1,6 +1,6 @@
 import { CHUNK_SIZE, OVERRIDE_NONE } from '../core/constants';
 import { chunkIndexOf } from '../core/iso';
-import { ROAD_CELL_BASE, zoneCell } from '../render/atlas';
+import { civicCell, ROAD_CELL_BASE, zoneCell } from '../render/atlas';
 import { isWater } from './terrain';
 import type { Chunk, World } from './world';
 
@@ -26,6 +26,8 @@ export const Build = {
   ZoneR: 1, // 주거
   ZoneC: 2, // 상업
   ZoneI: 3, // 공업
+  /** 3.3단계. 시설이 깔고 앉은 칸. 지구가 아니므로 zoneOfBuild 는 -1 을 준다. */
+  Civic: 4,
 } as const;
 
 export type BuildId = (typeof Build)[keyof typeof Build];
@@ -46,6 +48,7 @@ export const BUILD_LABELS: Record<number, string> = {
   [Build.ZoneR]: '주거지구',
   [Build.ZoneC]: '상업지구',
   [Build.ZoneI]: '공업지구',
+  [Build.Civic]: '공공시설',
 };
 
 /**
@@ -272,6 +275,7 @@ export function makeTopResolver(world: World): TopResolver {
     if (b >= Build.ZoneR && b <= Build.ZoneI) {
       return zoneCell(b - Build.ZoneR, hasRoadAccess(world, tx, ty));
     }
+    if (b === Build.Civic) return civicCell(hasRoadAccess(world, tx, ty));
     // 모르는 ID(미래 버전에서 저장된 값)는 지형으로 떨어뜨린다. 게임이 죽으면 안 된다.
     return chunk.tiles[index];
   };
