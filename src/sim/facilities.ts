@@ -1,5 +1,4 @@
-import { CHUNK_SIZE } from '../core/constants';
-import { chunkIndexOf, localIndexOf } from '../core/iso';
+import { chunkIndexOf } from '../core/iso';
 import { Build, type PlaceResult } from '../world/build';
 import { isWater } from '../world/terrain';
 import type { World } from '../world/world';
@@ -107,16 +106,6 @@ export function facilitySpan(kind: number): number {
 const OK: PlaceResult = { ok: true, reason: '' };
 
 /**
- * (tx, ty) 를 왼쪽 위로 하는 span x span 부지가 한 청크 안에 들어가는가.
- *
- * growth.ts:fitsInChunk 와 같은 규칙이고 이유도 같다 — 건물 하나가 두 저장
- * 문서에 걸치면 반쪽만 저장될 수 있다.
- */
-function fitsInChunk(tx: number, ty: number, span: number): boolean {
-  return localIndexOf(tx) + span <= CHUNK_SIZE && localIndexOf(ty) + span <= CHUNK_SIZE;
-}
-
-/**
  * 시설을 놓을 수 있는가. build.ts 의 canPlaceRoad / canPlaceZone 과 같은 모양이다.
  *
  * 거부 사유는 **학생이 읽을 문장으로** 돌려준다. 순서대로 검사한다.
@@ -132,21 +121,23 @@ export function canPlaceFacility(
   const spec = FACILITY_SPECS[kind];
   const span = spec.span;
 
-  // 1) 개척한 청크인가. footprint 가 청크를 넘지 않으므로 앵커만 보면 된다.
-  if (!world.isExplored(chunkIndexOf(tx), chunkIndexOf(ty))) {
-    return { ok: false, reason: '아직 개척하지 않은 땅입니다' };
-  }
-
-  // 2) 한 청크 안에 들어가는가
-  if (!fitsInChunk(tx, ty, span)) {
-    return { ok: false, reason: '청크 경계에는 지을 수 없습니다' };
-  }
-
+  /*
+   * 1) 개척한 청크인가.
+   *
+   * footprint 가 청크를 걸칠 수 있으므로 **칸마다** 확인한다.
+   * (지구 건물과 달리 시설에는 "한 청크 안에 들어가야 한다" 는 제약이 없다.
+   *  World.placeFacility / demolishAt 가 칸마다 필지를 찾아 쓰고, 저장은
+   *  citySave 의 runTransaction 이 걸친 청크를 한 번에 커밋하므로 반쪽짜리
+   *  시설이 남지 않는다.)
+   */
   const h = world.sampleHeight(tx, ty);
   for (let dy = 0; dy < span; dy++) {
     for (let dx = 0; dx < span; dx++) {
       const x = tx + dx;
       const y = ty + dy;
+      if (!world.isExplored(chunkIndexOf(x), chunkIndexOf(y))) {
+        return { ok: false, reason: '아직 개척하지 않은 땅입니다' };
+      }
       // 3) 물이 아닌가
       if (isWater(world.getTile(x, y))) {
         return { ok: false, reason: '물 위에는 지을 수 없습니다' };

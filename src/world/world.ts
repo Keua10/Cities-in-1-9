@@ -337,7 +337,7 @@ export class World {
     // 헐린 것이 시설이면 build 쪽에 Civic 칸이 그대로 남는다. 유령 칸이 되므로
     // 여기서 함께 지운다. 아래에서 p.build[i] = value 가 이 칸을 다시 덮어쓴다.
     if (removed && removed.kind !== null) {
-      this.clearFacilityFootprintBuild(p, removed);
+      this.clearFacilityFootprintBuild(removed);
     }
 
     if (!p.build) {
@@ -491,36 +491,66 @@ export class World {
 
     // 1) footprint 전 칸에 build = Build.Civic.
     //    setBuild 를 쓴다 — 기존 건물이 있으면 내부의 demolishAt 이 알아서 헌다.
+    //    setBuild 는 칸마다 필지를 스스로 찾으므로 청크를 걸쳐도 안전하다.
     for (let dy = 0; dy < span; dy++) {
       for (let dx = 0; dx < span; dx++) {
         this.setBuild(tx + dx, ty + dy, Build.Civic, true);
       }
     }
 
-    // 2) bld 배열 확보 -> 앵커에 facCode(kind), 나머지에 BLD_COVERED
+    // 2) bld 배열 -> 앵커에 facCode(kind), 나머지에 BLD_COVERED.
+    //    **칸마다 필지를 다시 찾는다.** footprint 가 청크 경계를 걸치면 칸들이
+    //    서로 다른 필지에 나뉘어 들어가기 때문이다.
+    const touched = new Set<Parcel>();
+    for (let dy = 0; dy < span; dy++) {
+      for (let dx = 0; dx < span; dx++) {
+        const anchorCell = dx === 0 && dy === 0;
+        touched.add(
+          this.writeBldCell(
+            tx + dx,
+            ty + dy,
+            anchorCell ? facCode(kind) : BLD_COVERED,
+            // 3) 건설 날짜는 앵커 칸에만. 이번 단계에서는 읽지 않지만
+            //    노후화(STEP 4)를 위해 남긴다.
+            anchorCell ? bornDay : null,
+          ),
+        );
+      }
+    }
+
+    // 4) p.buildingCount 는 **올리지 않는다.** 그 값은 지구 건물 수이고
+    //    recountParcel 과 짝이 맞아야 한다.
+    //    걸친 필지가 여럿이면 전부 다시 굽고 전부 저장해야 한다.
+    for (const p of touched) {
+      p.bldRevision++;
+      this.markDirty(p.key, true); // 학생이 한 일이므로 byUser = true
+    }
+  }
+
+  /**
+   * bld 한 칸을 쓴다. 칸이 속한 필지를 찾아 배열을 확보하고 값을 넣는다.
+   *
+   * footprint 를 도는 쪽에서 필지를 한 번만 찾아 쓰면 청크 경계를 걸친 순간
+   * 지역 index 가 옆줄로 넘어가 엉뚱한 칸을 덮어쓴다. 칸마다 찾는 비용은
+   * Map 조회 한 번이고, 시설은 최대 9칸이라 부담이 없다.
+   */
+  private writeBldCell(
+    tx: number,
+    ty: number,
+    code: number,
+    bornDay: number | null,
+  ): Parcel {
     const p = this.getParcel(chunkIndexOf(tx), chunkIndexOf(ty));
     if (!p.bld) p.bld = new Uint8Array(CHUNK_TILES).fill(BLD_NONE);
     if (!p.bornLo) p.bornLo = new Uint8Array(CHUNK_TILES).fill(BLD_NONE);
     if (!p.bornHi) p.bornHi = new Uint8Array(CHUNK_TILES).fill(BLD_NONE);
-
-    const lx = localIndexOf(tx);
-    const ly = localIndexOf(ty);
-    for (let dy = 0; dy < span; dy++) {
-      for (let dx = 0; dx < span; dx++) {
-        const i = (ly + dy) * CHUNK_SIZE + (lx + dx);
-        p.bld[i] = dx === 0 && dy === 0 ? facCode(kind) : BLD_COVERED;
-      }
+    const i = localIndexOf(ty) * CHUNK_SIZE + localIndexOf(tx);
+    p.bld[i] = code;
+    if (bornDay !== null) {
+      p.bornLo[i] = bornDay & 0xff;
+      p.bornHi[i] = (bornDay >> 8) & 0xff;
     }
-
-    // 3) 건설 날짜. 이번 단계에서는 읽지 않지만 노후화(STEP 4)를 위해 남긴다.
-    const anchor = ly * CHUNK_SIZE + lx;
-    p.bornLo[anchor] = bornDay & 0xff;
-    p.bornHi[anchor] = (bornDay >> 8) & 0xff;
-
-    // 4) p.buildingCount 는 **올리지 않는다.** 그 값은 지구 건물 수이고
-    //    recountParcel 과 짝이 맞아야 한다.
-    p.bldRevision++;
-    this.markDirty(p.key, true); // 학생이 한 일이므로 byUser = true
+    return p;
   }
 
   /**
@@ -547,42 +577,60 @@ export class World {
    *
    * **setBuild 를 재귀 호출하지 않는다** — 무한 재귀가 된다. 배열에 직접 쓴다.
    * Civic 칸은 도로도 지구도 아니므로 roadCount/emptyPlots 를 건드릴 것이 없다.
+   * 청크를 걸친 시설도 있으므로 칸마다 필지를 다시 찾는다.
    */
-  private clearFacilityFootprintBuild(p: Parcel, info: BuildingInfo): void {
-    if (!p.build) return;
-    const lx = localIndexOf(info.tx);
-    const ly = localIndexOf(info.ty);
+  private clearFacilityFootprintBuild(info: BuildingInfo): void {
     for (let dy = 0; dy < info.span; dy++) {
       for (let dx = 0; dx < info.span; dx++) {
-        const i = (ly + dy) * CHUNK_SIZE + (lx + dx);
+        const x = info.tx + dx;
+        const y = info.ty + dy;
+        const p = this.parcels.get(chunkKey(chunkIndexOf(x), chunkIndexOf(y)));
+        if (!p?.build) continue;
+        const i = localIndexOf(y) * CHUNK_SIZE + localIndexOf(x);
         if (p.build[i] === Build.Civic) p.build[i] = Build.None;
       }
     }
   }
 
-  /** 이 칸을 덮고 있는 건물을 헌다. 지구는 그대로 남는다. */
+  /**
+   * 이 칸을 덮고 있는 건물을 헌다. 지구는 그대로 남는다.
+   * footprint 가 청크를 걸칠 수 있으므로(시설) 칸마다 필지를 다시 찾는다.
+   */
   demolishAt(tx: number, ty: number): BuildingInfo | null {
     const info = this.buildingCovering(tx, ty);
     if (!info) return null;
-    const p = this.getParcel(chunkIndexOf(info.tx), chunkIndexOf(info.ty));
-    if (!p.bld) return null;
-    const lx = localIndexOf(info.tx);
-    const ly = localIndexOf(info.ty);
+
+    const touched = new Set<Parcel>();
     for (let dy = 0; dy < info.span; dy++) {
       for (let dx = 0; dx < info.span; dx++) {
-        const i = (ly + dy) * CHUNK_SIZE + (lx + dx);
+        const x = info.tx + dx;
+        const y = info.ty + dy;
+        const p = this.parcels.get(chunkKey(chunkIndexOf(x), chunkIndexOf(y)));
+        if (!p?.bld) continue;
+        const i = localIndexOf(y) * CHUNK_SIZE + localIndexOf(x);
         p.bld[i] = BLD_NONE;
         if (p.bornLo) p.bornLo[i] = BLD_NONE;
         if (p.bornHi) p.bornHi[i] = BLD_NONE;
         // 헐린 자리는 지구가 남아 있으면 다시 빈 부지가 된다.
         if (p.build && zoneOfBuild(p.build[i]) >= 0) p.emptyPlots++;
+        touched.add(p);
       }
     }
+    if (touched.size === 0) return null;
+
     // 시설은 buildingCount 에 들어간 적이 없다(placeFacility 가 올리지 않는다).
-    // 여기서 내리면 지구 건물 수가 음수로 샌다.
-    if (info.kind === null) p.buildingCount--;
-    p.bldRevision++;
-    this.markDirty(p.key, false);
+    // 여기서 내리면 지구 건물 수가 음수로 샌다. 지구 건물은 앵커가 있는
+    // 필지에서만 세므로 그쪽에서만 내린다.
+    if (info.kind === null) {
+      const anchorParcel = this.parcels.get(
+        chunkKey(chunkIndexOf(info.tx), chunkIndexOf(info.ty)),
+      );
+      if (anchorParcel) anchorParcel.buildingCount--;
+    }
+    for (const p of touched) {
+      p.bldRevision++;
+      this.markDirty(p.key, false);
+    }
     return info;
   }
 
