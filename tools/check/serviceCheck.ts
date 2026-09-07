@@ -501,11 +501,41 @@ console.log('5. 복지 — 계층별 요구');
 
   const score = field.amenityScoreAt(ox + 5, oy + 5);
   const fulfil = (tier: number): number => Math.min(1, score / AMENITY_NEED_BY_TIER[tier]);
-  check('17 소공원 바로 위 점수가 세기와 같다', near(score, FACILITY_SPECS[FAC_MINIPARK].strength, 0.03),
-    `${score.toFixed(3)}`);
-  check('17 1단계 fulfil = 1.0', near(fulfil(0), 1.0, 0.03), `${fulfil(0).toFixed(3)}`);
-  check('17 2단계 fulfil ~ 0.39', near(fulfil(1), 0.39, 0.03), `${fulfil(1).toFixed(3)}`);
-  check('17 3단계 fulfil ~ 0.19', near(fulfil(2), 0.19, 0.03), `${fulfil(2).toFixed(3)}`);
+  const mini = FACILITY_SPECS[FAC_MINIPARK].strength;
+  check('17 소공원 바로 위 점수가 세기와 같다', near(score, mini, 0.03), `${score.toFixed(3)}`);
+  /*
+   * 계층에 따라 결과가 갈리는 것이 정상이다 — 같은 자리, 같은 소공원인데
+   * 저소득은 충족되고 고소득은 미달이다. 그게 "얼마나 필요하냐" 다.
+   * 기대값은 세기/요구량에서 바로 나오므로 상수를 튜닝해도 이 관계는 유지된다.
+   */
+  check('17 1단계 fulfil = 1.0 (소공원 하나로 족하다)', near(fulfil(0), 1.0, 0.03),
+    `${fulfil(0).toFixed(3)}`);
+  check('17 2단계 fulfil < 1 (소공원으로는 안 된다)',
+    fulfil(1) < 1 && near(fulfil(1), mini / AMENITY_NEED_BY_TIER[1], 0.05), `${fulfil(1).toFixed(3)}`);
+  check('17 3단계 fulfil 이 2단계보다 더 낮다 (고소득이 가장 까다롭다)',
+    fulfil(2) < fulfil(1) && near(fulfil(2), mini / AMENITY_NEED_BY_TIER[2], 0.05),
+    `${fulfil(2).toFixed(3)}`);
+
+  // 2장의 세 줄이 실제 거리로 재현되는가 — 이게 복지 설계의 핵심이다.
+  const radiusFor = (kind: number, need: number): number => {
+    const spec = FACILITY_SPECS[kind];
+    return spec.strength <= need ? 0 : spec.range * (1 - need / spec.strength);
+  };
+  const miniLow = radiusFor(FAC_MINIPARK, AMENITY_NEED_BY_TIER[0]);
+  const parkMid = radiusFor(FAC_PARK, AMENITY_NEED_BY_TIER[1]);
+  console.log(
+    `     충족 반경: 소공원->저소득 ${miniLow.toFixed(1)}칸 · 공원->중산층 ${parkMid.toFixed(1)}칸`,
+  );
+  check('17 소공원이 저소득을 "걸어갈 만한" 거리에서 채운다', miniLow >= 3,
+    `${miniLow.toFixed(1)}칸`);
+  check('17 공원이 중산층을 "동네" 규모로 채운다', parkMid >= 5, `${parkMid.toFixed(1)}칸`);
+  check('17 소공원으로는 중산층을 못 채운다',
+    FACILITY_SPECS[FAC_MINIPARK].strength < AMENITY_NEED_BY_TIER[1]);
+  check('17 공원 하나로는 고소득을 못 채운다',
+    FACILITY_SPECS[FAC_PARK].strength < AMENITY_NEED_BY_TIER[2]);
+  check('17 공원 + 체육시설이 겹쳐야 고소득이 채워진다',
+    FACILITY_SPECS[FAC_PARK].strength + FACILITY_SPECS[FAC_SPORTS].strength >=
+      AMENITY_NEED_BY_TIER[2]);
 
   // 17c. 유예 — 인구가 SERVICE_GRACE_POP 미만이면 복지 감점도 0 이다
   const smallTownGap = AMENITY_GAP_MAX * 1 * ZONE_AMENITY_MUL[ZONE_R] * graceFactor(100);
