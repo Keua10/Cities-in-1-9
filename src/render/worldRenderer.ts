@@ -23,6 +23,9 @@ import type { World } from '../world/world';
 import type { TileAtlas } from './atlas';
 import type { BuildingAtlas } from './buildingAtlas';
 import { BuildingMesh } from './buildingMesh';
+import type { FacilityAtlas } from './facilityAtlas';
+import { FacilityMesh } from './facilityMesh';
+import { FACILITY_SPECS } from '../sim/facilities';
 import type { TrafficSim } from '../sim/traffic/trafficSim';
 import type { VehicleAtlas } from './vehicleAtlas';
 import { VehicleMesh } from './vehicleMesh';
@@ -38,6 +41,17 @@ export interface RenderStats {
   foggedChunks: number;
   /** 화면에 그려지고 있는 건물 수. 3.1단계에서 추가. */
   visibleBuildings: number;
+  /** 화면에 그려지고 있는 시설 수. 3.3단계에서 추가. */
+  visibleFacilities: number;
+}
+
+/** 시설 도구를 든 동안 커서 아래에 보여줄 배치 미리보기. */
+export interface FacilityPreview {
+  tx: number;
+  ty: number;
+  kind: number;
+  /** 놓을 수 있으면 초록, 없으면 빨강. */
+  ok: boolean;
 }
 
 /** 청크 하나가 덮는 큰 다이아몬드의 꼭짓점 4개. */
@@ -66,6 +80,8 @@ export class WorldRenderer {
   private fogLayer = new Container();
   private gridLayer = new Graphics();
   private cursorLayer = new Graphics();
+  /** 시설 배치 미리보기 사각형. 커서 레이어와 따로 둬야 서로 지우지 않는다. */
+  private previewLayer = new Graphics();
   private signalLayer = new Graphics();
   private lastSignalDrawMs = -1;
 
@@ -76,6 +92,11 @@ export class WorldRenderer {
    * 뒤쪽 청크의 건물을 제대로 가린다.
    */
   private buildings = new Map<string, BuildingMesh>();
+  /**
+   * 시설 메시. 건물과 텍스처가 달라 합칠 수 없으므로 메시가 하나 늘어난다.
+   * 시설이 하나도 없는 청크에는 아예 만들지 않으므로 대부분의 청크는 그대로다.
+   */
+  private facilities = new Map<string, FacilityMesh>();
   private vehicleMeshes = new Map<string, VehicleMesh>();
   private turningVehicleMesh: VehicleMesh | null = null;
   private traffic: TrafficSim | null = null;
@@ -85,6 +106,7 @@ export class WorldRenderer {
   private lastRangeKey = '';
   private lastZoom = -1;
   private cursorTile: { tx: number; ty: number } | null = null;
+  private preview: FacilityPreview | null = null;
 
   showFog = true;
   showGrid = false;
@@ -94,12 +116,14 @@ export class WorldRenderer {
     loadedMeshes: 0,
     foggedChunks: 0,
     visibleBuildings: 0,
+    visibleFacilities: 0,
   };
 
   constructor(
     private world: World,
     private atlas: TileAtlas,
     private buildingAtlas: BuildingAtlas,
+    private facilityAtlas: FacilityAtlas,
   ) {
     this.root.addChild(
       this.groundLayer,
@@ -108,6 +132,7 @@ export class WorldRenderer {
       this.signalLayer,
       this.gridLayer,
       this.cursorLayer,
+      this.previewLayer,
     );
     this.groundLayer.interactiveChildren = false;
     this.turningVehicleLayer.interactiveChildren = false;
@@ -170,6 +195,7 @@ export class WorldRenderer {
     let visible = 0;
     let fogged = 0;
     let buildingsShown = 0;
+    let facilitiesShown = 0;
     const usedVehicleMeshes = new Set<string>();
     const turningVehicles: Vehicle[] = [];
 
@@ -189,6 +215,7 @@ export class WorldRenderer {
         const mesh = this.ensureMesh(key, cx, cy);
         mesh.lastUsed = now;
         buildingsShown += this.ensureBuildings(key, cx, cy);
+        facilitiesShown += this.ensureFacilities(key, cx, cy);
         if (this.traffic && this.vehicleAtlas) {
           const vehicles = this.traffic.vehiclesInChunk(cx, cy);
           if (vehicles.length > 0 || this.vehicleMeshes.has(key)) {
@@ -227,6 +254,50 @@ export class WorldRenderer {
     this.stats.loadedMeshes = this.meshes.size;
     this.stats.foggedChunks = fogged;
     this.stats.visibleBuildings = buildingsShown;
+    this.stats.visibleFacilities = facilitiesShown;
+  }
+
+  /**
+   * 시설 배치 미리보기. 시설 도구를 든 동안 커서 아래 footprint 를 반투명
+   * 사각형으로 보여준다. 1x1·2x2·3x3 을 눈으로 못 보면 학생이 계속 실패한다.
+   */
+  setFacilityPreview(preview: FacilityPreview | null): void {
+    const a = this.preview;
+    if (!a && !preview) return;
+    if (
+      a &&
+      preview &&
+      a.tx === preview.tx &&
+      a.ty === preview.ty &&
+      a.kind === preview.kind &&
+      a.ok === preview.ok
+    ) {
+      return;
+    }
+    this.preview = preview;
+    this.drawPreview();
+  }
+
+  private drawPreview(): void {
+    const g = this.previewLayer;
+    g.clear();
+    const p = this.preview;
+    if (!p) return;
+    const span = FACILITY_SPECS[p.kind]?.span ?? 1;
+    const color = p.ok ? 0x6fd3b8 : 0xe25f5f;
+    const h = this.world.sampleHeight(p.tx, p.ty);
+
+    for (let dy = 0; dy < span; dy++) {
+      for (let dx = 0; dx < span; dx++) {
+        const x = tileToWorldX(p.tx + dx, p.ty + dy);
+        const y = tileToWorldY(p.tx + dx, p.ty + dy, h);
+        const diamond = [x, y - TILE_HH, x + TILE_HW, y, x, y + TILE_HH, x - TILE_HW, y];
+        g.poly(diamond);
+        g.fill({ color, alpha: 0.26 });
+        g.poly(diamond);
+        g.stroke({ width: Math.max(1, 1 / this.lastZoom), color, alpha: 0.9 });
+      }
+    }
   }
 
   /**
@@ -301,6 +372,7 @@ export class WorldRenderer {
       this.meshes.delete(key);
     }
     this.dropBuildings(key);
+    this.dropFacilities(key);
     this.dropVehicles(key);
   }
 
@@ -329,6 +401,46 @@ export class WorldRenderer {
       this.groundLayer.addChild(bm.mesh);
     }
     return bm.count;
+  }
+
+  /**
+   * 시설 메시를 필지 상태에 맞춘다. 건물과 같은 규칙(bldRevision)으로 다시 굽되,
+   * **시설이 하나도 없으면 메시를 아예 만들지 않는다.** 대부분의 청크에는 시설이
+   * 없으므로 드로우콜이 그대로 유지된다.
+   */
+  private ensureFacilities(key: string, cx: number, cy: number): number {
+    const parcel = this.world.peekParcel(cx, cy);
+    if (!parcel || !parcel.bld) {
+      this.dropFacilities(key);
+      return 0;
+    }
+    let fm = this.facilities.get(key);
+    if (fm && fm.needsRebuild(parcel)) {
+      this.dropFacilities(key);
+      fm = undefined;
+    }
+    if (!fm) {
+      fm = new FacilityMesh(parcel, this.facilityAtlas, this.sampleHeight);
+      if (fm.count === 0) {
+        // 시설이 없는 청크. 만들자마자 버려서 씬 그래프에 안 남긴다.
+        fm.destroy();
+        return 0;
+      }
+      // 지구 건물보다 조금 앞에 둔다. 같은 칸에 둘 다 설 일은 없지만
+      // 큰 시설이 뒤쪽 건물에 가리면 안 된다.
+      fm.mesh.zIndex = cx + cy + 0.6;
+      this.facilities.set(key, fm);
+      this.groundLayer.addChild(fm.mesh);
+    }
+    return fm.count;
+  }
+
+  private dropFacilities(key: string): void {
+    const fm = this.facilities.get(key);
+    if (!fm) return;
+    this.groundLayer.removeChild(fm.mesh);
+    fm.destroy();
+    this.facilities.delete(key);
   }
 
   private ensureVehicles(key: string, cx: number, cy: number, vehicles: readonly import('../sim/traffic/vehicles').Vehicle[]): void {
@@ -408,6 +520,7 @@ export class WorldRenderer {
       mesh.destroy();
       this.meshes.delete(key);
       this.dropBuildings(key);
+      this.dropFacilities(key);
       over--;
     }
 

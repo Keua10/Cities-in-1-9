@@ -17,6 +17,21 @@ import { growParcel, type GrowthContext } from './growth';
 import { AssignmentTable } from './assignment';
 import { CongestionMap } from './congestion';
 import { RoadField } from './roadGraph';
+import { SERVICE_KIND_COUNT, ServiceField } from './services';
+import { FACILITY_COUNT } from './buildings';
+import {
+  AMENITY_GAP_MAX,
+  AMENITY_HALF,
+  AMENITY_NEED_BY_TIER,
+  AMENITY_SURPLUS_MAX,
+  NEEDS_PENALTY_MAX,
+  SERVICE_FULL_POP,
+  SERVICE_GRACE_POP,
+  SERVICE_PENALTY_MAX,
+  SERVICE_WEIGHT,
+  TIER_SERVICE_MUL,
+  ZONE_AMENITY_MUL,
+} from './simConstants';
 import {
   COMMUTE_BAD_DIST,
   COMMUTE_GOOD_DIST,
@@ -84,6 +99,20 @@ export interface CityStats {
   /** 하루 수지. 표시용. */
   dailyIncome: number;
   dailyUpkeep: number;
+
+  /* ---------- 3.3단계. 전부 파생값이고 저장하지 않는다. ---------- */
+  /** 하루 시설 유지비 (필수 + 복지 전부). dailyUpkeep 안에 이미 포함돼 있다. */
+  facilityUpkeep: number;
+  /** 종류별 시설 수 (길이 FACILITY_COUNT = 7). */
+  facilityCounts: number[];
+  /** kind 0~3 의 커버율 0~1 (커버된 건물 수 / 전체 건물 수). */
+  serviceCoverage: number[];
+  /** loadRatio > 1 인 시설 수 (필수 서비스만). */
+  overloadedFacilities: number;
+  /** 도로에 안 닿은 시설 수 (needsRoad 인 것만 센다). */
+  deadFacilities: number;
+  /** 복지 요구를 채운 주거 건물 비율 0~1. 상태판 게이지가 이 값. */
+  amenityFulfilled: number;
 }
 
 function emptyTiers(): TierStats[][] {
@@ -94,6 +123,25 @@ function emptyTiers(): TierStats[][] {
     out.push(row);
   }
   return out;
+}
+
+function emptyFacilityStats(): Pick<
+  CityStats,
+  | 'facilityUpkeep'
+  | 'facilityCounts'
+  | 'serviceCoverage'
+  | 'overloadedFacilities'
+  | 'deadFacilities'
+  | 'amenityFulfilled'
+> {
+  return {
+    facilityUpkeep: 0,
+    facilityCounts: new Array<number>(FACILITY_COUNT).fill(0),
+    serviceCoverage: new Array<number>(SERVICE_KIND_COUNT).fill(0),
+    overloadedFacilities: 0,
+    deadFacilities: 0,
+    amenityFulfilled: 0,
+  };
 }
 
 function zeroDemand(): number[][] {
@@ -117,8 +165,15 @@ export class MacroSim {
     strandedBuildings: 0,
     dailyIncome: 0,
     dailyUpkeep: 0,
+    ...emptyFacilityStats(),
   };
   readonly roadField = new RoadField();
+  /**
+   * 3.3단계 서비스 품질장. 필수 서비스 커버리지와 복지 점수를 함께 들고 있다.
+   * roadField 와 **같은 타이밍에** 다시 만든다 — 도로가 바뀌면 커버리지도
+   * 반드시 같이 바뀌기 때문이다. 별도 주기를 만들지 마라.
+   */
+  readonly services = new ServiceField();
   private assignment: AssignmentTable | null = null;
   private congestion: CongestionMap | null = null;
 
@@ -202,7 +257,10 @@ export class MacroSim {
     // 불러온 직후에는 통계가 비어 있다. 한 번 채워야 수요가 0 에서 시작하지 않는다.
     this.evaluate(true);
     this.roadField.rebuild(this.world);
+    this.services.rebuild(this.world);
     // 거리장이 생긴 뒤 입주율을 한 번 더 계산해야 첫 배정이 0명으로 굳지 않는다.
+    // 서비스 부하도 이 두 번째 호출에서 채워지므로(5.4 한 틱 지연) 첫 틱이
+    // 돌기 전에 품질이 이미 확정돼 있다.
     this.evaluate(false);
     this.rebuildTrafficFields();
   }
@@ -245,6 +303,7 @@ export class MacroSim {
       this.macro.tick - this.lastFieldTick >= ROAD_FIELD_MIN_INTERVAL;
     if (periodicRebuild || changedAndReady) {
       this.roadField.rebuild(this.world);
+      this.services.rebuild(this.world);
       // 새 도로망을 배정표가 읽기 전에 입주율/통근 상태도 같은 거리장으로 맞춘다.
       this.evaluate(false);
       this.rebuildTrafficFields();
@@ -311,6 +370,23 @@ export class MacroSim {
     let capacityTotal = 0;
     let filledTotal = 0;
 
+    /*
+     * 3.3단계 유예.
+     *
+     * grace 는 **직전 평가의 인구** 로 잡는다. 이게 없으면 이번 패치를 올리는
+     * 순간 학생들의 기존 도시가 전부 공실이 된다(시설이 하나도 없으므로 모든
+     * 건물의 gap 이 최대치가 된다). 게임 디자인 측면에서도 맞다 — 100명짜리
+     * 마을에 소방서를 요구하지 않는다.
+     *
+     * 이 값이 **하강 나선의 바닥** 이기도 하다. 감점이 인구를 줄이고, 줄어든
+     * 인구가 grace 를 낮춰 감점을 줄인다. 음의 되먹임이라 어딘가에서 평형에
+     * 닿고, 도시는 작아질 뿐 사라지지 않는다.
+     */
+    const grace = graceFactor(this.stats.population);
+    const coveredByKind = new Array<number>(SERVICE_KIND_COUNT).fill(0);
+    let homesCounted = 0;
+    let homesFulfilled = 0;
+
     for (const p of parcels) {
       roads += p.roadCount;
       if (!p.bld) continue;
@@ -340,7 +416,55 @@ export class MacroSim {
           if (dist >= ROAD_DIST_UNREACHABLE) stranded++;
 
           const congestion = this.congestion?.routeCongestionFor(tx, ty) ?? 0;
-          const sat = satisfaction(zone, dist, nui, congestion);
+
+          /* ---------- 3.3단계: 필수 서비스 감점 ---------- */
+          // 품질은 **직전 평가에서 적립된 부하** 로 계산된 값이다(services.ts 5.4).
+          let serviceGap = 0;
+          for (let kind = 0; kind < SERVICE_KIND_COUNT; kind++) {
+            const owner = this.services.ownerFor(tx, ty, level, kind);
+            if (owner >= 0) coveredByKind[kind]++;
+            const quality = owner < 0 ? 0 : this.services.qualityOf(owner);
+            // 용도마다 필요한 서비스가 다르다. 공업지구에 학교는 필요 없다.
+            serviceGap += SERVICE_WEIGHT[kind][zone] * (1 - quality);
+          }
+          // 고소득이 더 까다롭다. 학생이 3단계 건물을 원하면 서비스를 깔아야
+          // 한다는 압력이 여기서 나온다.
+          serviceGap *= TIER_SERVICE_MUL[level - 1] * grace;
+          // 상한이 없으면 서비스가 통근·혼잡을 압도해서 3.1/3.2 에서 맞춰놓은
+          // 밸런스가 무너진다.
+          serviceGap = Math.min(serviceGap, SERVICE_PENALTY_MAX);
+
+          /* ---------- 3.3단계: 복지 ---------- */
+          const score = this.services.amenityForBuilding(tx, ty, level);
+          const need = AMENITY_NEED_BY_TIER[level - 1];
+          // **분자가 아니라 분모가 계층에 따라 움직인다.** 같은 자리, 같은
+          // 공원인데 저소득 건물은 충족되고 고소득 건물은 미달인 상황이
+          // 자연스럽게 나온다 — 그게 "얼마나 필요하냐" 다.
+          const fulfil = Math.min(1, score / need);
+          const amenityGap =
+            AMENITY_GAP_MAX * (1 - fulfil) * ZONE_AMENITY_MUL[zone] * grace;
+
+          // 요구를 채운 뒤에도 공원을 더 지을 이유가 있어야 한다. 초과분에만
+          // 소폭 보너스를 주되 **포화 곡선** 을 씌운다. 아무리 쌓아도 상한을
+          // 넘지 못하고 늘어나는 폭이 계속 줄어들므로, 공원 도배는 유지비만
+          // 나가는 손해가 되고 "여기 말고 저기" 가 항상 이긴다.
+          const surplus = Math.max(0, score - need);
+          const amenityBonus =
+            AMENITY_SURPLUS_MAX *
+            (surplus / (surplus + AMENITY_HALF)) *
+            ZONE_AMENITY_MUL[zone];
+
+          if (zone === ZONE_R) {
+            homesCounted++;
+            if (fulfil >= 1) homesFulfilled++;
+          }
+
+          // **감점 인자를 둘로 나누지 않는다.** 서비스와 복지는 각자 계산하지만
+          // 만족도에는 합쳐서 한 번 들어간다. 총합 상한이 하강 나선을 막는
+          // 유일한 바닥이기 때문이다.
+          const needsGap = Math.min(NEEDS_PENALTY_MAX, serviceGap + amenityGap);
+
+          const sat = satisfaction(zone, dist, nui, congestion, needsGap, amenityBonus);
           const floor = SATISFACTION_FLOOR[level - 1];
           const target =
             sat <= floor ? 0 : Math.min(1, (sat - floor) / Math.max(0.05, 1 - floor));
@@ -351,6 +475,8 @@ export class MacroSim {
 
           const cap = capacityOf(zone, level);
           const filled = cap * (occArr[i] / 255);
+          // 입주율이 확정된 뒤 이번 부하를 적립한다. **다음 평가가 쓸 값** 이다.
+          this.services.accrueLoad(tx, ty, level, filled);
           tiers[zone][level - 1].capacity += cap;
           tiers[zone][level - 1].filled += filled;
           capacityTotal += cap;
@@ -359,12 +485,18 @@ export class MacroSim {
       }
     }
 
+    // 적립된 부하로 품질을 확정하고 카운터를 비운다. 도시를 두 바퀴 도는 것보다
+    // 싸고, 결정론은 깨지지 않는다 — 부하 초기값은 항상 0 이고 저장하지 않는다.
+    this.services.settleLoads();
+
     let population = 0;
     let jobs = 0;
     for (let t = 0; t < LEVEL_COUNT; t++) {
       population += tiers[ZONE_R][t].filled;
       jobs += tiers[ZONE_C][t].filled + tiers[ZONE_I][t].filled;
     }
+
+    const coverage = coveredByKind.map((n) => (buildings === 0 ? 0 : n / buildings));
 
     this.stats = {
       tiers,
@@ -376,6 +508,12 @@ export class MacroSim {
       strandedBuildings: stranded,
       dailyIncome: this.stats.dailyIncome,
       dailyUpkeep: this.stats.dailyUpkeep,
+      facilityUpkeep: this.services.dailyUpkeep(),
+      facilityCounts: this.services.countsByKind(),
+      serviceCoverage: coverage,
+      overloadedFacilities: this.services.overloadedCount(),
+      deadFacilities: this.services.deadCount(),
+      amenityFulfilled: homesCounted === 0 ? 0 : homesFulfilled / homesCounted,
     };
     this.macro.population = Math.round(population);
 
@@ -501,9 +639,13 @@ export class MacroSim {
       income += this.stats.tiers[ZONE_R][t].filled * TAX_PER_RESIDENT[t];
       income += (this.stats.tiers[ZONE_C][t].filled + this.stats.tiers[ZONE_I][t].filled) * TAX_PER_JOB[t];
     }
-    const upkeep = this.stats.roads * UPKEEP_ROAD_PER_DAY;
+    // 3.3단계: 시설 유지비가 붙는다. **도로가 끊겨 죽은 시설도 유지비를 낸다.**
+    // 실제로 그렇고, 학생에게 도로 철거의 대가를 알려주는 신호이기도 하다.
+    const facilityUpkeep = this.services.dailyUpkeep();
+    const upkeep = this.stats.roads * UPKEEP_ROAD_PER_DAY + facilityUpkeep;
     this.stats.dailyIncome = income;
     this.stats.dailyUpkeep = upkeep;
+    this.stats.facilityUpkeep = facilityUpkeep;
     this.macro.money = Math.round((this.macro.money + income - upkeep) * 100) / 100;
     this.onMacroChange?.();
   }
@@ -519,12 +661,25 @@ export class MacroSim {
 /**
  * 만족도.
  *
- * 3.1단계에서는 통근과 공업 혐오 두 가지만 본다.
- * 오염·상하수도·서비스는 4단계에서 이 함수에 항을 더 붙이는 방식으로 들어온다.
+ * 3.1단계는 통근과 공업 혐오, 3.2단계가 혼잡, 3.3단계가 서비스·복지를 얹었다.
+ * **기존 항은 손대지 않는다** — 각 항 끝에서 `- needsGap + amenityBonus` 만 한다.
  * 계층별 기준선(SATISFACTION_FLOOR)은 호출한 쪽에서 적용한다 —
  * 같은 자리라도 고소득 건물이 더 까다롭게 군다.
+ *
+ * **보너스 쪽에는 상한 클램프를 새로 넣지 마라.** 만족도가 1을 넘어도 입주율은
+ * 호출부에서 잘린다. 넘은 만큼은 버려지는 게 아니라 **완충** 이 된다 — 공원을
+ * 넉넉히 깔아둔 동네는 나중에 혼잡이 좀 늘어도 사람이 바로 빠지지 않는다.
  */
-function satisfaction(zone: number, commuteDist: number, nuisance: number, congestion: number): number {
+function satisfaction(
+  zone: number,
+  commuteDist: number,
+  nuisance: number,
+  congestion: number,
+  /** 필수 서비스 + 복지 부족분을 합친 감점. NEEDS_PENALTY_MAX 로 이미 잘린 값. */
+  needsGap: number,
+  /** 요구를 넘긴 복지에 붙는 소폭 보너스. */
+  amenityBonus: number,
+): number {
   if (commuteDist >= ROAD_DIST_UNREACHABLE) return 0;
 
   let commute: number;
@@ -534,7 +689,22 @@ function satisfaction(zone: number, commuteDist: number, nuisance: number, conge
     commute = 1 - (commuteDist - COMMUTE_GOOD_DIST) / (COMMUTE_BAD_DIST - COMMUTE_GOOD_DIST);
   }
 
-  if (zone === ZONE_R) return Math.max(0, 0.35 + 0.65 * commute - nuisance - CONGESTION_PENALTY_R * congestion);
-  if (zone === ZONE_C) return Math.max(0, 0.3 + 0.7 * commute - CONGESTION_PENALTY_W * congestion);
-  return Math.max(0, 0.45 + 0.55 * commute - CONGESTION_PENALTY_W * congestion);
+  const needs = amenityBonus - needsGap;
+
+  if (zone === ZONE_R) return Math.max(0, 0.35 + 0.65 * commute - nuisance - CONGESTION_PENALTY_R * congestion + needs);
+  if (zone === ZONE_C) return Math.max(0, 0.3 + 0.7 * commute - CONGESTION_PENALTY_W * congestion + needs);
+  return Math.max(0, 0.45 + 0.55 * commute - CONGESTION_PENALTY_W * congestion + needs);
+}
+
+/**
+ * 인구에 따른 감점 유예. **서비스와 복지에 똑같이 건다.**
+ *
+ *   population <= SERVICE_GRACE_POP  ->  0  (감점 없음)
+ *   population >= SERVICE_FULL_POP   ->  1
+ *   그 사이                          ->  선형 보간
+ */
+export function graceFactor(population: number): number {
+  if (population <= SERVICE_GRACE_POP) return 0;
+  if (population >= SERVICE_FULL_POP) return 1;
+  return (population - SERVICE_GRACE_POP) / (SERVICE_FULL_POP - SERVICE_GRACE_POP);
 }

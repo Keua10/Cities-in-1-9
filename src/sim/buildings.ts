@@ -72,6 +72,48 @@ export function zoneOfCode(v: number): number {
   return Math.floor(v / LEVEL_COUNT);
 }
 
+/* ---------------------------------------------------------------- *
+ * 3.3단계: 서비스·복지 시설 코드
+ * ---------------------------------------------------------------- */
+
+/**
+ * 시설은 지구 건물과 **같은 bld 배열**을 쓰되 코드 범위를 뒤에 붙인다.
+ *
+ * 이렇게 하면 `isAnchor(v)` 가 `v < 9` 그대로여서, 인구·일자리 집계, 공업 혐오도,
+ * 취직 배정, 통행 발생, 통근 거리장, 재건축 후보, 지구 건물 메시가 **코드를 한 줄도
+ * 안 고치고** 시설을 건너뛴다. `isAnchor` 를 시설까지 포함하도록 넓히면 그 여덟
+ * 군데가 조용히 틀리기 시작하고, 증상은 "인구가 이상하게 늘어남" 처럼 원인에서
+ * 멀리 떨어져 나타난다. **절대 넓히지 마라.**
+ */
+
+/** 시설 코드 시작점. 지구 건물 코드 0~8 뒤에 붙인다. 절대 앞당기지 마라. */
+export const FAC_BASE = 9;
+/** 시설 종류 수. 이 값은 저장된 코드 범위를 정하므로 simConstants 가 아니라 여기 있다. */
+export const FACILITY_COUNT = 7;
+/** kind 가 이 값 이상이면 복지 시설. 0~3 필수 서비스, 4~6 복지. */
+export const FAC_WELFARE_BASE = 4;
+
+export function isWelfareKind(kind: number): boolean {
+  return kind >= FAC_WELFARE_BASE;
+}
+
+export function isFacilityAnchor(v: number): boolean {
+  return v >= FAC_BASE && v < FAC_BASE + FACILITY_COUNT;
+}
+
+/** 지구 건물 앵커이거나 시설 앵커. buildingCovering 만 이걸 쓴다. */
+export function isAnyAnchor(v: number): boolean {
+  return isAnchor(v) || isFacilityAnchor(v);
+}
+
+export function facilityKindOfCode(v: number): number {
+  return v - FAC_BASE;
+}
+
+export function facCode(kind: number): number {
+  return FAC_BASE + kind;
+}
+
 export function levelOfCode(v: number): number {
   return (v % LEVEL_COUNT) + 1;
 }

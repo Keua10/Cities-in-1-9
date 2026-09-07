@@ -4,6 +4,20 @@ import { CHUNK_SIZE } from '../core/constants';
 import { parseChunkKey, tileToWorldX, tileToWorldY, worldToTileF } from '../core/iso';
 import type { World } from '../world/world';
 import { Build } from '../world/build';
+import { isWelfareKind } from '../sim/buildings';
+import type { ServiceField } from '../sim/services';
+
+/**
+ * 시설 도구를 든 동안 미니맵에 얹는 레이어.
+ *
+ * 월드 오버레이는 3.3단계 범위 밖이다(청크 메시 UV 를 건드려야 해서 비싸다).
+ * 대신 이미 도시를 축약해 그리고 있는 미니맵에 얹는다.
+ */
+export interface CoverageOverlay {
+  field: ServiceField;
+  /** 지금 고른 시설 종류. 이 값에 맞는 그림을 그린다. */
+  kind: number;
+}
 
 interface TileBounds {
   minTx: number;
@@ -30,6 +44,8 @@ export class Minimap {
   private bounds: TileBounds;
   private lastBasePaint = -Infinity;
   private dragging = false;
+  /** 지금 그려진 오버레이 종류. 바뀌면 다시 칠한다. */
+  private overlayKey = '';
 
   constructor(
     private world: World,
@@ -66,14 +82,20 @@ export class Minimap {
     });
   }
 
-  update(nowMs: number): void {
+  update(nowMs: number, overlay: CoverageOverlay | null = null): void {
     const nextBounds = exploredBounds(this.world);
     if (!sameBounds(nextBounds, this.bounds)) {
       this.bounds = nextBounds;
       this.lastBasePaint = -Infinity;
     }
+    // 오버레이가 바뀌면(도구를 들거나 종류를 바꾸면) 바로 다시 칠한다.
+    const key = overlay ? String(overlay.kind) : '';
+    if (key !== this.overlayKey) {
+      this.overlayKey = key;
+      this.lastBasePaint = -Infinity;
+    }
     if (nowMs - this.lastBasePaint >= REDRAW_MS) {
-      this.paintBase();
+      this.paintBase(overlay);
       this.lastBasePaint = nowMs;
     }
     this.paintView(this.small);
@@ -129,7 +151,7 @@ export class Minimap {
     );
   }
 
-  private paintBase(): void {
+  private paintBase(overlay: CoverageOverlay | null = null): void {
     const ctx = this.base.getContext('2d');
     if (!ctx) return;
     ctx.clearRect(0, 0, MAP_RES, MAP_RES);
@@ -161,6 +183,53 @@ export class Minimap {
           const y0 = this.mapY(baseTy + ly);
           const x1 = this.mapX(baseTx + lx + 1);
           const y1 = this.mapY(baseTy + ly + 1);
+          ctx.fillRect(x0, y0, Math.max(1, x1 - x0 + 0.25), Math.max(1, y1 - y0 + 0.25));
+        }
+      }
+    }
+
+    if (overlay) this.paintOverlay(ctx, overlay);
+  }
+
+  /**
+   * 시설 레이어.
+   *
+   * **두 가족이 다르게 생겨야 두 가족이 다르다는 게 UI 에서도 읽힌다.**
+   *
+   *   필수 서비스 — 그 종류가 커버하는 **도로 칸** 을 밝게. 이진이다(닿거나
+   *                 안 닿거나). 학생이 "여기가 비었구나" 를 한눈에 본다.
+   *   복지        — **복지 점수 격자** 를 농도로. 진할수록 점수가 높다.
+   *                 히트맵이라 "여기는 이미 충분하고 저기가 비었다" 가 보인다.
+   */
+  private paintOverlay(ctx: CanvasRenderingContext2D, overlay: CoverageOverlay): void {
+    const welfare = isWelfareKind(overlay.kind);
+
+    for (const p of this.world.developedParcels()) {
+      if (!p.build) continue;
+      const baseTx = p.cx * CHUNK_SIZE;
+      const baseTy = p.cy * CHUNK_SIZE;
+      for (let ly = 0; ly < CHUNK_SIZE; ly++) {
+        for (let lx = 0; lx < CHUNK_SIZE; lx++) {
+          const tx = baseTx + lx;
+          const ty = baseTy + ly;
+
+          if (welfare) {
+            // 요구 최대치(고소득 1.8)를 기준으로 농도를 잡는다. 그 위는 이미
+            // 모두를 충족한 자리라 더 진해질 이유가 없다.
+            const score = overlay.field.amenityScoreAt(tx, ty);
+            if (score <= 0) continue;
+            const a = Math.min(1, score / 1.8) * 0.62;
+            ctx.fillStyle = `rgba(126, 226, 142, ${a.toFixed(3)})`;
+          } else {
+            if (p.build[ly * CHUNK_SIZE + lx] !== Build.Road) continue;
+            if (!overlay.field.roadCoveredAt(tx, ty, overlay.kind)) continue;
+            ctx.fillStyle = 'rgba(126, 206, 240, 0.85)';
+          }
+
+          const x0 = this.mapX(tx);
+          const y0 = this.mapY(ty);
+          const x1 = this.mapX(tx + 1);
+          const y1 = this.mapY(ty + 1);
           ctx.fillRect(x0, y0, Math.max(1, x1 - x0 + 0.25), Math.max(1, y1 - y0 + 0.25));
         }
       }

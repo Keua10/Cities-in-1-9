@@ -7,7 +7,8 @@ import {
   ZONE_NAMES,
   ZONE_R,
 } from '../sim/buildings';
-import { TICKS_PER_DAY } from '../sim/simConstants';
+import { SERVICE_KIND_COUNT } from '../sim/services';
+import { FACILITY_NAMES, TICKS_PER_DAY } from '../sim/simConstants';
 
 /**
  * 학생이 보는 도시 상태판.
@@ -29,6 +30,13 @@ export class CityPanel {
   private occupancyFillEl: HTMLElement;
   private noteEl: HTMLElement;
   private bars: HTMLElement[][] = [];
+  /** 3.3단계: kind 0~3 커버율 게이지. */
+  private serviceFills: HTMLElement[] = [];
+  private serviceValues: HTMLElement[] = [];
+  /** 복지 충족률 게이지. 커버율과 **같은 무게** 로 보여준다. */
+  private amenityFillEl: HTMLElement;
+  private amenityValueEl: HTMLElement;
+  private facilityNoteEl: HTMLElement;
   private lastPaint = 0;
 
   constructor(selector = '#city-panel') {
@@ -51,6 +59,14 @@ export class CityPanel {
       }
       this.bars.push(row);
     }
+
+    for (let kind = 0; kind < SERVICE_KIND_COUNT; kind++) {
+      this.serviceFills.push(must(el, `.cp-svc[data-kind="${kind}"] .cp-gauge-fill`));
+      this.serviceValues.push(must(el, `.cp-svc[data-kind="${kind}"] .cp-gauge-value`));
+    }
+    this.amenityFillEl = must(el, '.cp-amenity .cp-gauge-fill');
+    this.amenityValueEl = must(el, '.cp-amenity .cp-gauge-value');
+    this.facilityNoteEl = must(el, '.cp-facility-note');
   }
 
   update(now: number, sim: MacroSim): void {
@@ -84,8 +100,66 @@ export class CityPanel {
       }
     }
 
+    for (let kind = 0; kind < SERVICE_KIND_COUNT; kind++) {
+      const v = Math.max(0, Math.min(1, sim.stats.serviceCoverage[kind] ?? 0));
+      this.serviceFills[kind].style.width = `${Math.round(v * 100)}%`;
+      this.serviceFills[kind].classList.toggle('warning', v < 0.7);
+      this.serviceFills[kind].classList.toggle('critical', v < 0.4);
+      this.serviceValues[kind].textContent = `${Math.round(v * 100)}%`;
+    }
+
+    const amenity = Math.max(0, Math.min(1, sim.stats.amenityFulfilled));
+    this.amenityFillEl.style.width = `${Math.round(amenity * 100)}%`;
+    this.amenityFillEl.classList.toggle('warning', amenity < 0.7);
+    this.amenityFillEl.classList.toggle('critical', amenity < 0.4);
+    this.amenityValueEl.textContent = `${Math.round(amenity * 100)}%`;
+
+    this.facilityNoteEl.textContent = describeFacilities(sim);
     this.noteEl.textContent = describe(sim);
   }
+}
+
+/**
+ * 시설 안내 문구. 학생이 읽는 문장이다.
+ *
+ * 마지막 줄이 중요하다. 복지 부족은 **미달이 계층마다 다르게 나타나서** 학생이
+ * 원인을 짚기 어렵다. 저소득 동네는 멀쩡한데 같은 자리에 고급 아파트가 안
+ * 들어서는 상황이 정상 동작이기 때문이다. 상태판이 계층을 짚어주지 않으면
+ * 학생은 그걸 버그로 읽는다.
+ */
+function describeFacilities(sim: MacroSim): string {
+  const s = sim.stats;
+  if (s.buildings === 0) return '';
+
+  if (s.deadFacilities > 0) {
+    return `도로에 닿지 않은 시설이 ${s.deadFacilities}개 있습니다`;
+  }
+
+  // 가장 부족한 필수 서비스를 하나만 짚는다. 넷을 한꺼번에 늘어놓으면 안 읽힌다.
+  let worst = -1;
+  for (let kind = 0; kind < SERVICE_KIND_COUNT; kind++) {
+    const v = s.serviceCoverage[kind] ?? 0;
+    if (v >= 0.7) continue;
+    if (worst < 0 || v < (s.serviceCoverage[worst] ?? 0)) worst = kind;
+  }
+  if (worst >= 0) {
+    const pct = Math.round((s.serviceCoverage[worst] ?? 0) * 100);
+    return `${FACILITY_NAMES[worst]}이(가) 부족합니다 (커버 ${pct}%)`;
+  }
+
+  if (s.overloadedFacilities > 0) {
+    return `담당 정원을 넘긴 시설이 ${s.overloadedFacilities}개 있습니다`;
+  }
+
+  if (s.amenityFulfilled < 0.75) {
+    const short = Math.round((1 - s.amenityFulfilled) * 100);
+    if (s.facilityCounts[5] === 0 && s.facilityCounts[6] === 0) {
+      return '중산층 이상은 소공원만으로 부족합니다. 공원을 지어 보세요';
+    }
+    return `공원이 부족합니다 (주민의 ${short}%가 부족한 동네에 삽니다)`;
+  }
+
+  return '';
 }
 
 function describe(sim: MacroSim): string {
@@ -127,6 +201,7 @@ function template(): string {
       return `<div class="cp-row cp-z${z}"><span>${ZONE_NAMES[z]}</span><div class="cp-bars">${cells}</div></div>`;
     })
     .join('');
+  const gauges = gaugeRows();
 
   return `
     <div class="cp-top">
@@ -147,6 +222,34 @@ function template(): string {
       <div class="cp-legend"><span>저소득</span><span>중산층</span><span>고소득</span></div>
       ${rows}
     </div>
+    <div class="cp-services">
+      <div class="cp-section-title">서비스 · 복지</div>
+      ${gauges}
+    </div>
+    <div class="cp-facility-note"></div>
     <div class="cp-note"></div>
+  `;
+}
+
+/**
+ * 커버율 게이지 4개 + 복지 충족률 게이지 1개.
+ *
+ * **복지도 커버율과 같은 무게로 보여준다.** 게이지 하나가 덜 중요해 보이면 안 된다.
+ */
+function gaugeRows(): string {
+  const services = Array.from({ length: SERVICE_KIND_COUNT }, (_, kind) => {
+    return gaugeRow('cp-svc', FACILITY_NAMES[kind], `data-kind="${kind}"`);
+  }).join('');
+  // 요구를 채운 주거 건물 수 / 전체 주거 건물 수.
+  return services + gaugeRow('cp-amenity', '공원·복지', '');
+}
+
+function gaugeRow(cls: string, label: string, attrs: string): string {
+  return `
+    <div class="cp-gauge ${cls}" ${attrs}>
+      <span class="cp-gauge-label">${label}</span>
+      <div class="cp-gauge-track" aria-hidden="true"><i class="cp-gauge-fill"></i></div>
+      <b class="cp-gauge-value">0%</b>
+    </div>
   `;
 }

@@ -27,6 +27,13 @@ export interface HudData {
   building: string | null;
   /** 화면에 그려지고 있는 건물 수. */
   visibleBuildings: number;
+  /* ---------- 3.3단계 ---------- */
+  /** 커서 칸의 필수 서비스 상태. 커서가 없으면 null. */
+  service: string | null;
+  /** 커서 칸의 복지 상태. 점수와 계층별 요구량을 나란히 담는다. */
+  amenity: string | null;
+  /** 화면에 그려지고 있는 시설 수. */
+  visibleFacilities: number;
   /** 메모리에 남아 있는 필지 수. 지형 청크와 따로 센다. */
   parcels: number;
   /* ---------- 3.2단계 ---------- */
@@ -76,8 +83,10 @@ export class Hud {
       `고도 ${data.height === null ? '—' : data.height}`,
       `시설 ${build}${data.roadAccess === null ? '' : data.roadAccess ? '   도로 연결' : '   도로 미연결'}`,
       `건물 ${data.building ?? '—'}`,
+      `필수 ${data.service ?? '—'}`,
+      `복지 ${data.amenity ?? '—'}`,
       `화면 청크 ${data.visibleChunks}   메시 ${data.loadedMeshes}   필지 ${data.parcels}`,
-      `화면 건물 ${data.visibleBuildings}`,
+      `화면 건물 ${data.visibleBuildings}   화면 시설 ${data.visibleFacilities}`,
       `차량 ${data.activeVehicles}   평균 혼잡 ${Math.round(data.averageCongestion * 100)}%`,
       `daytime ${data.weekday}요일 · ${data.season} ${formatHour(data.daytimeHour)} (${data.daytimeIsDay ? '낮' : '밤'})   일출 ${formatHour(data.sunriseHour)} / 일몰 ${formatHour(data.sunsetHour)}`,
       `gametime ${data.gametimeDay}일 ${String(data.gametimeHour).padStart(2, '0')}:00` ,

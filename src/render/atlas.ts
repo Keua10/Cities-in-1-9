@@ -48,12 +48,16 @@ export const SHADE_CELL_COUNT = MAX_HEIGHT + 1;
  *   16 ~ 24  고도 음영 (코드)
  *   25 ~ 40  도로 16칸 (코드) — 연결 마스크 0~15 가 그대로 셀 번호
  *   41 ~ 46  지구 6칸  (코드) — (주거·상업·공업) x (도로 미접함·접함)
+ *   47 ~ 48  시설 2칸  (코드) — 3.3단계. Build.Civic 칸의 윗면 (도로 미접함·접함)
  */
 export const ROAD_CELL_BASE = SHADE_BASE + SHADE_CELL_COUNT;
 export const ROAD_CELL_COUNT = 16;
 export const ZONE_CELL_BASE = ROAD_CELL_BASE + ROAD_CELL_COUNT;
 export const ZONE_CELL_COUNT = 6;
-export const ATLAS_CELL_COUNT = ZONE_CELL_BASE + ZONE_CELL_COUNT;
+/** 3.3단계: 시설이 깔고 앉은 칸(Build.Civic)의 윗면. 회색 포장. */
+export const CIVIC_CELL_BASE = ZONE_CELL_BASE + ZONE_CELL_COUNT;
+export const CIVIC_CELL_COUNT = 2;
+export const ATLAS_CELL_COUNT = CIVIC_CELL_BASE + CIVIC_CELL_COUNT;
 
 /** 고도 h 에 해당하는 음영 셀. 0 이면 음영 자체가 없다. */
 export function shadeCellFor(height: number): number {
@@ -63,6 +67,16 @@ export function shadeCellFor(height: number): number {
 /** 지구 셀. zone 은 0=주거, 1=상업, 2=공업. */
 export function zoneCell(zone: number, hasRoad: boolean): number {
   return ZONE_CELL_BASE + zone * 2 + (hasRoad ? 1 : 0);
+}
+
+/**
+ * 시설 지면 셀. 지구와 같은 규칙으로 도로 접함 여부에 따라 두 칸이다.
+ *
+ * 시설은 도로에 닿아야만 놓을 수 있지만(소공원 제외), 학생이 나중에 옆 도로를
+ * 헐면 "죽은 시설" 이 된다. 그때 지면이 어두워지므로 화면에서도 바로 읽힌다.
+ */
+export function civicCell(hasRoad: boolean): number {
+  return CIVIC_CELL_BASE + (hasRoad ? 1 : 0);
 }
 
 /** 지구 색. HUD 범례도 같은 값을 쓴다. */
@@ -103,6 +117,7 @@ export async function loadTileAtlas(): Promise<TileAtlas> {
   drawShadeCells(ctx);
   drawRoadCells(ctx);
   drawZoneCells(ctx);
+  drawCivicCells(ctx);
 
   const texture = Texture.from(canvas);
   texture.source.scaleMode = 'nearest';
@@ -408,6 +423,45 @@ function drawZoneCells(ctx: CanvasRenderingContext2D): void {
 
       ctx.restore();
     }
+  }
+}
+
+/**
+ * 시설 지면 2칸. 지구처럼 색으로 용도를 말하지 않고 **회색 포장** 하나로 끝낸다.
+ *
+ * 시설 종류는 위에 서는 스프라이트가 말해주므로 지면까지 종류별로 나누면
+ * 화면이 시끄러워지기만 한다.
+ */
+function drawCivicCells(ctx: CanvasRenderingContext2D): void {
+  for (let r = 0; r < CIVIC_CELL_COUNT; r++) {
+    const hasRoad = r === 1;
+    const { ox, oy } = cellOrigin(civicCell(hasRoad));
+
+    ctx.save();
+    diamondPath(ctx, ox, oy);
+    ctx.clip();
+
+    ctx.fillStyle = hasRoad ? '#6d7379' : '#4a4f54';
+    ctx.fillRect(ox, oy, TILE_W, TILE_H);
+
+    const shade = ctx.createLinearGradient(ox, oy, ox, oy + TILE_H);
+    shade.addColorStop(0, 'rgba(255,255,255,0.10)');
+    shade.addColorStop(1, 'rgba(0,0,0,0.22)');
+    ctx.fillStyle = shade;
+    ctx.fillRect(ox, oy, TILE_W, TILE_H);
+
+    // 포장 이음매. 지구의 점선 테두리와 달리 실선이라 "구획" 이 아니라 "바닥" 으로 읽힌다.
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = hasRoad ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.10)';
+    ctx.beginPath();
+    ctx.moveTo(ox + TILE_HW, oy + 6);
+    ctx.lineTo(ox + TILE_W - 12, oy + TILE_HH);
+    ctx.lineTo(ox + TILE_HW, oy + TILE_H - 6);
+    ctx.lineTo(ox + 12, oy + TILE_HH);
+    ctx.closePath();
+    ctx.stroke();
+
+    ctx.restore();
   }
 }
 

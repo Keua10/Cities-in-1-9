@@ -8,12 +8,17 @@ import { chunkIndexOf, chunkKey, localIndexOf } from '../core/iso';
 import {
   BLD_COVERED,
   BLD_NONE,
+  facCode,
+  facilityKindOfCode,
   isAnchor,
+  isAnyAnchor,
+  isFacilityAnchor,
   levelOfCode,
   MAX_FOOTPRINT,
   zoneOfBuild,
   zoneOfCode,
 } from '../sim/buildings';
+import { facilitySpan } from '../sim/facilities';
 import { Build } from './build';
 import { baseOriginChunk } from './spawn';
 import {
@@ -100,17 +105,26 @@ export interface Chunk {
   parcel: Parcel;
 }
 
-/** 건물 한 채를 읽어낸 결과. */
+/** 건물 한 채를 읽어낸 결과. 3.3단계부터 시설도 여기로 나온다. */
 export interface BuildingInfo {
   /** 앵커 타일(왼쪽 위). */
   tx: number;
   ty: number;
+  /**
+   * 시설이면 -1.
+   *
+   * 기존 호출부가 zone 비교로 시설을 거르게 하려고 이 값을 쓴다. 예를 들어
+   * growth.ts:rebuildFits 의 `if (info.zone !== zone) return false` 가 코드를 한 줄도
+   * 안 고치고 시설을 재건축 대상에서 제외한다.
+   */
   zone: number;
   level: number;
   /** 한 변의 타일 수. */
   span: number;
   /** 지어진 게임 날짜. */
   born: number;
+  /** 3.3단계. 지구 건물이면 null, 시설이면 종류 번호(0~6). */
+  kind: number | null;
 }
 
 /**
@@ -318,7 +332,13 @@ export class World {
     if (cur === value) return;
 
     // 이 칸을 덮고 있던 건물은 지구가 바뀌는 순간 존재 근거를 잃는다.
-    if (p.bld && p.bld[i] !== BLD_NONE) this.demolishAt(tx, ty);
+    const removed =
+      p.bld && p.bld[i] !== BLD_NONE ? this.demolishAt(tx, ty) : null;
+    // 헐린 것이 시설이면 build 쪽에 Civic 칸이 그대로 남는다. 유령 칸이 되므로
+    // 여기서 함께 지운다. 아래에서 p.build[i] = value 가 이 칸을 다시 덮어쓴다.
+    if (removed && removed.kind !== null) {
+      this.clearFacilityFootprintBuild(p, removed);
+    }
 
     if (!p.build) {
       // 지울 것도 없는데 배열만 만들 이유가 없다.
@@ -364,6 +384,10 @@ export class World {
    * 덮인 칸에 앵커 위치를 따로 저장하지 않는다. 대신 왼쪽 위로 최대
    * MAX_FOOTPRINT 칸까지 거슬러 올라가며 앵커를 찾는다. 최악 9번 조회라
    * 배열을 하나 더 저장하는 것보다 싸다.
+   *
+   * 3.3단계: **여기만 isAnyAnchor 를 쓴다.** 시설 칸에서도 앵커를 찾아야 하기
+   * 때문이다. 다른 곳은 전부 isAnchor 그대로여야 시설이 인구·일자리·통행·재건축에
+   * 섞이지 않는다. 시설이 3x3 까지라 탐색 범위 MAX_FOOTPRINT = 3 이 그대로 맞는다.
    */
   buildingCovering(tx: number, ty: number): BuildingInfo | null {
     const v = this.getBld(tx, ty);
@@ -373,16 +397,23 @@ export class World {
         const ax = tx - dx;
         const ay = ty - dy;
         const code = this.getBld(ax, ay);
-        if (!isAnchor(code)) continue;
-        const span = levelOfCode(code);
+        if (!isAnyAnchor(code)) continue;
+        const facility = isFacilityAnchor(code);
+        const kind = facility ? facilityKindOfCode(code) : null;
+        const span = facility ? facilitySpan(kind as number) : levelOfCode(code);
         if (dx < span && dy < span) {
           return {
             tx: ax,
             ty: ay,
-            zone: zoneOfCode(code),
+            // 시설은 지구가 아니다. -1 이 그것을 말한다.
+            zone: facility ? -1 : zoneOfCode(code),
+            // 시설의 level 은 span 과 같은 값을 넣어둔다. congestion.ts / citizens.ts 가
+            // `?? 1` 로 읽는 자리인데, 그 호출부는 지구 건물 좌표로만 불리므로
+            // 실제로는 도달하지 않는다.
             level: span,
             span,
             born: this.bornDayAt(ax, ay),
+            kind,
           };
         }
       }
@@ -435,6 +466,100 @@ export class World {
     this.markDirty(p.key, false);
   }
 
+  /* ---------------- 3.3단계: 시설 ---------------- */
+
+  /**
+   * 시설을 세운다. **build/bld 두 레이어에 함께 쓴다.** 검사는 호출 전에 끝난 상태.
+   *
+   *   build 레이어   footprint 전 칸 = Build.Civic (4)
+   *   bld  레이어   앵커 칸 = FAC_BASE + kind (9~15), 나머지 칸 = BLD_COVERED
+   *                 (1x1 소공원은 앵커 한 칸뿐이고 COVERED 칸이 없다)
+   *   bornLo/Hi     앵커 칸에 건설 날짜 (이번 단계에서는 읽지 않는다. 노후화용 자리)
+   *
+   * 양쪽에 쓰는 이유: bld 에만 넣으면 growth.ts 가 그 칸을 빈 지구로 착각하고,
+   * build 에만 넣으면 footprint 와 건설 날짜를 표현할 배열이 없다. 두 겹이 다
+   * 걸리므로 한쪽을 실수로 놓쳐도 시설 위에 아파트가 서지 않는다.
+   *
+   * **placeBuilding 을 재사용하지 마라.** 그 함수는 footprint 칸마다 emptyPlots--
+   * 를 하는데, 시설 칸은 애초에 emptyPlots 에 들어간 적이 없다(setBuild 는
+   * zoneOfBuild(value) >= 0 일 때만 센다). 그대로 쓰면 emptyPlots 가 음수로 새고,
+   * growParcel 의 `p.emptyPlots > 0` 분기가 영구히 거짓이 되어 **그 청크에서
+   * 신축이 멈춘다.** 원인에서 아주 멀리 떨어져 나타나는 증상이라 미리 못박는다.
+   */
+  placeFacility(tx: number, ty: number, kind: number, bornDay: number): void {
+    const span = facilitySpan(kind);
+
+    // 1) footprint 전 칸에 build = Build.Civic.
+    //    setBuild 를 쓴다 — 기존 건물이 있으면 내부의 demolishAt 이 알아서 헌다.
+    for (let dy = 0; dy < span; dy++) {
+      for (let dx = 0; dx < span; dx++) {
+        this.setBuild(tx + dx, ty + dy, Build.Civic, true);
+      }
+    }
+
+    // 2) bld 배열 확보 -> 앵커에 facCode(kind), 나머지에 BLD_COVERED
+    const p = this.getParcel(chunkIndexOf(tx), chunkIndexOf(ty));
+    if (!p.bld) p.bld = new Uint8Array(CHUNK_TILES).fill(BLD_NONE);
+    if (!p.bornLo) p.bornLo = new Uint8Array(CHUNK_TILES).fill(BLD_NONE);
+    if (!p.bornHi) p.bornHi = new Uint8Array(CHUNK_TILES).fill(BLD_NONE);
+
+    const lx = localIndexOf(tx);
+    const ly = localIndexOf(ty);
+    for (let dy = 0; dy < span; dy++) {
+      for (let dx = 0; dx < span; dx++) {
+        const i = (ly + dy) * CHUNK_SIZE + (lx + dx);
+        p.bld[i] = dx === 0 && dy === 0 ? facCode(kind) : BLD_COVERED;
+      }
+    }
+
+    // 3) 건설 날짜. 이번 단계에서는 읽지 않지만 노후화(STEP 4)를 위해 남긴다.
+    const anchor = ly * CHUNK_SIZE + lx;
+    p.bornLo[anchor] = bornDay & 0xff;
+    p.bornHi[anchor] = (bornDay >> 8) & 0xff;
+
+    // 4) p.buildingCount 는 **올리지 않는다.** 그 값은 지구 건물 수이고
+    //    recountParcel 과 짝이 맞아야 한다.
+    p.bldRevision++;
+    this.markDirty(p.key, true); // 학생이 한 일이므로 byUser = true
+  }
+
+  /**
+   * 이 칸을 덮은 시설을 통째로 헌다. build 의 Civic 칸까지 전부 지운다.
+   * 시설이 아니면(지구 건물이거나 빈 칸) 아무것도 하지 않고 false.
+   */
+  removeFacilityAt(tx: number, ty: number): boolean {
+    const info = this.buildingCovering(tx, ty);
+    if (!info || info.kind === null) return false;
+    // setBuild 가 bld 쪽 시설을 헐고, 그 안에서 남은 Civic 칸까지 정리한다.
+    this.setBuild(info.tx, info.ty, Build.None, true);
+    return true;
+  }
+
+  /**
+   * 시설을 헌 뒤 build 레이어에 남은 Civic 칸을 지운다.
+   *
+   * 학생이 철거 도구로 시설의 **한 칸** 을 찍으면 setBuild(tx,ty,None) 이 불리고,
+   * 그 안의 demolishAt 이 bld 쪽 시설 전체를 지운다. 그런데 build 쪽에는 나머지
+   * span²-1 칸이 Civic 인 채로 남는다. **아무것도 지을 수 없는 유령 칸** 이다.
+   *
+   * Tools 쪽에서 처리하지 않는 이유: 지구 도구로 시설 위를 덧칠해도 같은 일이
+   * 일어나기 때문이다. 한 군데(setBuild)에서 막아야 전부 막힌다.
+   *
+   * **setBuild 를 재귀 호출하지 않는다** — 무한 재귀가 된다. 배열에 직접 쓴다.
+   * Civic 칸은 도로도 지구도 아니므로 roadCount/emptyPlots 를 건드릴 것이 없다.
+   */
+  private clearFacilityFootprintBuild(p: Parcel, info: BuildingInfo): void {
+    if (!p.build) return;
+    const lx = localIndexOf(info.tx);
+    const ly = localIndexOf(info.ty);
+    for (let dy = 0; dy < info.span; dy++) {
+      for (let dx = 0; dx < info.span; dx++) {
+        const i = (ly + dy) * CHUNK_SIZE + (lx + dx);
+        if (p.build[i] === Build.Civic) p.build[i] = Build.None;
+      }
+    }
+  }
+
   /** 이 칸을 덮고 있는 건물을 헌다. 지구는 그대로 남는다. */
   demolishAt(tx: number, ty: number): BuildingInfo | null {
     const info = this.buildingCovering(tx, ty);
@@ -453,7 +578,9 @@ export class World {
         if (p.build && zoneOfBuild(p.build[i]) >= 0) p.emptyPlots++;
       }
     }
-    p.buildingCount--;
+    // 시설은 buildingCount 에 들어간 적이 없다(placeFacility 가 올리지 않는다).
+    // 여기서 내리면 지구 건물 수가 음수로 샌다.
+    if (info.kind === null) p.buildingCount--;
     p.bldRevision++;
     this.markDirty(p.key, false);
     return info;
@@ -631,6 +758,11 @@ function applyTerrainOverride(chunk: Chunk, p: Parcel): void {
  * 파생값(빈 부지 수, 도로 수, 건물 수)을 다시 센다.
  * 저장하지 않는 값이므로 불러온 직후 한 번만 돌면 된다. 청크당 4096칸 훑기는
  * 로그인 때 한 번이라 문제되지 않는다.
+ *
+ * 3.3단계: **시설은 어느 쪽에도 안 들어간다.** buildingCount 는 isAnchor(코드 0~8)
+ * 만 세므로 시설 코드 9~15 가 자동으로 빠지고, emptyPlots 는 zoneOfBuild 로
+ * 거르므로 Build.Civic(4) 칸이 자동으로 빠진다. 여기 손댈 것이 없는 게 3장
+ * 설계가 실제로 지켜진다는 증거다.
  */
 export function recountParcel(p: Parcel): void {
   let empty = 0;
