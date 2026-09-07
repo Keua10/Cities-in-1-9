@@ -17,6 +17,7 @@
  * 맞아도 이 둘이 깨지면 학생 도시가 비기 시작한다.
  */
 import { CHUNK_SIZE } from '../../src/core/constants';
+import { chunkIndexOf } from '../../src/core/iso';
 import { AssignmentTable } from '../../src/sim/assignment';
 import {
   BLD_COVERED,
@@ -241,10 +242,7 @@ console.log('1. 배치 · 철거');
   const slope = canPlaceFacility(world, ox + 14, oy + 1, FAC_FIRE);
   check('1 경사지 거부', !slope.ok && slope.reason === '평평한 땅에만 지을 수 있습니다', slope.reason);
 
-  // 청크 경계 — 청크 마지막 칸에서 3x3 을 시도한다
-  const edgeX = (world.baseCx + 1) * CHUNK_SIZE - 1;
-  const edge = canPlaceFacility(world, edgeX, oy + 1, FAC_HOSPITAL);
-  check('1 청크 경계 거부', !edge.ok && edge.reason === '청크 경계에는 지을 수 없습니다', edge.reason);
+  // 청크 경계는 **막지 않는다.** 지형까지 갖춰놓고 보는 검사는 아래 4b 에 있다.
 
   // 기존 건물 위
   world.setBuild(ox + 20, oy + 1, Build.ZoneR, false);
@@ -317,6 +315,63 @@ console.log('1. 배치 · 철거');
   check('4 지구 덧칠도 시설을 통째로 걷어낸다', ok);
   const p = world.getParcel(world.baseCx, world.baseCy);
   check('4 emptyPlots 가 음수가 되지 않는다', p.emptyPlots >= 0, `${p.emptyPlots}`);
+}
+
+{
+  /*
+   * 4b. 청크 경계를 걸친 시설이 제대로 서고, 제대로 헐린다.
+   *
+   * footprint 가 두(또는 네) 필지에 나뉘어 들어가므로, 칸마다 필지를 다시 찾지
+   * 않으면 지역 index 가 옆줄로 넘어가 엉뚱한 칸을 덮어쓴다.
+   */
+  const { world, oy } = flatWorld(40);
+  const w2 = world;
+  // 청크 경계에 걸치도록 3x3 병원을 놓는다 (마지막 칸에서 시작 -> 2칸이 옆 청크).
+  const edgeX = (w2.baseCx + 1) * CHUNK_SIZE - 1;
+  const ty = oy + 4;
+  for (let y = -2; y < 6; y++) {
+    for (let x = -2; x < 6; x++) {
+      w2.setTile(edgeX + x, ty + y, Terrain.Grass);
+      w2.setHeight(edgeX + x, ty + y, 0);
+    }
+  }
+  for (let x = -1; x < 5; x++) w2.setBuild(edgeX + x, ty - 1, Build.Road, false);
+
+  const res = canPlaceFacility(w2, edgeX, ty, FAC_HOSPITAL);
+  check('4b 청크를 걸친 자리에 배치가 허용된다', res.ok, res.reason);
+  w2.placeFacility(edgeX, ty, FAC_HOSPITAL, 0);
+
+  let placed = true;
+  for (let dy = 0; dy < 3; dy++) {
+    for (let dx = 0; dx < 3; dx++) {
+      if (w2.getBuild(edgeX + dx, ty + dy) !== Build.Civic) placed = false;
+      const want = dx === 0 && dy === 0 ? facCode(FAC_HOSPITAL) : BLD_COVERED;
+      if (w2.getBld(edgeX + dx, ty + dy) !== want) placed = false;
+    }
+  }
+  check('4b 청크를 걸쳐도 footprint 전 칸이 제대로 쓰인다', placed);
+  check('4b 걸친 두 필지 모두 저장 대상이 된다', w2.hasUnsaved());
+
+  // 옆 청크 쪽 칸에서 앵커를 되찾을 수 있는가
+  const found = w2.buildingCovering(edgeX + 2, ty + 2);
+  check('4b 옆 청크 칸에서도 앵커를 찾는다',
+    found !== null && found.tx === edgeX && found.kind === FAC_HOSPITAL,
+    found ? `tx=${found.tx} kind=${found.kind}` : 'null');
+
+  // 옆 청크 쪽 한 칸만 철거해도 전체가 비어야 한다
+  w2.setBuild(edgeX + 2, ty + 2, Build.None);
+  let cleared = true;
+  for (let dy = 0; dy < 3; dy++) {
+    for (let dx = 0; dx < 3; dx++) {
+      if (w2.getBuild(edgeX + dx, ty + dy) !== Build.None) cleared = false;
+      if (w2.getBld(edgeX + dx, ty + dy) !== BLD_NONE) cleared = false;
+    }
+  }
+  check('4b 옆 청크 칸을 찍어도 청크 걸친 시설 전체가 헐린다 (유령 칸 없음)', cleared);
+  for (const cx of [w2.baseCx, w2.baseCx + 1]) {
+    const p = w2.peekParcel(cx, chunkIndexOf(ty));
+    if (p) check(`4b 필지 ${cx} 의 emptyPlots 가 음수가 아니다`, p.emptyPlots >= 0, `${p.emptyPlots}`);
+  }
 }
 
 console.log('2. 격리 — isAnchor 를 안 고쳤는가');
