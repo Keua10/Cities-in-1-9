@@ -1,0 +1,9 @@
+/* STEP 3.4: 1틱 = 게임 내 1시간. 발생률은 건물 한 채당 확률이다. */
+export const DISASTER_MAX_ACTIVE = 128;
+export const DISASTER_RATE_PER_TICK = [0.000012, 0.00003, 0.000025] as const;
+export const DISASTER_PREVENTION = [0.85, 0.9, 0.85] as const;
+export const DISASTER_RECOVERY = [0.002, 0.04, 0.02] as const;
+export const DISASTER_SERVICE_RECOVERY = [0.4, 0.3, 0.22] as const;
+export const DISASTER_DURATION = [12, 12, 24] as const;
+export const DISASTER_PENALTY = [1, 0.08, 0.12] as const;
+export const FIRE_SPREAD_CHANCE = 0.04;

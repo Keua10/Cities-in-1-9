@@ -61,9 +61,10 @@ export class Hud {
     this.el = el;
   }
 
-  update(now: number, data: HudData): void {
+  update(now: number, source: HudData | (() => HudData)): void {
     if (now - this.lastPaint < 200) return;
     this.lastPaint = now;
+    const data = typeof source === 'function' ? source() : source;
 
     const tile = data.tile ? `${data.tile.tx}, ${data.tile.ty}` : '—';
     const chunk = data.chunk ? `${data.chunk.cx}, ${data.chunk.cy}` : '—';
@@ -71,9 +72,7 @@ export class Hud {
       data.terrain === null ? '—' : (TERRAIN_KEYS[data.terrain] ?? String(data.terrain));
 
     const build =
-      data.build === null || data.build === undefined
-        ? '—'
-        : (BUILD_LABELS[data.build] ?? '빈 땅');
+      data.build === null || data.build === undefined ? '—' : (BUILD_LABELS[data.build] ?? '빈 땅');
 
     const lines = [
       `<b>${data.fps.toFixed(0)} fps</b>   확대 ${data.zoom.toFixed(2)}x`,
@@ -91,7 +90,7 @@ export class Hud {
       `화면 건물 ${data.visibleBuildings}   화면 시설 ${data.visibleFacilities}`,
       `차량 ${data.activeVehicles}   평균 혼잡 ${Math.round(data.averageCongestion * 100)}%`,
       `daytime ${data.weekday}요일 · ${data.season} ${formatHour(data.daytimeHour)} (${data.daytimeIsDay ? '낮' : '밤'})   일출 ${formatHour(data.sunriseHour)} / 일몰 ${formatHour(data.sunsetHour)}`,
-      `gametime ${data.gametimeDay}일 ${String(data.gametimeHour).padStart(2, '0')}:00` ,
+      `gametime ${data.gametimeDay}일 ${String(data.gametimeHour).padStart(2, '0')}:00`,
     ];
     if (data.placeholderArt) lines.push('그림: 임시 타일 사용 중');
     if (data.message) lines.push(`<b class="warn">${data.message}</b>`);

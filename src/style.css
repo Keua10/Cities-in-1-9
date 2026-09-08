@@ -20,7 +20,7 @@ body {
   overflow: hidden;
   background: #0e1418;
   color: var(--ink);
-  font-family: "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif;
+  font-family: 'Pretendard', 'Apple SD Gothic Neo', 'Noto Sans KR', system-ui, sans-serif;
   font-size: 14px;
   line-height: 1.45;
   -webkit-font-smoothing: antialiased;
@@ -111,7 +111,7 @@ canvas {
   color: var(--ink);
 }
 
-#toolbar button[aria-pressed="true"] {
+#toolbar button[aria-pressed='true'] {
   background: rgba(111, 211, 184, 0.16);
   color: var(--accent);
 }
@@ -159,23 +159,23 @@ canvas {
   color: var(--ink);
 }
 
-#tools button[aria-pressed="true"] {
+#tools button[aria-pressed='true'] {
   background: rgba(111, 211, 184, 0.16);
   color: var(--accent);
 }
 
 /* 지구 버튼은 켜졌을 때 지구 색을 그대로 쓴다. 지도 위 색과 같아야 헷갈리지 않는다. */
-#tools button[data-zone="r"][aria-pressed="true"] {
+#tools button[data-zone='r'][aria-pressed='true'] {
   background: rgba(63, 143, 79, 0.28);
   color: #8fe0a0;
 }
 
-#tools button[data-zone="c"][aria-pressed="true"] {
+#tools button[data-zone='c'][aria-pressed='true'] {
   background: rgba(47, 111, 168, 0.28);
   color: #8fc4ec;
 }
 
-#tools button[data-zone="i"][aria-pressed="true"] {
+#tools button[data-zone='i'][aria-pressed='true'] {
   background: rgba(168, 134, 47, 0.28);
   color: #e8cc86;
 }
@@ -318,13 +318,13 @@ canvas {
   opacity: 0.35;
 }
 
-#save-status[data-status="saving"],
-#save-status[data-status="pending"] {
+#save-status[data-status='saving'],
+#save-status[data-status='pending'] {
   color: var(--accent);
 }
 
-#save-status[data-status="error"],
-#save-status[data-status="conflict"] {
+#save-status[data-status='error'],
+#save-status[data-status='conflict'] {
   border-color: rgba(255, 157, 138, 0.5);
   color: #ff9d8a;
   opacity: 1;
@@ -333,7 +333,6 @@ canvas {
 #toolbar button[hidden] {
   display: none;
 }
-
 
 /* ---------- 3.1단계: 도시 상태판 ---------- */
 
@@ -428,7 +427,9 @@ canvas {
   height: 100%;
   border-radius: inherit;
   background: #6fd3b8;
-  transition: width 200ms ease, background-color 200ms ease;
+  transition:
+    width 200ms ease,
+    background-color 200ms ease;
 }
 
 .cp-occupancy-fill.warning {
@@ -504,7 +505,7 @@ canvas {
 }
 
 .cp-bar::before {
-  content: "";
+  content: '';
   position: absolute;
   left: 50%;
   top: 0;
@@ -521,7 +522,9 @@ canvas {
   width: 0;
   border-radius: 2px;
   background: currentColor;
-  transition: width 200ms ease, left 200ms ease;
+  transition:
+    width 200ms ease,
+    left 200ms ease;
 }
 
 .cp-bar i.neg {
@@ -589,7 +592,9 @@ canvas {
 }
 
 /* author display:flex 가 브라우저의 기본 [hidden] 규칙을 덮지 않게 한다. */
-#facility-sheet[hidden] { display: none; }
+#facility-sheet[hidden] {
+  display: none;
+}
 
 #facility-sheet .fs-label {
   flex: 0 0 62px;
@@ -641,13 +646,13 @@ canvas {
 }
 
 /* 필수는 청록, 복지는 초록. 두 가족이 색으로도 갈린다. */
-#facility-sheet .fs-item[aria-pressed="true"][data-welfare="false"] {
+#facility-sheet .fs-item[aria-pressed='true'][data-welfare='false'] {
   border-color: rgba(111, 211, 184, 0.5);
   background: rgba(111, 211, 184, 0.16);
   color: var(--accent);
 }
 
-#facility-sheet .fs-item[aria-pressed="true"][data-welfare="true"] {
+#facility-sheet .fs-item[aria-pressed='true'][data-welfare='true'] {
   border-color: rgba(111, 200, 122, 0.5);
   background: rgba(63, 143, 79, 0.24);
   color: #8fe0a0;
@@ -697,7 +702,9 @@ canvas {
   height: 100%;
   border-radius: inherit;
   background: #6fd3b8;
-  transition: width 200ms ease, background-color 200ms ease;
+  transition:
+    width 200ms ease,
+    background-color 200ms ease;
 }
 
 .cp-gauge-fill.warning {
@@ -730,10 +737,42 @@ canvas {
 .cp-facility-note:empty {
   display: none;
 }
-.cp-safety { border-top: 1px solid rgba(255,255,255,.12); padding-top: 10px; margin-top: 10px; }
-.cp-safety .cp-section-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.cp-incident-focus { color: #f5bd4f; background: transparent; border: 1px solid #655638; border-radius: 5px; padding: 3px 6px; font-size: 10px; cursor: pointer; pointer-events: auto; }
-.cp-incident-focus:disabled { opacity: .4; cursor: default; }
-.cp-safety-counts { margin-top: 7px; font-size: 12px; color: #abc4b7; }
-.cp-safety-counts.active { color: #ffc16d; }
-.cp-safety-note { margin-top: 5px; color: #a5b1bf; font-size: 10px; line-height: 1.5; }
+.cp-safety {
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  padding-top: 10px;
+  margin-top: 10px;
+}
+.cp-safety .cp-section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.cp-incident-focus {
+  color: #f5bd4f;
+  background: transparent;
+  border: 1px solid #655638;
+  border-radius: 5px;
+  padding: 3px 6px;
+  font-size: 10px;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.cp-incident-focus:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.cp-safety-counts {
+  margin-top: 7px;
+  font-size: 12px;
+  color: #abc4b7;
+}
+.cp-safety-counts.active {
+  color: #ffc16d;
+}
+.cp-safety-note {
+  margin-top: 5px;
+  color: #a5b1bf;
+  font-size: 10px;
+  line-height: 1.5;
+}

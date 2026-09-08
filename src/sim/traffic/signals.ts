@@ -1,8 +1,4 @@
-import {
-  SIGNAL_ALL_RED_MS,
-  SIGNAL_GREEN_MS,
-  SIGNAL_YELLOW_MS,
-} from '../simConstants';
+import { SIGNAL_ALL_RED_MS, SIGNAL_GREEN_MS, SIGNAL_YELLOW_MS } from '../simConstants';
 import type { Junction } from './junctions';
 
 /**
@@ -48,11 +44,7 @@ function cycleTime(junction: Junction, timeMs: number): number {
 }
 
 /** 이 진입 방향의 신호 상태. 신호가 없는 교차로는 항상 Green 을 돌려준다(=통행우선순위로 처리). */
-export function signalState(
-  junction: Junction,
-  enterDir: number,
-  timeMs: number,
-): SignalState {
+export function signalState(junction: Junction, enterDir: number, timeMs: number): SignalState {
   if (!junction.signalized) return SignalState.Green;
   const t = cycleTime(junction, timeMs);
   const axis = signalAxis(enterDir);
@@ -83,11 +75,7 @@ export function greenAxis(junction: Junction, timeMs: number): number {
 }
 
 /** 이 축의 녹색이 끝나기까지 남은 시간(ms). 이미 녹색이 아니면 0. */
-export function greenRemainingMs(
-  junction: Junction,
-  enterDir: number,
-  timeMs: number,
-): number {
+export function greenRemainingMs(junction: Junction, enterDir: number, timeMs: number): number {
   if (!junction.signalized) return Number.POSITIVE_INFINITY;
   const t = cycleTime(junction, timeMs);
   const axis = signalAxis(enterDir);

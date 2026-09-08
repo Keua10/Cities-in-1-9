@@ -1,6 +1,7 @@
 import { CHUNK_SIZE, WORLD_SEED } from '../core/constants';
 import { chunkIndexOf } from '../core/iso';
 import type { World } from '../world/world';
+import type { AssignmentTable, DestLink } from './assignment';
 import {
   isAnchor,
   levelOfCode,
@@ -11,7 +12,6 @@ import {
   ZONE_R,
   zoneOfCode,
 } from './buildings';
-import type { AssignmentTable, DestLink } from './assignment';
 import {
   AFTER_WORK_COMMERCIAL_SHARE,
   AFTER_WORK_STAY_MAX_MINUTES,
@@ -32,9 +32,9 @@ import {
   VEHICLE_SPEED_TILES_PER_SEC,
   WEEKEND_AFTER_WORK_COMMERCIAL_SHARE,
   WEEKEND_FREIGHT_MUL,
+  WORK_EXIT_SPREAD_MINUTES,
   WORK_START_0830_SHARE,
   WORKPLACE_PRESENCE_MINUTES,
-  WORK_EXIT_SPREAD_MINUTES,
 } from './simConstants';
 import type { DaytimeSnapshot } from './time';
 
@@ -218,7 +218,15 @@ export class CitizenPool {
         if (job && worksOnWeekendDay(home.tx, home.ty, job.zone, slot, life)) {
           const departMinute = commuteDepartureMinute(home, slot, job);
           if (life.lifeSlotOfDay === minuteToLifeSlot(departMinute)) {
-            const trip = this.makeCitizenTrip(home, slot, TripPurpose.Commute, home.tx, home.ty, job.tx, job.ty);
+            const trip = this.makeCitizenTrip(
+              home,
+              slot,
+              TripPurpose.Commute,
+              home.tx,
+              home.ty,
+              job.tx,
+              job.ty,
+            );
             home.inTransit[slot] = 1;
             out.push(trip);
             continue;
@@ -230,7 +238,15 @@ export class CitizenPool {
           if (life.lifeSlotOfDay === minuteToLifeSlot(shopMinute)) {
             const shop = this.assignment.shopForSlot(home.tx, home.ty, slot, life.absoluteDay);
             if (shop) {
-              const trip = this.makeCitizenTrip(home, slot, TripPurpose.Shop, home.tx, home.ty, shop.tx, shop.ty);
+              const trip = this.makeCitizenTrip(
+                home,
+                slot,
+                TripPurpose.Shop,
+                home.tx,
+                home.ty,
+                shop.tx,
+                shop.ty,
+              );
               home.inTransit[slot] = 1;
               out.push(trip);
             }
@@ -397,7 +413,12 @@ export class CitizenPool {
     return simRandom(WORLD_SEED, home.tx, home.ty, slot ^ life.absoluteDay ^ 0x3311) < share;
   }
 
-  private shoppingMinute(home: HomeState, slot: number, employed: boolean, life: DaytimeSnapshot): number {
+  private shoppingMinute(
+    home: HomeState,
+    slot: number,
+    employed: boolean,
+    life: DaytimeSnapshot,
+  ): number {
     let start: number;
     let end: number;
     if (life.isWeekend) {
@@ -509,10 +530,7 @@ export class CitizenPool {
       const gate = simRandom(WORLD_SEED, business.tx, business.ty, life.absoluteLifeSlot);
       // LIFE_SLOT_MINUTES를 15->5로 낮춰도 시간당 화물 총량은 늘지 않게 확률을 보정한다.
       const slotRateScale = LIFE_SLOT_MINUTES / 15;
-      if (
-        gate >
-        (FREIGHT_CURVE[life.hourOfDay] ?? 0) * 0.03 * slotRateScale * weekendMul
-      ) continue;
+      if (gate > (FREIGHT_CURVE[life.hourOfDay] ?? 0) * 0.03 * slotRateScale * weekendMul) continue;
       const dest =
         destinations[
           simHash(WORLD_SEED, business.tx, business.ty, life.absoluteDay) % destinations.length

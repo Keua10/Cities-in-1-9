@@ -1,26 +1,13 @@
 import { pickTile } from '../core/pick';
 import type { WorldRenderer } from '../render/worldRenderer';
-import type { MacroSim } from '../sim/macro';
 import { FACILITY_COUNT, isWelfareKind } from '../sim/buildings';
 import { canPlaceFacility, FACILITY_SPECS } from '../sim/facilities';
+import type { MacroSim } from '../sim/macro';
 import { COST_ROAD, COST_ZONE } from '../sim/simConstants';
-import {
-  Build,
-  canPlaceRoad,
-  canPlaceZone,
-  DIRS,
-  type PlaceResult,
-} from '../world/build';
+import { Build, canPlaceRoad, canPlaceZone, DIRS, type PlaceResult } from '../world/build';
 import type { World } from '../world/world';
 
-export type ToolId =
-  | 'select'
-  | 'road'
-  | 'zoneR'
-  | 'zoneC'
-  | 'zoneI'
-  | 'facility'
-  | 'bulldoze';
+export type ToolId = 'select' | 'road' | 'zoneR' | 'zoneC' | 'zoneI' | 'facility' | 'bulldoze';
 
 /** 도구 -> build 레이어에 쓸 값. 'select' 와 'bulldoze' 는 따로 다룬다. */
 const TOOL_VALUE: Partial<Record<ToolId, number>> = {
@@ -112,7 +99,10 @@ export class Tools {
    * 시설 도구를 든 동안 커서 아래 미리보기 상태. 놓을 수 있으면 초록, 없으면 빨강.
    * main.ts 가 매 프레임 커서로 부른다.
    */
-  facilityPreviewAt(tx: number, ty: number): { tx: number; ty: number; kind: number; ok: boolean } | null {
+  facilityPreviewAt(
+    tx: number,
+    ty: number,
+  ): { tx: number; ty: number; kind: number; ok: boolean } | null {
     if (this.tool !== 'facility') return null;
     const kind = this.facilityKind;
     return { tx, ty, kind, ok: canPlaceFacility(this.world, tx, ty, kind).ok };

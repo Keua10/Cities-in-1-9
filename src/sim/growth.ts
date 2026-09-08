@@ -240,7 +240,10 @@ export function pickLevel(demandForZone: readonly number[], roll: number): numbe
  */
 function chargeDemand(ctx: GrowthContext, zone: number, level: number, sign: number): void {
   const d = ctx.demand[zone];
-  d[level - 1] = Math.max(-1, Math.min(1, d[level - 1] - (sign * capacityOf(zone, level)) / DEMAND_SCALE));
+  d[level - 1] = Math.max(
+    -1,
+    Math.min(1, d[level - 1] - (sign * capacityOf(zone, level)) / DEMAND_SCALE),
+  );
 }
 
 /**
@@ -251,11 +254,7 @@ function chargeDemand(ctx: GrowthContext, zone: number, level: number, sign: num
  * rebuildPass 둘 다). 몇 틱에 걸쳐 청크를 한 바퀴 도는 셈이고, 틱은 1초에
  * 한 번이라 학생 눈에는 도시가 자연스럽게 자라는 것으로 보인다.
  */
-export function growParcel(
-  world: World,
-  p: Parcel,
-  ctx: GrowthContext,
-): GrowthResult {
+export function growParcel(world: World, p: Parcel, ctx: GrowthContext): GrowthResult {
   if (!p.build) return EMPTY_RESULT;
   // 신축을 먼저 시도한다. 그 뒤에도 현재 후보 섹터 주변 9개 섹터가 꽉 찬
   // 경우에만 재개발 패스가 실제 후보를 처리한다.

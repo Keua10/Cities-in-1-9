@@ -1,10 +1,10 @@
 import {
   browserLocalPersistence,
   createUserWithEmailAndPassword,
+  signOut as fbSignOut,
   onAuthStateChanged,
   setPersistence,
   signInWithEmailAndPassword,
-  signOut as fbSignOut,
   type User,
 } from 'firebase/auth';
 import { getFirebase } from './firebase';
@@ -102,20 +102,13 @@ export async function signIn(loginId: string, password: string): Promise<Session
 }
 
 /** allowSignup 이 켜져 있을 때만 쓴다. 학생용 화면에는 노출되지 않는다. */
-export async function createAccount(
-  loginId: string,
-  password: string,
-): Promise<Session> {
+export async function createAccount(loginId: string, password: string): Promise<Session> {
   const fb = getFirebase();
   if (!fb) throw new AuthError('서버 설정이 없습니다.');
   if (!allowSignup) throw new AuthError('계정 생성이 꺼져 있습니다.');
   try {
     await setPersistence(fb.auth, browserLocalPersistence);
-    const cred = await createUserWithEmailAndPassword(
-      fb.auth,
-      loginIdToEmail(loginId),
-      password,
-    );
+    const cred = await createUserWithEmailAndPassword(fb.auth, loginIdToEmail(loginId), password);
     return toSession(cred.user);
   } catch (err) {
     throw new AuthError(describeAuthError(err));

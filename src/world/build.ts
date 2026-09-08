@@ -222,12 +222,7 @@ export function canPlaceRoad(world: World, tx: number, ty: number): PlaceResult 
  * 도로 인접은 "배치 조건" 이 아니라 "표시 조건" 이다. 도로 없이도 지정은 되고
  * 색만 어둡게 나온다. 3단계에서 건물이 들어설 때 "도로에 접한 지구만 개발" 로 이어진다.
  */
-export function canPlaceZone(
-  world: World,
-  tx: number,
-  ty: number,
-  zone: number,
-): PlaceResult {
+export function canPlaceZone(world: World, tx: number, ty: number, zone: number): PlaceResult {
   if (!exploredOk(world, tx, ty)) {
     return { ok: false, reason: '아직 개척하지 않은 땅입니다' };
   }
@@ -259,12 +254,7 @@ export function canPlaceZone(
  * 반환값은 아틀라스 셀 번호이고 **저장되지 않는다.** 나중에 셀 순서를 바꾸거나
  * 진짜 그림으로 교체해도 도시 데이터가 깨지지 않는다.
  */
-export type TopResolver = (
-  chunk: Chunk,
-  index: number,
-  tx: number,
-  ty: number,
-) => number;
+export type TopResolver = (chunk: Chunk, index: number, tx: number, ty: number) => number;
 
 export function makeTopResolver(world: World): TopResolver {
   return (chunk, index, tx, ty) => {

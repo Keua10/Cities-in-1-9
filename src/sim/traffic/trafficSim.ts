@@ -1,4 +1,9 @@
-import { MAX_ACTIVE_VEHICLES, SIM_RADIUS_CHUNKS, WORLD_SEED, CHUNK_SIZE } from '../../core/constants';
+import {
+  CHUNK_SIZE,
+  MAX_ACTIVE_VEHICLES,
+  SIM_RADIUS_CHUNKS,
+  WORLD_SEED,
+} from '../../core/constants';
 import { chunkIndexOf } from '../../core/iso';
 import { Build, DIRS, roadMask } from '../../world/build';
 import type { World } from '../../world/world';
@@ -18,17 +23,17 @@ import {
   EXIT_ROOM_TILES,
   FOLLOW_LATERAL_TILES,
   FOLLOW_LOOKAHEAD_TILES,
+  FREEZE_BACKOFF_TILES,
+  FREEZE_BREAK_MS,
   INTERSECTION_STOP_T,
   JUNCTION_MARGIN_TILES,
   LEFT_YIELD_LOOKAHEAD_TILES,
   MAX_SPAWNS_PER_FRAME,
   MERGE_CLEAR_TILES,
   MIN_GAP_TILES,
-  FREEZE_BACKOFF_TILES,
-  FREEZE_BREAK_MS,
-  RESERVATION_ABANDON_MS,
   REROUTE_LOOKAHEAD,
   REROUTE_THRESHOLD,
+  RESERVATION_ABANDON_MS,
   ROUTE_BUDGET_PER_FRAME,
   SPAWN_BURST_TOKENS,
   SPAWN_GATE_HEADWAY_MS,
@@ -38,31 +43,29 @@ import {
   SPAWN_SPREAD_MAX_MS,
   STUCK_GIVEUP_MS,
   TRUCK_SPEED_MUL,
-  VEHICLE_SPEED_TILES_PER_SEC,
   VEHICLE_BODY_LENGTH_TILES,
+  VEHICLE_SPEED_TILES_PER_SEC,
 } from '../simConstants';
 import { sessionDaytimeAt, type DaytimeSnapshot } from '../time';
-import {
-  dirBetween,
-  isTurnNode,
-  laneHeading,
-  lanePosition,
-  routeSegmentDir,
-} from './laneGeometry';
 import { bodiesOverlap, SpatialGrid, type Body } from './collision';
-import { JunctionIndex } from './junctions';
 import {
   buildJunctionPath,
   IntersectionControl,
   type Approach,
   type JunctionPath,
 } from './intersectionControl';
+import { JunctionIndex } from './junctions';
+import { dirBetween, isTurnNode, laneHeading, lanePosition, routeSegmentDir } from './laneGeometry';
 import { Router, type Route } from './router';
 import { SignalState, signalState } from './signals';
 import { VehicleKind, type Vehicle } from './vehicles';
 
 type ReadySpawn = { trip: Trip; route: Route; readyAtMs: number };
-const enum SpawnResult { Spawned = 0, Blocked = 1, Handled = 2 }
+const enum SpawnResult {
+  Spawned = 0,
+  Blocked = 1,
+  Handled = 2,
+}
 
 /** 앞차를 몇 타일 앞까지 보는가. 제동거리(속도^2/2a)보다 넉넉해야 한다. */
 const GAP_LOOKAHEAD_TILES = 3;
@@ -163,11 +166,13 @@ export class TrafficSim {
     const st = signalState(j, path.enterDir, this.timeMs);
     const dist = path.entryIndex - 1 + INTERSECTION_STOP_T - progress;
     const free = this.exitFreeDistance(this.frames, i, path);
-    return `j=${path.junctionId} sig=${j.signalized ? st : 'none'} turn=${path.turn} ` +
+    return (
+      `j=${path.junctionId} sig=${j.signalized ? st : 'none'} turn=${path.turn} ` +
       `dist=${dist.toFixed(2)} right=${right} exitFree=${free.toFixed(2)} ` +
       `near=${near.toFixed(2)} occ=${this.control.occupantCount(path.junctionId)} ` +
       `hold=${hold === null ? '-' : (hold - progress).toFixed(2)} ` +
-      `entry=${path.entryIndex} idx=${vehicle.routeIdx} frozen=${this.frames[i].frozen}`;
+      `entry=${path.entryIndex} idx=${vehicle.routeIdx} frozen=${this.frames[i].frozen}`
+    );
   }
 
   setActiveChunk(cx: number, cy: number): void {
@@ -248,20 +253,12 @@ export class TrafficSim {
     this.router.update(ROUTE_BUDGET_PER_FRAME);
     if (this.macro.tick !== this.lastMacroTick) {
       this.lastMacroTick = this.macro.tick;
-      this.congestion.decayOutside(
-        this.world,
-        this.activeCx,
-        this.activeCy,
-        SIM_RADIUS_CHUNKS,
-      );
+      this.congestion.decayOutside(this.world, this.activeCx, this.activeCy, SIM_RADIUS_CHUNKS);
     }
 
     this.spawnDueVehicles();
 
-    const room = Math.max(
-      0,
-      MAX_ACTIVE_VEHICLES - this.vehicles.length - this.readySpawns.length,
-    );
+    const room = Math.max(0, MAX_ACTIVE_VEHICLES - this.vehicles.length - this.readySpawns.length);
     // A*가 프레임당 5건이므로 발생 쪽도 작은 묶음만 넘긴다. 출근 시각 한 틱에
     // 수백 명이 잡혀도 scanCursor가 다음 프레임부터 이어서 처리한다.
     const tripBudget = Math.min(room, ROUTE_BUDGET_PER_FRAME);
@@ -299,10 +296,16 @@ export class TrafficSim {
     return this.byChunk.get(`${cx},${cy}`) ?? EMPTY;
   }
 
-  get activeCount(): number { return this.vehicles.length; }
-  get daytimeState(): DaytimeSnapshot { return this.daytime; }
+  get activeCount(): number {
+    return this.vehicles.length;
+  }
+  get daytimeState(): DaytimeSnapshot {
+    return this.daytime;
+  }
   /** 렌더러의 신호등 색과 차량 판정이 같은 시계를 보게 한다. */
-  get signalTimeMs(): number { return this.timeMs; }
+  get signalTimeMs(): number {
+    return this.timeMs;
+  }
 
   private queueTrip(trip: Trip): void {
     const sourceInfo = this.world.buildingCovering(trip.fromTx, trip.fromTy);
@@ -390,9 +393,10 @@ export class TrafficSim {
     const sx = route.tiles[startIndex * 2];
     const sy = route.tiles[startIndex * 2 + 1];
     const sliced = startIndex === 0 ? route : this.router.sliceRoute(route, startIndex);
-    const dir = sliced.tiles.length >= 4
-      ? dirBetween(sliced.tiles[0], sliced.tiles[1], sliced.tiles[2], sliced.tiles[3])
-      : 0;
+    const dir =
+      sliced.tiles.length >= 4
+        ? dirBetween(sliced.tiles[0], sliced.tiles[1], sliced.tiles[2], sliced.tiles[3])
+        : 0;
     const gateKey = `${sx},${sy},${dir}`;
     if ((this.nextGateSpawnMs.get(gateKey) ?? 0) > this.timeMs) return SpawnResult.Blocked;
     if (this.spawnBlocked(sliced)) return SpawnResult.Blocked;
@@ -424,12 +428,9 @@ export class TrafficSim {
     };
     this.vehicles.push(vehicle);
     this.trips.set(vehicle, trip);
-    const gateJitter = simHash(
-      WORLD_SEED,
-      trip.fromTx ^ trip.toTx,
-      trip.fromTy ^ trip.toTy,
-      this.spawnSequence++,
-    ) % 251;
+    const gateJitter =
+      simHash(WORLD_SEED, trip.fromTx ^ trip.toTx, trip.fromTy ^ trip.toTy, this.spawnSequence++) %
+      251;
     this.nextGateSpawnMs.set(gateKey, this.timeMs + SPAWN_GATE_HEADWAY_MS + gateJitter);
     return SpawnResult.Spawned;
   }
@@ -476,10 +477,18 @@ export class TrafficSim {
       const [x, y] = lanePosition(vehicle.route, vehicle.routeIdx, vehicle.tileT);
       const [hx, hy] = laneHeading(vehicle.route, vehicle.routeIdx, vehicle.tileT);
       frames.push({
-        vehicle, x, y, hx, hy,
+        vehicle,
+        x,
+        y,
+        hx,
+        hy,
         advance: 0,
-        px: x, py: y, phx: hx, phy: hy,
-        nextIdx: vehicle.routeIdx, nextT: vehicle.tileT,
+        px: x,
+        py: y,
+        phx: hx,
+        phy: hy,
+        nextIdx: vehicle.routeIdx,
+        nextT: vehicle.tileT,
         frozen: false,
       });
     }
@@ -495,8 +504,8 @@ export class TrafficSim {
       const f = frames[i];
       const vehicle = f.vehicle;
       const points = vehicle.route.tiles.length / 2;
-      let target = VEHICLE_SPEED_TILES_PER_SEC *
-        (vehicle.kind === VehicleKind.Truck ? TRUCK_SPEED_MUL : 1);
+      let target =
+        VEHICLE_SPEED_TILES_PER_SEC * (vehicle.kind === VehicleKind.Truck ? TRUCK_SPEED_MUL : 1);
 
       const minCenterGap = VEHICLE_BODY_LENGTH_TILES + MIN_GAP_TILES;
       const desiredCenterGap = VEHICLE_BODY_LENGTH_TILES + DESIRED_GAP_TILES;
@@ -724,10 +733,14 @@ export class TrafficSim {
         behind.vehicle.routeIdx = Math.floor(progress);
         behind.vehicle.tileT = progress - behind.vehicle.routeIdx;
         const [nx, ny] = lanePosition(
-          behind.vehicle.route, behind.vehicle.routeIdx, behind.vehicle.tileT,
+          behind.vehicle.route,
+          behind.vehicle.routeIdx,
+          behind.vehicle.tileT,
         );
         const [nhx, nhy] = laneHeading(
-          behind.vehicle.route, behind.vehicle.routeIdx, behind.vehicle.tileT,
+          behind.vehicle.route,
+          behind.vehicle.routeIdx,
+          behind.vehicle.tileT,
         );
         behind.x = nx;
         behind.y = ny;
@@ -770,8 +783,7 @@ export class TrafficSim {
           // 아직 정지선을 넘지 않았을 때만 반납한다. 이미 정지선을 넘은 차의
           // 통행권을 뺏으면, 그 차는 통행권도 없이 적신호에 교차로로 들어가는
           // 상태가 된다(정지선 뒤가 아니라 앞에 있으므로 잡을 수도 없다).
-          vehicle.routeIdx + vehicle.tileT <=
-            held.entryIndex - 1 + INTERSECTION_STOP_T + 1e-3 &&
+          vehicle.routeIdx + vehicle.tileT <= held.entryIndex - 1 + INTERSECTION_STOP_T + 1e-3 &&
           vehicle.stoppedMs > RESERVATION_ABANDON_MS
         ) {
           // 통행권만 받아 쥔 채 정지선 앞에서 못 움직이고 있다. 반납해야
@@ -787,8 +799,8 @@ export class TrafficSim {
         vehicle.waitMs = 0;
         continue;
       }
-      const distance = path.entryIndex - 1 + INTERSECTION_STOP_T -
-        (vehicle.routeIdx + vehicle.tileT);
+      const distance =
+        path.entryIndex - 1 + INTERSECTION_STOP_T - (vehicle.routeIdx + vehicle.tileT);
       if (distance > LEFT_YIELD_LOOKAHEAD_TILES) {
         vehicle.waitMs = 0;
         continue;
@@ -1037,9 +1049,10 @@ export class TrafficSim {
       // 자리에서 도로 반대편 차선으로 순간이동하고, 하필 그 자리에 마주 오는
       // 차가 있으면 두 차체가 포개진 채 굳어 버린다. 그 한 대가 뒤쪽 대기열
       // 전체를 세워 도시가 멈췄다.
-      const newDir = route.tiles.length >= 4
-        ? dirBetween(route.tiles[0], route.tiles[1], route.tiles[2], route.tiles[3])
-        : vehicle.dir;
+      const newDir =
+        route.tiles.length >= 4
+          ? dirBetween(route.tiles[0], route.tiles[1], route.tiles[2], route.tiles[3])
+          : vehicle.dir;
       if (newDir !== vehicle.dir) return;
       vehicle.route = route;
       vehicle.routeIdx = 0;
@@ -1054,8 +1067,10 @@ export class TrafficSim {
       SPAWN_SPREAD_MAX_MS,
       SPAWN_READY_JITTER_MAX_MS + this.readySpawns.length * SPAWN_QUEUE_SPREAD_MS,
     );
-    return simHash(WORLD_SEED, trip.fromTx, trip.fromTy, trip.toTx ^ trip.toTy ^ seq) %
-      Math.max(1, spread);
+    return (
+      simHash(WORLD_SEED, trip.fromTx, trip.fromTy, trip.toTx ^ trip.toTy ^ seq) %
+      Math.max(1, spread)
+    );
   }
 
   private completeVehicle(vehicle: Vehicle): void {
@@ -1075,8 +1090,10 @@ export class TrafficSim {
   private tileInside(tx: number, ty: number): boolean {
     const cx = chunkIndexOf(tx);
     const cy = chunkIndexOf(ty);
-    return Math.abs(cx - this.activeCx) <= SIM_RADIUS_CHUNKS &&
-      Math.abs(cy - this.activeCy) <= SIM_RADIUS_CHUNKS;
+    return (
+      Math.abs(cx - this.activeCx) <= SIM_RADIUS_CHUNKS &&
+      Math.abs(cy - this.activeCy) <= SIM_RADIUS_CHUNKS
+    );
   }
 
   private vehicleInside(vehicle: Vehicle): boolean {
@@ -1127,9 +1144,8 @@ function buildLaneOccupancy(vehicles: readonly Vehicle[]): Map<string, Vehicle[]
   const occupancy = new Map<string, Vehicle[]>();
   for (const vehicle of vehicles) {
     const [x, y] = tileAt(vehicle);
-    const dirs = incomingDir(vehicle) === vehicle.dir
-      ? [vehicle.dir]
-      : [vehicle.dir, incomingDir(vehicle)];
+    const dirs =
+      incomingDir(vehicle) === vehicle.dir ? [vehicle.dir] : [vehicle.dir, incomingDir(vehicle)];
     for (const dir of dirs) {
       const key = laneKey(x, y, dir);
       let list = occupancy.get(key);

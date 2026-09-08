@@ -1,5 +1,5 @@
-import { ZOOM_WHEEL_STEP } from './constants';
 import type { Camera } from './camera';
+import { ZOOM_WHEEL_STEP } from './constants';
 
 export interface InputHandlers {
   /** 짧게 누른 경우. 월드 좌표를 준다. */
@@ -127,15 +127,9 @@ export function attachInput(
     if (handlers.isPainting?.()) {
       painting = true;
 
-      const w = camera.screenToWorld(
-        e.clientX,
-        e.clientY,
-      );
+      const w = camera.screenToWorld(e.clientX, e.clientY);
 
-      handlers.onPaintStart?.(
-        w.wx,
-        w.wy,
-      );
+      handlers.onPaintStart?.(w.wx, w.wy);
     }
   };
 
@@ -156,13 +150,7 @@ export function attachInput(
     const dxPointer = e.clientX - p.x;
     const dyPointer = e.clientY - p.y;
 
-    p.moved = Math.max(
-      p.moved,
-      Math.hypot(
-        e.clientX - p.startX,
-        e.clientY - p.startY,
-      ),
-    );
+    p.moved = Math.max(p.moved, Math.hypot(e.clientX - p.startX, e.clientY - p.startY));
 
     p.x = e.clientX;
     p.y = e.clientY;
@@ -175,19 +163,12 @@ export function attachInput(
       const d = distance();
 
       if (pinchDist > 0 && d > 0) {
-        camera.zoomAt(
-          mid.x,
-          mid.y,
-          d / pinchDist,
-        );
+        camera.zoomAt(mid.x, mid.y, d / pinchDist);
       }
 
       pinchDist = d;
 
-      camera.panByScreen(
-        mid.x - prevMid.x,
-        mid.y - prevMid.y,
-      );
+      camera.panByScreen(mid.x - prevMid.x, mid.y - prevMid.y);
 
       return;
     }
@@ -197,15 +178,9 @@ export function attachInput(
      * 관성도 걸지 않는다(velX/velY 를 건드리지 않고 빠져나간다).
      */
     if (painting) {
-      const w = camera.screenToWorld(
-        e.clientX,
-        e.clientY,
-      );
+      const w = camera.screenToWorld(e.clientX, e.clientY);
 
-      handlers.onPaintMove?.(
-        w.wx,
-        w.wy,
-      );
+      handlers.onPaintMove?.(w.wx, w.wy);
 
       return;
     }
@@ -216,62 +191,34 @@ export function attachInput(
      *
      * 이 구간은 끝까지 탭 후보로 유지한다.
      */
-    if (
-      e.pointerType !== 'mouse' &&
-      p.moved <= TAP_MOVE_LIMIT
-    ) {
+    if (e.pointerType !== 'mouse' && p.moved <= TAP_MOVE_LIMIT) {
       return;
     }
 
-    const dx =
-      e.pointerType === 'mouse'
-        ? mid.x - prevMid.x
-        : dxPointer;
+    const dx = e.pointerType === 'mouse' ? mid.x - prevMid.x : dxPointer;
 
-    const dy =
-      e.pointerType === 'mouse'
-        ? mid.y - prevMid.y
-        : dyPointer;
+    const dy = e.pointerType === 'mouse' ? mid.y - prevMid.y : dyPointer;
 
     camera.panByScreen(dx, dy);
 
     const now = performance.now();
 
-    const dt = Math.max(
-      1,
-      now - lastMoveT,
-    );
+    const dt = Math.max(1, now - lastMoveT);
 
     lastMoveT = now;
 
-    velX =
-      velX * 0.6 +
-      (dx / dt) * 0.4;
+    velX = velX * 0.6 + (dx / dt) * 0.4;
 
-    velY =
-      velY * 0.6 +
-      (dy / dt) * 0.4;
+    velY = velY * 0.6 + (dy / dt) * 0.4;
 
-    if (
-      e.pointerType === 'mouse' &&
-      handlers.onHover
-    ) {
-      const w = camera.screenToWorld(
-        e.clientX,
-        e.clientY,
-      );
+    if (e.pointerType === 'mouse' && handlers.onHover) {
+      const w = camera.screenToWorld(e.clientX, e.clientY);
 
-      handlers.onHover(
-        w.wx,
-        w.wy,
-      );
+      handlers.onHover(w.wx, w.wy);
     }
   };
 
-  const finishPointer = (
-    e: PointerEvent,
-    cancelled: boolean,
-  ): void => {
+  const finishPointer = (e: PointerEvent, cancelled: boolean): void => {
     const p = pointers.get(e.pointerId);
 
     pointers.delete(e.pointerId);
@@ -289,13 +236,7 @@ export function attachInput(
       return;
     }
 
-    p.moved = Math.max(
-      p.moved,
-      Math.hypot(
-        e.clientX - p.startX,
-        e.clientY - p.startY,
-      ),
-    );
+    p.moved = Math.max(p.moved, Math.hypot(e.clientX - p.startX, e.clientY - p.startY));
 
     p.x = e.clientX;
     p.y = e.clientY;
@@ -328,43 +269,25 @@ export function attachInput(
       return;
     }
 
-    const held =
-      performance.now() -
-      p.startT;
+    const held = performance.now() - p.startT;
 
-    const tapped =
-      !multiTouchGesture &&
-      p.moved <= TAP_MOVE_LIMIT &&
-      held <= TAP_TIME_LIMIT;
+    const tapped = !multiTouchGesture && p.moved <= TAP_MOVE_LIMIT && held <= TAP_TIME_LIMIT;
 
     if (tapped) {
       /*
        * 탭 허용 범위 안에서 손가락이 조금 움직였더라도
        * 선택 위치는 처음 손가락을 댄 곳을 기준으로 한다.
        */
-      const w = camera.screenToWorld(
-        p.startX,
-        p.startY,
-      );
+      const w = camera.screenToWorld(p.startX, p.startY);
 
-      handlers.onTap?.(
-        w.wx,
-        w.wy,
-      );
+      handlers.onTap?.(w.wx, w.wy);
 
       multiTouchGesture = false;
       return;
     }
 
-    if (
-      performance.now() -
-        lastMoveT <
-      80
-    ) {
-      camera.fling(
-        velX,
-        velY,
-      );
+    if (performance.now() - lastMoveT < 80) {
+      camera.fling(velX, velY);
     }
 
     if (e.pointerType !== 'mouse') {
@@ -374,49 +297,30 @@ export function attachInput(
     multiTouchGesture = false;
   };
 
-  const onUp = (
-    e: PointerEvent,
-  ): void => {
+  const onUp = (e: PointerEvent): void => {
     e.preventDefault();
     finishPointer(e, false);
   };
 
-  const onCancel = (
-    e: PointerEvent,
-  ): void => {
+  const onCancel = (e: PointerEvent): void => {
     finishPointer(e, true);
   };
 
-  const onWheel = (
-    e: WheelEvent,
-  ): void => {
+  const onWheel = (e: WheelEvent): void => {
     e.preventDefault();
 
-    const strength =
-      e.ctrlKey ? 3 : 1;
+    const strength = e.ctrlKey ? 3 : 1;
 
-    const factor = Math.exp(
-      -e.deltaY *
-        ZOOM_WHEEL_STEP *
-        strength,
-    );
+    const factor = Math.exp(-e.deltaY * ZOOM_WHEEL_STEP * strength);
 
-    camera.zoomAt(
-      e.clientX,
-      e.clientY,
-      factor,
-    );
+    camera.zoomAt(e.clientX, e.clientY, factor);
   };
 
-  const onContext = (
-    e: Event,
-  ): void => {
+  const onContext = (e: Event): void => {
     e.preventDefault();
   };
 
-  const onLeave = (
-    e: PointerEvent,
-  ): void => {
+  const onLeave = (e: PointerEvent): void => {
     if (e.pointerType === 'mouse') {
       handlers.onHoverEnd?.();
     }

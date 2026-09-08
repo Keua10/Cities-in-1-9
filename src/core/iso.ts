@@ -1,9 +1,4 @@
-import {
-  CHUNK_SIZE,
-  HEIGHT_UNIT,
-  TILE_HH,
-  TILE_HW,
-} from './constants';
+import { CHUNK_SIZE, HEIGHT_UNIT, TILE_HH, TILE_HW } from './constants';
 
 /**
  * 좌표계 정의 (이 파일이 유일한 기준이다)

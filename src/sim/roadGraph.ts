@@ -2,12 +2,8 @@ import { CHUNK_SIZE, CHUNK_TILES } from '../core/constants';
 import { chunkIndexOf, chunkKey, localIndexOf } from '../core/iso';
 import { Build, DIRS } from '../world/build';
 import type { World } from '../world/world';
-import { isAnchor, ZONE_R, zoneOfCode, levelOfCode } from './buildings';
-import {
-  ROAD_DIST_UNREACHABLE,
-  ROAD_FIELD_MAX_DIST,
-  ROAD_REACH,
-} from './simConstants';
+import { isAnchor, levelOfCode, ZONE_R, zoneOfCode } from './buildings';
+import { ROAD_DIST_UNREACHABLE, ROAD_FIELD_MAX_DIST, ROAD_REACH } from './simConstants';
 
 /**
  * 도로망 거리장.
@@ -72,12 +68,7 @@ export class RoadField {
    * 건물의 통근 거리. footprint 에 맞닿은 도로 중 가장 가까운 값을 쓴다.
    * 도로에 안 닿아 있으면 UNREACHABLE.
    */
-  commuteFor(
-    tx: number,
-    ty: number,
-    span: number,
-    zone: number,
-  ): number {
+  commuteFor(tx: number, ty: number, span: number, zone: number): number {
     let best = ROAD_DIST_UNREACHABLE;
     for (const [rx, ry] of edgeNeighbors(tx, ty, span)) {
       const d = zone === ZONE_R ? this.distToJobs(rx, ry) : this.distToHomes(rx, ry);
@@ -104,7 +95,6 @@ export class RoadField {
   roadCapacity(world: World, tx: number, ty: number): number {
     return roadTileCapacity(world, tx, ty);
   }
-
 
   /** 전체 재계산. 하루에 한 번(ROAD_FIELD_INTERVAL) 돈다. */
   rebuild(world: World): void {
@@ -231,12 +221,7 @@ export class RoadField {
     }
   }
 
-  private write(
-    tx: number,
-    ty: number,
-    which: 'toJobs' | 'toHomes',
-    value: number,
-  ): void {
+  private write(tx: number, ty: number, which: 'toJobs' | 'toHomes', value: number): void {
     const f = this.fields.get(chunkKey(chunkIndexOf(tx), chunkIndexOf(ty)));
     if (!f) return;
     const idx = localIndexOf(ty) * CHUNK_SIZE + localIndexOf(tx);
@@ -248,11 +233,7 @@ export class RoadField {
  * span x span 부지의 바깥 테두리 칸들. 건물이 도로에 접했는지 볼 때 쓴다.
  * 모서리 대각선은 넣지 않는다 — 도로는 4방향 연결이다.
  */
-export function* edgeNeighbors(
-  tx: number,
-  ty: number,
-  span: number,
-): Generator<[number, number]> {
+export function* edgeNeighbors(tx: number, ty: number, span: number): Generator<[number, number]> {
   for (let k = 0; k < span; k++) {
     yield [tx + k, ty - 1];
     yield [tx + k, ty + span];
@@ -325,12 +306,7 @@ export function roadDistancesFrom(
 }
 
 /** 부지가 도로에 한 칸이라도 접해 있는가. */
-export function touchesRoad(
-  world: World,
-  tx: number,
-  ty: number,
-  span: number,
-): boolean {
+export function touchesRoad(world: World, tx: number, ty: number, span: number): boolean {
   for (const [rx, ry] of edgeNeighbors(tx, ty, span)) {
     if (world.getBuild(rx, ry) === Build.Road) return true;
   }

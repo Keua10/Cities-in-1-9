@@ -1,8 +1,4 @@
-import {
-  SAVE_DEBOUNCE_MS,
-  SAVE_MIN_INTERVAL_MS,
-  SAVE_SIM_INTERVAL_MS,
-} from '../core/constants';
+import { SAVE_DEBOUNCE_MS, SAVE_MIN_INTERVAL_MS, SAVE_SIM_INTERVAL_MS } from '../core/constants';
 import type { World } from '../world/world';
 import { ConflictError, saveCity } from './citySave';
 import type { CityDoc } from './types';

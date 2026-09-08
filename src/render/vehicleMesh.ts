@@ -1,4 +1,3 @@
-import { quadIndices, writeQuad } from './quadBuffers';
 import { Mesh, MeshGeometry } from 'pixi.js';
 import { MAX_ACTIVE_VEHICLES, TILE_W, WORLD_SEED } from '../core/constants';
 import { tileToWorldX, tileToWorldY } from '../core/iso';
@@ -7,6 +6,7 @@ import { laneFacing, lanePosition } from '../sim/traffic/laneGeometry';
 import type { Vehicle } from '../sim/traffic/vehicles';
 import { surfaceHeightAt } from '../world/slope';
 import type { World } from '../world/world';
+import { quadIndices, writeQuad } from './quadBuffers';
 import {
   VEHICLE_CELL,
   VEHICLE_GROUND_DROP_PX,
@@ -30,7 +30,7 @@ export class VehicleMesh {
   private positions: Float32Array;
   private uvs: Float32Array;
   private sorted: Vehicle[] = [];
-  private depths = new Map<Vehicle, number>();
+  private laneSamples = new Map<Vehicle, [number, number]>();
 
   constructor(
     private world: World,
@@ -49,13 +49,16 @@ export class VehicleMesh {
     // 정렬 기준은 도로 중앙선이 아니라 실제 차선 위치다. 중앙선으로 정렬하면
     // 마주 오는 두 차의 깊이가 같아져 매 프레임 앞뒤가 뒤바뀌며 깜빡인다.
     this.sorted.length = 0;
-    this.depths.clear();
+    this.laneSamples.clear();
     for (const vehicle of vehicles) {
-      const [laneTx, laneTy] = lanePosition(vehicle.route, vehicle.routeIdx, vehicle.tileT);
-      this.depths.set(vehicle, laneTx + laneTy);
+      this.laneSamples.set(vehicle, lanePosition(vehicle.route, vehicle.routeIdx, vehicle.tileT));
       this.sorted.push(vehicle);
     }
-    this.sorted.sort((a, b) => (this.depths.get(a) ?? 0) - (this.depths.get(b) ?? 0));
+    this.sorted.sort((a, b) => {
+      const pa = this.laneSamples.get(a)!;
+      const pb = this.laneSamples.get(b)!;
+      return pa[0] + pa[1] - (pb[0] + pb[1]);
+    });
 
     let q = 0;
     for (const vehicle of this.sorted) {
@@ -63,7 +66,7 @@ export class VehicleMesh {
       const t = vehicle.tileT;
 
       // 렌더링과 시뮬레이션이 laneGeometry 하나만 본다. 화면 픽셀 보정은 없다.
-      const [laneTx, laneTy] = lanePosition(vehicle.route, vehicle.routeIdx, t);
+      const [laneTx, laneTy] = this.laneSamples.get(vehicle)!;
       /*
        * 높이는 **도로면(slope.ts)** 에서 읽는다.
        *
@@ -85,7 +88,8 @@ export class VehicleMesh {
 
       // 스프라이트 방향은 차선 접선에서 뽑는다. 코너에서도 실제 향한 쪽을 쓴다.
       const facing = laneFacing(vehicle.route, vehicle.routeIdx, t);
-      const variant = simHash(WORLD_SEED, vehicle.destTx, vehicle.destTy, vehicle.tier) % VEHICLE_VARIANTS;
+      const variant =
+        simHash(WORLD_SEED, vehicle.destTx, vehicle.destTy, vehicle.tier) % VEHICLE_VARIANTS;
       const [u0, v0, u1, v1] = this.atlas.uv(vehicle.kind, facing, variant);
       writeQuad(this.uvs, q, u0, v0, u1, v1);
       q++;
@@ -99,7 +103,9 @@ export class VehicleMesh {
 
   destroy(): void {
     this.mesh.destroy();
-    try { this.geometry.destroy(true); } catch {}
+    try {
+      this.geometry.destroy(true);
+    } catch {}
   }
 }
 

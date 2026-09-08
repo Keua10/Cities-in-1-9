@@ -45,7 +45,7 @@ export async function loadVehicleAtlas(): Promise<VehicleAtlas> {
     texture,
     placeholder: !art,
     uv(kind, dir, variant) {
-      const x = (((dir & 3) * VEHICLE_VARIANTS) + (variant % VEHICLE_VARIANTS)) * VEHICLE_CELL;
+      const x = ((dir & 3) * VEHICLE_VARIANTS + (variant % VEHICLE_VARIANTS)) * VEHICLE_CELL;
       const y = (kind & 1) * VEHICLE_CELL;
       return [
         x / VEHICLE_ATLAS_W,
@@ -123,10 +123,14 @@ interface Palette {
 /** 타일 방향 인덱스 -> 화면 벡터(타일 1칸 이동량). iso.ts 와 같은 정의다. */
 function screenAxis(dir: number): [number, number] {
   switch (dir & 3) {
-    case 0: return [TILE_HW, TILE_HH]; // +tx 오른쪽아래
-    case 1: return [-TILE_HW, TILE_HH]; // +ty 왼쪽아래
-    case 2: return [-TILE_HW, -TILE_HH]; // -tx 왼쪽위
-    default: return [TILE_HW, -TILE_HH]; // -ty 오른쪽위
+    case 0:
+      return [TILE_HW, TILE_HH]; // +tx 오른쪽아래
+    case 1:
+      return [-TILE_HW, TILE_HH]; // +ty 왼쪽아래
+    case 2:
+      return [-TILE_HW, -TILE_HH]; // -tx 왼쪽위
+    default:
+      return [TILE_HW, -TILE_HH]; // -ty 오른쪽위
   }
 }
 
@@ -171,10 +175,26 @@ function drawCar(
     const w = hw * widthScale;
     const top = base + height;
     const faces: Array<{ p: Array<[number, number]>; nx: number; ny: number }> = [
-      { p: [point(to, -w, base), point(to, w, base), point(to, w, top), point(to, -w, top)], nx: fx, ny: fy },
-      { p: [point(from, w, base), point(to, w, base), point(to, w, top), point(from, w, top)], nx: rx, ny: ry },
-      { p: [point(from, w, base), point(from, -w, base), point(from, -w, top), point(from, w, top)], nx: -fx, ny: -fy },
-      { p: [point(from, -w, base), point(to, -w, base), point(to, -w, top), point(from, -w, top)], nx: -rx, ny: -ry },
+      {
+        p: [point(to, -w, base), point(to, w, base), point(to, w, top), point(to, -w, top)],
+        nx: fx,
+        ny: fy,
+      },
+      {
+        p: [point(from, w, base), point(to, w, base), point(to, w, top), point(from, w, top)],
+        nx: rx,
+        ny: ry,
+      },
+      {
+        p: [point(from, w, base), point(from, -w, base), point(from, -w, top), point(from, w, top)],
+        nx: -fx,
+        ny: -fy,
+      },
+      {
+        p: [point(from, -w, base), point(to, -w, base), point(to, -w, top), point(from, -w, top)],
+        nx: -rx,
+        ny: -ry,
+      },
     ];
     for (const face of faces) {
       if (face.ny <= 0) continue; // 화면 뒤쪽을 향한 면은 차체에 가려진다
@@ -184,15 +204,16 @@ function drawCar(
     }
     ctx.fillStyle = shade(color, 1.12);
     fillPoly(ctx, [
-      point(to, w, top), point(to, -w, top), point(from, -w, top), point(from, w, top),
+      point(to, w, top),
+      point(to, -w, top),
+      point(from, -w, top),
+      point(from, w, top),
     ]);
   };
 
   // 접지 그림자
   ctx.fillStyle = 'rgba(0,0,0,0.25)';
-  fillPoly(ctx, [
-    point(hl, hw, 0), point(hl, -hw, 0), point(-hl, -hw, 0), point(-hl, hw, 0),
-  ]);
+  fillPoly(ctx, [point(hl, hw, 0), point(hl, -hw, 0), point(-hl, -hw, 0), point(-hl, hw, 0)]);
 
   const chassis = truck ? bodyHeight * 0.45 : bodyHeight * 0.5;
   box(-hl, hl, 1, 0, chassis, palette.dark); // 하부(바퀴/섀시)

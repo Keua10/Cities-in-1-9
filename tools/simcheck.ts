@@ -13,11 +13,7 @@ import { CHUNK_SIZE } from '../src/core/constants';
 import { growParcel, sectorNeighborhoodHasEmptyLot } from '../src/sim/growth';
 import { MacroSim } from '../src/sim/macro';
 import { RoadField } from '../src/sim/roadGraph';
-import {
-  REDEVELOPMENT_SECTOR_SIZE,
-  START_MONEY,
-  TICKS_PER_DAY,
-} from '../src/sim/simConstants';
+import { REDEVELOPMENT_SECTOR_SIZE, START_MONEY, TICKS_PER_DAY } from '../src/sim/simConstants';
 import { isAnchor, levelOfCode, zoneOfCode } from '../src/sim/buildings';
 import {
   canPlaceFacility,
@@ -104,7 +100,9 @@ for (let dy = 0; dy < 4; dy++) {
     }
   }
 }
-console.log(`대상 청크 ${target.cx},${target.cy} (마른 땅 비율 ${((bestScore / 1024) * 100).toFixed(0)}%)`);
+console.log(
+  `대상 청크 ${target.cx},${target.cy} (마른 땅 비율 ${((bestScore / 1024) * 100).toFixed(0)}%)`,
+);
 
 // 6칸마다 도로를 긋고(5칸 폭 블록) 나머지를 지구로 채운다. 학생이 격자 도시를 만든 상황.
 const bx = target.cx * CHUNK_SIZE;
@@ -287,8 +285,7 @@ for (let day = 0; day <= DAYS; day++) {
 report(DAYS);
 
 const occupancyPct = Math.round(sim.stats.occupancy * 100);
-const upkeepShare =
-  sim.stats.dailyIncome > 0 ? (facilityUpkeep / sim.stats.dailyIncome) * 100 : 0;
+const upkeepShare = sim.stats.dailyIncome > 0 ? (facilityUpkeep / sim.stats.dailyIncome) * 100 : 0;
 console.log(
   `검증 요약: 최소 자금 ${Math.round(minimumMoney).toLocaleString('ko-KR')}원` +
     ` · 재건축 철거 ${rebuildDemolitions}채 · 최종 입주율 ${occupancyPct}%`,
@@ -343,9 +340,7 @@ if (reachableCoverage.some((v) => v < 0.85)) {
   );
 }
 if (sim.stats.amenityFulfilled < 0.8) {
-  throw new Error(
-    `복지 충족률이 낮습니다: ${Math.round(sim.stats.amenityFulfilled * 100)}%`,
-  );
+  throw new Error(`복지 충족률이 낮습니다: ${Math.round(sim.stats.amenityFulfilled * 100)}%`);
 }
 // 11장의 목표는 15~25% 다. 여유를 두되 도시를 목 조르는 수준은 막는다.
 if (upkeepShare > 40) {
@@ -367,9 +362,7 @@ function report(day: number): void {
       if (isAnchor(c)) counts[zoneOfCode(c)][levelOfCode(c) - 1]++;
     }
   }
-  const d = sim.demand
-    .map((row) => row.map((v) => v.toFixed(2).padStart(5)).join(' '))
-    .join(' | ');
+  const d = sim.demand.map((row) => row.map((v) => v.toFixed(2).padStart(5)).join(' ')).join(' | ');
   console.log(
     `${String(day).padStart(4)}일  인구 ${String(Math.round(sim.stats.population)).padStart(6)}` +
       `  돈 ${String(Math.round(sim.money)).padStart(9)}` +

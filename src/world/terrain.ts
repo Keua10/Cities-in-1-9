@@ -1,9 +1,4 @@
-import {
-  CHUNK_SIZE,
-  CHUNK_TILES,
-  MAX_HEIGHT,
-  WORLD_SEED,
-} from '../core/constants';
+import { CHUNK_SIZE, CHUNK_TILES, MAX_HEIGHT, WORLD_SEED } from '../core/constants';
 
 /**
  * 지형 종류. 이 순서가 그대로 아틀라스의 셀 인덱스다.
@@ -164,7 +159,10 @@ export function wallMaterial(topTerrain: number): 'rock' | 'soil' {
   return topTerrain === Terrain.Rock ? 'rock' : 'soil';
 }
 
-export function generateChunk(cx: number, cy: number): {
+export function generateChunk(
+  cx: number,
+  cy: number,
+): {
   tiles: Uint8Array;
   heights: Uint8Array;
 } {

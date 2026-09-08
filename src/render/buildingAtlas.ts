@@ -62,8 +62,7 @@ export function buildingBandY(level: number): number {
 }
 
 export const BUILDING_ATLAS_W = buildingCellSize(LEVEL_COUNT) * ZONE_COUNT * BUILDING_VARIANTS;
-export const BUILDING_ATLAS_H =
-  buildingBandY(LEVEL_COUNT) + buildingCellSize(LEVEL_COUNT);
+export const BUILDING_ATLAS_H = buildingBandY(LEVEL_COUNT) + buildingCellSize(LEVEL_COUNT);
 
 export interface BuildingAtlas {
   texture: Texture;
@@ -225,7 +224,12 @@ function drawBox(
     const y = midY - body * t;
     const w = Math.max(2, dx * 0.5);
     ctx.fillRect(cxm + dx * 0.25, y - Math.max(1, body * 0.06), w * 0.6, Math.max(2, body * 0.09));
-    ctx.fillRect(cxm - dx * 0.25 - w * 0.6, y - Math.max(1, body * 0.06), w * 0.6, Math.max(2, body * 0.09));
+    ctx.fillRect(
+      cxm - dx * 0.25 - w * 0.6,
+      y - Math.max(1, body * 0.06),
+      w * 0.6,
+      Math.max(2, body * 0.09),
+    );
   }
 
   // 바닥 그림자. 건물이 땅에 붙어 보이게 한다.

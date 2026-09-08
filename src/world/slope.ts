@@ -58,18 +58,10 @@ export function flatSurface(h: number): TileSurface {
 }
 
 /** 두 타일이 램프로 이어지는가 = 둘 다 도로이고 고도차가 정확히 한 단계. */
-export function rampJoins(
-  world: World,
-  ax: number,
-  ay: number,
-  bx: number,
-  by: number,
-): boolean {
+export function rampJoins(world: World, ax: number, ay: number, bx: number, by: number): boolean {
   if (world.sampleBuild(ax, ay) !== Build.Road) return false;
   if (world.sampleBuild(bx, by) !== Build.Road) return false;
-  return (
-    Math.abs(world.sampleHeight(ax, ay) - world.sampleHeight(bx, by)) === RAMP_STEP
-  );
+  return Math.abs(world.sampleHeight(ax, ay) - world.sampleHeight(bx, by)) === RAMP_STEP;
 }
 
 /**
@@ -178,13 +170,7 @@ function cornerZ(s: TileSurface, sx: number, sy: number): number {
  *   +tx 면: A = (+0.5, +0.5) 꼭짓점, B = (+0.5, -0.5)
  *   +ty 면: A = (-0.5, +0.5) 꼭짓점, B = (+0.5, +0.5)
  */
-export function edgeWallAt(
-  world: World,
-  tx: number,
-  ty: number,
-  dx: number,
-  dy: number,
-): EdgeWall {
+export function edgeWallAt(world: World, tx: number, ty: number, dx: number, dy: number): EdgeWall {
   const self = surfaceAt(world, tx, ty);
   const near = surfaceAt(world, tx + dx, ty + dy);
 

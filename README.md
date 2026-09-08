@@ -1,5 +1,7 @@
 # Cities-in-1-9
 
+2026-09-09 코드 정리: 파일별 역할은 [ARCHITECTURE.md](ARCHITECTURE.md), 변경 내용과 기능 보존 검증은 [REFACTOR_2026_09_09.md](REFACTOR_2026_09_09.md)를 참고한다. `npm run format:check`, `npm run build`, `npm run check`, `npm run check:parity`로 형식·타입·기능·이전 버전과의 동등성을 검사한다.
+
 ## 현재 상태 (2026-09-08)
 
 경사(비탈) 도로 렌더링 버그를 고치고, 구역이 나뉜 테스트용 대도시 생성기와 "맵 초기화" 버튼을 넣었다. 내용은 [경사 도로 + 대도시 노트](SLOPE_ROAD_NOTES.md)에 있다.

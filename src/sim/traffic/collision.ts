@@ -44,19 +44,12 @@ export function bodiesOverlap(a: Body, b: Body): boolean {
 }
 
 /** 축 n 에 두 사각형을 투영해 분리되어 있는지 본다. */
-function separated(
-  dx: number,
-  dy: number,
-  nx: number,
-  ny: number,
-  a: Body,
-  b: Body,
-): boolean {
+function separated(dx: number, dy: number, nx: number, ny: number, a: Body, b: Body): boolean {
   const center = Math.abs(dx * nx + dy * ny);
-  const ra = HALF_LEN * Math.abs(a.hx * nx + a.hy * ny) +
-    HALF_WID * Math.abs(-a.hy * nx + a.hx * ny);
-  const rb = HALF_LEN * Math.abs(b.hx * nx + b.hy * ny) +
-    HALF_WID * Math.abs(-b.hy * nx + b.hx * ny);
+  const ra =
+    HALF_LEN * Math.abs(a.hx * nx + a.hy * ny) + HALF_WID * Math.abs(-a.hy * nx + a.hx * ny);
+  const rb =
+    HALF_LEN * Math.abs(b.hx * nx + b.hy * ny) + HALF_WID * Math.abs(-b.hy * nx + b.hx * ny);
   return center > ra + rb;
 }
 

@@ -24,9 +24,7 @@ const config = {
 };
 
 /** 설정이 다 들어와 있는가. 로그인 화면이 이 값을 보고 안내 문구를 바꾼다. */
-export const firebaseConfigured: boolean = Object.values(config).every(
-  (v) => v.length > 0,
-);
+export const firebaseConfigured: boolean = Object.values(config).every((v) => v.length > 0);
 
 let handles: FirebaseHandles | null = null;
 let failed = false;

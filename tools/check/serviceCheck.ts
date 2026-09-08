@@ -240,14 +240,22 @@ console.log('1. 배치 · 철거');
   // 경사지
   world.setHeight(ox + 15, oy + 2, 1);
   const slope = canPlaceFacility(world, ox + 14, oy + 1, FAC_FIRE);
-  check('1 경사지 거부', !slope.ok && slope.reason === '평평한 땅에만 지을 수 있습니다', slope.reason);
+  check(
+    '1 경사지 거부',
+    !slope.ok && slope.reason === '평평한 땅에만 지을 수 있습니다',
+    slope.reason,
+  );
 
   // 청크 경계는 **막지 않는다.** 지형까지 갖춰놓고 보는 검사는 아래 4b 에 있다.
 
   // 기존 건물 위
   world.setBuild(ox + 20, oy + 1, Build.ZoneR, false);
   const occupied = canPlaceFacility(world, ox + 20, oy + 1, FAC_FIRE);
-  check('1 기존 지구 위 거부', !occupied.ok && occupied.reason === '먼저 철거해야 합니다', occupied.reason);
+  check(
+    '1 기존 지구 위 거부',
+    !occupied.ok && occupied.reason === '먼저 철거해야 합니다',
+    occupied.reason,
+  );
 
   // 도로 비인접
   const far = canPlaceFacility(world, ox + 5, oy + 8, FAC_FIRE);
@@ -308,7 +316,11 @@ console.log('1. 배치 · 철거');
   world.setBuild(ox + 3, oy + 2, Build.ZoneR);
 
   let ok = world.getBuild(ox + 3, oy + 2) === Build.ZoneR;
-  for (const [dx, dy] of [[0, 0], [1, 0], [0, 1]] as const) {
+  for (const [dx, dy] of [
+    [0, 0],
+    [1, 0],
+    [0, 1],
+  ] as const) {
     if (world.getBuild(ox + 2 + dx, oy + 1 + dy) !== Build.None) ok = false;
     if (world.getBld(ox + 2 + dx, oy + 1 + dy) !== BLD_NONE) ok = false;
   }
@@ -354,9 +366,11 @@ console.log('1. 배치 · 철거');
 
   // 옆 청크 쪽 칸에서 앵커를 되찾을 수 있는가
   const found = w2.buildingCovering(edgeX + 2, ty + 2);
-  check('4b 옆 청크 칸에서도 앵커를 찾는다',
+  check(
+    '4b 옆 청크 칸에서도 앵커를 찾는다',
     found !== null && found.tx === edgeX && found.kind === FAC_HOSPITAL,
-    found ? `tx=${found.tx} kind=${found.kind}` : 'null');
+    found ? `tx=${found.tx} kind=${found.kind}` : 'null',
+  );
 
   // 옆 청크 쪽 한 칸만 철거해도 전체가 비어야 한다
   w2.setBuild(edgeX + 2, ty + 2, Build.None);
@@ -370,7 +384,8 @@ console.log('1. 배치 · 철거');
   check('4b 옆 청크 칸을 찍어도 청크 걸친 시설 전체가 헐린다 (유령 칸 없음)', cleared);
   for (const cx of [w2.baseCx, w2.baseCx + 1]) {
     const p = w2.peekParcel(cx, chunkIndexOf(ty));
-    if (p) check(`4b 필지 ${cx} 의 emptyPlots 가 음수가 아니다`, p.emptyPlots >= 0, `${p.emptyPlots}`);
+    if (p)
+      check(`4b 필지 ${cx} 의 emptyPlots 가 음수가 아니다`, p.emptyPlots >= 0, `${p.emptyPlots}`);
   }
 }
 
@@ -411,17 +426,27 @@ console.log('2. 격리 — isAnchor 를 안 고쳤는가');
   }
   check('6 시설 칸에 지구 건물이 서지 않는다 (3,000틱)', intact);
   check('7 재개발이 돌아도 시설이 헐리지 않는다', intact);
-  check('8 시설이 인구에 섞이지 않는다 (인구 > 0 이고 건물 수와 짝이 맞는다)', sim.stats.population > 0);
+  check(
+    '8 시설이 인구에 섞이지 않는다 (인구 > 0 이고 건물 수와 짝이 맞는다)',
+    sim.stats.population > 0,
+  );
 
   let anchorCount = 0;
   for (const p of world.developedParcels()) {
     if (!p.bld) continue;
     for (let i = 0; i < p.bld.length; i++) if (isAnchor(p.bld[i])) anchorCount++;
   }
-  check('8 buildingCount 에 시설이 섞이지 않는다', sim.stats.buildings === anchorCount,
-    `stats=${sim.stats.buildings} anchors=${anchorCount}`);
-  check('8 시설 수는 따로 센다', sim.stats.facilityCounts[FAC_FIRE] === 1 &&
-    sim.stats.facilityCounts[FAC_HOSPITAL] === 1 && sim.stats.facilityCounts[FAC_MINIPARK] === 1);
+  check(
+    '8 buildingCount 에 시설이 섞이지 않는다',
+    sim.stats.buildings === anchorCount,
+    `stats=${sim.stats.buildings} anchors=${anchorCount}`,
+  );
+  check(
+    '8 시설 수는 따로 센다',
+    sim.stats.facilityCounts[FAC_FIRE] === 1 &&
+      sim.stats.facilityCounts[FAC_HOSPITAL] === 1 &&
+      sim.stats.facilityCounts[FAC_MINIPARK] === 1,
+  );
 }
 
 console.log('3. 커버리지 — 도로 BFS');
@@ -437,8 +462,11 @@ console.log('3. 커버리지 — 도로 BFS');
 
   const left = field.ownerFor(ox + 5, oy + 1, 1, FAC_FIRE);
   const right = field.ownerFor(ox + 38, oy + 1, 1, FAC_FIRE);
-  check('9 가까운 쪽이 담당이 된다', left !== right && left >= 0 && right >= 0,
-    `left=${left} right=${right}`);
+  check(
+    '9 가까운 쪽이 담당이 된다',
+    left !== right && left >= 0 && right >= 0,
+    `left=${left} right=${right}`,
+  );
 
   // 11. FACILITY_RANGE 밖은 owner < 0, 품질 0
   const range = FACILITY_SPECS[FAC_FIRE].range;
@@ -460,8 +488,11 @@ console.log('3. 커버리지 — 도로 BFS');
   field.rebuild(world);
   const after = field.ownerFor(ox + 20, oy + 1, 1, FAC_FIRE);
 
-  check('10 도로를 끊으면 건너편 커버리지가 사라진다', before >= 0 && after < 0,
-    `before=${before} after=${after}`);
+  check(
+    '10 도로를 끊으면 건너편 커버리지가 사라진다',
+    before >= 0 && after < 0,
+    `before=${before} after=${after}`,
+  );
 }
 
 {
@@ -502,8 +533,11 @@ console.log('4. 용량 · 만족도');
   field.accrueLoad(ox + 4, oy + 1, 1, spec.capacity * 2);
   field.settleLoads();
   const q = field.qualityAt(ox + 4, oy + 1, 1, FAC_POLICE);
-  check('13 정원 2배에서 품질 = 1 - OVERLOAD_SLOPE', near(q, 1 - OVERLOAD_SLOPE),
-    `${q.toFixed(4)} vs ${(1 - OVERLOAD_SLOPE).toFixed(4)}`);
+  check(
+    '13 정원 2배에서 품질 = 1 - OVERLOAD_SLOPE',
+    near(q, 1 - OVERLOAD_SLOPE),
+    `${q.toFixed(4)} vs ${(1 - OVERLOAD_SLOPE).toFixed(4)}`,
+  );
 }
 
 {
@@ -511,7 +545,10 @@ console.log('4. 용량 · 만족도');
   check('14 인구 SERVICE_GRACE_POP 미만이면 grace 가 0', graceFactor(SERVICE_GRACE_POP - 1) === 0);
   check('14 인구 0 에서도 grace 가 0', graceFactor(0) === 0);
   check('14 인구 SERVICE_FULL_POP 이상이면 grace 가 1', graceFactor(SERVICE_FULL_POP) === 1);
-  check('14 그 사이는 선형 보간', near(graceFactor((SERVICE_GRACE_POP + SERVICE_FULL_POP) / 2), 0.5));
+  check(
+    '14 그 사이는 선형 보간',
+    near(graceFactor((SERVICE_GRACE_POP + SERVICE_FULL_POP) / 2), 0.5),
+  );
 
   // 서비스 전무 · 최악 계층에서도 상한을 넘지 않는다
   let worst = 0;
@@ -522,8 +559,10 @@ console.log('4. 용량 · 만족도');
     }
   }
   check('15 serviceGap 이 SERVICE_PENALTY_MAX 를 넘지 않는다', worst <= SERVICE_PENALTY_MAX + 1e-9);
-  check('15 needsGap 이 NEEDS_PENALTY_MAX 를 넘지 않는다',
-    Math.min(NEEDS_PENALTY_MAX, SERVICE_PENALTY_MAX + AMENITY_GAP_MAX) <= NEEDS_PENALTY_MAX);
+  check(
+    '15 needsGap 이 NEEDS_PENALTY_MAX 를 넘지 않는다',
+    Math.min(NEEDS_PENALTY_MAX, SERVICE_PENALTY_MAX + AMENITY_GAP_MAX) <= NEEDS_PENALTY_MAX,
+  );
 }
 
 {
@@ -539,10 +578,16 @@ console.log('4. 용량 · 만족도');
   };
   const satT3 = base - gapFor(2);
   const satT1 = base - gapFor(0);
-  check('16 서비스·복지 전무면 주거 3단계가 기준선에 못 미친다',
-    satT3 <= SATISFACTION_FLOOR[2], `${satT3.toFixed(3)} vs ${SATISFACTION_FLOOR[2]}`);
-  check('16 같은 자리에서 1단계는 기준선을 넘는다',
-    satT1 > SATISFACTION_FLOOR[0], `${satT1.toFixed(3)} vs ${SATISFACTION_FLOOR[0]}`);
+  check(
+    '16 서비스·복지 전무면 주거 3단계가 기준선에 못 미친다',
+    satT3 <= SATISFACTION_FLOOR[2],
+    `${satT3.toFixed(3)} vs ${SATISFACTION_FLOOR[2]}`,
+  );
+  check(
+    '16 같은 자리에서 1단계는 기준선을 넘는다',
+    satT1 > SATISFACTION_FLOOR[0],
+    `${satT1.toFixed(3)} vs ${SATISFACTION_FLOOR[0]}`,
+  );
 }
 
 console.log('5. 복지 — 계층별 요구');
@@ -563,13 +608,21 @@ console.log('5. 복지 — 계층별 요구');
    * 저소득은 충족되고 고소득은 미달이다. 그게 "얼마나 필요하냐" 다.
    * 기대값은 세기/요구량에서 바로 나오므로 상수를 튜닝해도 이 관계는 유지된다.
    */
-  check('17 1단계 fulfil = 1.0 (소공원 하나로 족하다)', near(fulfil(0), 1.0, 0.03),
-    `${fulfil(0).toFixed(3)}`);
-  check('17 2단계 fulfil < 1 (소공원으로는 안 된다)',
-    fulfil(1) < 1 && near(fulfil(1), mini / AMENITY_NEED_BY_TIER[1], 0.05), `${fulfil(1).toFixed(3)}`);
-  check('17 3단계 fulfil 이 2단계보다 더 낮다 (고소득이 가장 까다롭다)',
+  check(
+    '17 1단계 fulfil = 1.0 (소공원 하나로 족하다)',
+    near(fulfil(0), 1.0, 0.03),
+    `${fulfil(0).toFixed(3)}`,
+  );
+  check(
+    '17 2단계 fulfil < 1 (소공원으로는 안 된다)',
+    fulfil(1) < 1 && near(fulfil(1), mini / AMENITY_NEED_BY_TIER[1], 0.05),
+    `${fulfil(1).toFixed(3)}`,
+  );
+  check(
+    '17 3단계 fulfil 이 2단계보다 더 낮다 (고소득이 가장 까다롭다)',
     fulfil(2) < fulfil(1) && near(fulfil(2), mini / AMENITY_NEED_BY_TIER[2], 0.05),
-    `${fulfil(2).toFixed(3)}`);
+    `${fulfil(2).toFixed(3)}`,
+  );
 
   // 2장의 세 줄이 실제 거리로 재현되는가 — 이게 복지 설계의 핵심이다.
   const radiusFor = (kind: number, need: number): number => {
@@ -581,16 +634,25 @@ console.log('5. 복지 — 계층별 요구');
   console.log(
     `     충족 반경: 소공원->저소득 ${miniLow.toFixed(1)}칸 · 공원->중산층 ${parkMid.toFixed(1)}칸`,
   );
-  check('17 소공원이 저소득을 "걸어갈 만한" 거리에서 채운다', miniLow >= 3,
-    `${miniLow.toFixed(1)}칸`);
+  check(
+    '17 소공원이 저소득을 "걸어갈 만한" 거리에서 채운다',
+    miniLow >= 3,
+    `${miniLow.toFixed(1)}칸`,
+  );
   check('17 공원이 중산층을 "동네" 규모로 채운다', parkMid >= 5, `${parkMid.toFixed(1)}칸`);
-  check('17 소공원으로는 중산층을 못 채운다',
-    FACILITY_SPECS[FAC_MINIPARK].strength < AMENITY_NEED_BY_TIER[1]);
-  check('17 공원 하나로는 고소득을 못 채운다',
-    FACILITY_SPECS[FAC_PARK].strength < AMENITY_NEED_BY_TIER[2]);
-  check('17 공원 + 체육시설이 겹쳐야 고소득이 채워진다',
+  check(
+    '17 소공원으로는 중산층을 못 채운다',
+    FACILITY_SPECS[FAC_MINIPARK].strength < AMENITY_NEED_BY_TIER[1],
+  );
+  check(
+    '17 공원 하나로는 고소득을 못 채운다',
+    FACILITY_SPECS[FAC_PARK].strength < AMENITY_NEED_BY_TIER[2],
+  );
+  check(
+    '17 공원 + 체육시설이 겹쳐야 고소득이 채워진다',
     FACILITY_SPECS[FAC_PARK].strength + FACILITY_SPECS[FAC_SPORTS].strength >=
-      AMENITY_NEED_BY_TIER[2]);
+      AMENITY_NEED_BY_TIER[2],
+  );
 
   // 17c. 유예 — 인구가 SERVICE_GRACE_POP 미만이면 복지 감점도 0 이다
   const smallTownGap = AMENITY_GAP_MAX * 1 * ZONE_AMENITY_MUL[ZONE_R] * graceFactor(100);
@@ -618,8 +680,7 @@ console.log('5. 복지 — 계층별 요구');
     if (Math.abs(got - want) > 1 / 40 + 1e-6) linear = false;
   }
   check('18 반경 안이 거리에 따라 선형으로 줄어든다', linear);
-  check('18 반경 밖은 정확히 0',
-    field.amenityScoreAt(ox + 20 + spec.range + 1, oy + 20) === 0);
+  check('18 반경 밖은 정확히 0', field.amenityScoreAt(ox + 20 + spec.range + 1, oy + 20) === 0);
 }
 
 {
@@ -631,9 +692,11 @@ console.log('5. 복지 — 계층별 요구');
   world.placeFacility(ox + 8, oy + 5, FAC_MINIPARK, 0);
   const field = new ServiceField();
   field.rebuild(world);
-  check('19 물 건너에도 복지 점수가 간다 (유클리드)',
+  check(
+    '19 물 건너에도 복지 점수가 간다 (유클리드)',
     field.amenityScoreAt(ox + 14, oy + 5) > 0,
-    `${field.amenityScoreAt(ox + 14, oy + 5).toFixed(3)}`);
+    `${field.amenityScoreAt(ox + 14, oy + 5).toFixed(3)}`,
+  );
 }
 
 {
@@ -655,8 +718,11 @@ console.log('5. 복지 — 계층별 요구');
       max = Math.max(max, field.amenityScoreAt(bx + dx, by + dy));
     }
   }
-  check('20 amenityForBuilding 이 최댓값이 아니라 평균을 준다', avg < max && avg > 0,
-    `avg=${avg.toFixed(3)} max=${max.toFixed(3)}`);
+  check(
+    '20 amenityForBuilding 이 최댓값이 아니라 평균을 준다',
+    avg < max && avg > 0,
+    `avg=${avg.toFixed(3)} max=${max.toFixed(3)}`,
+  );
 }
 
 {
@@ -681,9 +747,15 @@ console.log('5. 복지 — 계층별 요구');
   for (let i = 2; i < onCurve.length; i++) {
     if (onCurve[i] - onCurve[i - 1] >= onCurve[i - 1] - onCurve[i - 2]) shrinking = false;
   }
-  check('21 초과 구간에서 증가폭이 매번 줄어든다 (포화 곡선)', shrinking && onCurve.length >= 3,
-    `${onCurve.map((b) => b.toFixed(4)).join(' / ')}`);
-  check('21 상한을 넘지 않는다', bonuses.every((b) => b < AMENITY_SURPLUS_MAX));
+  check(
+    '21 초과 구간에서 증가폭이 매번 줄어든다 (포화 곡선)',
+    shrinking && onCurve.length >= 3,
+    `${onCurve.map((b) => b.toFixed(4)).join(' / ')}`,
+  );
+  check(
+    '21 상한을 넘지 않는다',
+    bonuses.every((b) => b < AMENITY_SURPLUS_MAX),
+  );
   check('21 요구를 못 넘기면 보너스가 0 (요구가 주인공이다)', bonuses[0] === 0);
 }
 
@@ -779,10 +851,16 @@ console.log('6. 통합');
     `     입주율 ${(before * 100).toFixed(1)}% -> ${(after * 100).toFixed(1)}% · ` +
       `인구 ${popBefore.toFixed(0)} -> ${sim.stats.population.toFixed(0)}`,
   );
-  check('23 필수 시설을 놓으면 입주율이 회복된다', after >= before - 1e-9,
-    `${(before * 100).toFixed(2)}% -> ${(after * 100).toFixed(2)}%`);
+  check(
+    '23 필수 시설을 놓으면 입주율이 회복된다',
+    after >= before - 1e-9,
+    `${(before * 100).toFixed(2)}% -> ${(after * 100).toFixed(2)}%`,
+  );
   check('23 인구가 줄지 않는다', sim.stats.population >= popBefore - 1e-9);
-  check('23 커버율이 0 보다 커진다', sim.stats.serviceCoverage.some((v) => v > 0));
+  check(
+    '23 커버율이 0 보다 커진다',
+    sim.stats.serviceCoverage.some((v) => v > 0),
+  );
 }
 
 {
@@ -790,13 +868,19 @@ console.log('6. 통합');
   //     (6장 밸런스 표 세 번째 줄)
   const commute = 0.85;
   const base = 0.35 + 0.65 * commute; // 0.9025
-  const halfService = 0.20;
+  const halfService = 0.2;
   const withoutPark = base - Math.min(NEEDS_PENALTY_MAX, halfService + AMENITY_GAP_MAX);
   const withPark = base - Math.min(NEEDS_PENALTY_MAX, halfService + 0);
-  check('24 공원이 없으면 주거 3단계가 기준선에 못 미친다',
-    withoutPark <= SATISFACTION_FLOOR[2], `${withoutPark.toFixed(3)}`);
-  check('24 공원을 채우면 주거 3단계가 열린다',
-    withPark > SATISFACTION_FLOOR[2], `${withPark.toFixed(3)} (기대 0.703)`);
+  check(
+    '24 공원이 없으면 주거 3단계가 기준선에 못 미친다',
+    withoutPark <= SATISFACTION_FLOOR[2],
+    `${withoutPark.toFixed(3)}`,
+  );
+  check(
+    '24 공원을 채우면 주거 3단계가 열린다',
+    withPark > SATISFACTION_FLOOR[2],
+    `${withPark.toFixed(3)} (기대 0.703)`,
+  );
   check('24 기대값 0.703 과 일치', near(withPark, 0.7025, 0.002));
 }
 
@@ -874,8 +958,11 @@ console.log('6. 통합');
         `grace ${graceFactor(sim.stats.population).toFixed(2)}`,
     );
   }
-  check('25b 인구가 0 이 되지 않는다 (하강 나선이 스스로 멈춘다)', sim.stats.population > 0,
-    `최저 ${lowest.toFixed(0)}`);
+  check(
+    '25b 인구가 0 이 되지 않는다 (하강 나선이 스스로 멈춘다)',
+    sim.stats.population > 0,
+    `최저 ${lowest.toFixed(0)}`,
+  );
 
   /*
    * 재건 뒤 회복은 **3.3 이 직접 만들어내는 신호로 잰다** — 커버율과 복지 충족률.
@@ -895,8 +982,10 @@ console.log('6. 통합');
       `커버율 [${sim.stats.serviceCoverage.map((v) => (v * 100).toFixed(0)).join(',')}] · ` +
       `복지 충족 ${(sim.stats.amenityFulfilled * 100).toFixed(0)}%`,
   );
-  check('25b 시설을 다시 지으면 커버리지가 돌아온다',
-    sim.stats.serviceCoverage.every((v) => v > 0));
+  check(
+    '25b 시설을 다시 지으면 커버리지가 돌아온다',
+    sim.stats.serviceCoverage.every((v) => v > 0),
+  );
   check('25b 시설을 다시 지으면 복지 충족률이 돌아온다', sim.stats.amenityFulfilled > 0);
   check('25b 재건 뒤에도 도시가 살아 있다', sim.stats.population > 0);
 }
@@ -932,10 +1021,16 @@ console.log('6. 통합');
   check('26 저장 왕복에서 7종 시설이 그대로 복원된다', same);
 
   recountParcel(p);
-  check('26 recountParcel 뒤 emptyPlots 가 그대로', p.emptyPlots === emptyBefore,
-    `${p.emptyPlots} vs ${emptyBefore}`);
-  check('26 recountParcel 뒤 buildingCount 가 그대로 (시설을 안 센다)',
-    p.buildingCount === buildingsBefore, `${p.buildingCount} vs ${buildingsBefore}`);
+  check(
+    '26 recountParcel 뒤 emptyPlots 가 그대로',
+    p.emptyPlots === emptyBefore,
+    `${p.emptyPlots} vs ${emptyBefore}`,
+  );
+  check(
+    '26 recountParcel 뒤 buildingCount 가 그대로 (시설을 안 센다)',
+    p.buildingCount === buildingsBefore,
+    `${p.buildingCount} vs ${buildingsBefore}`,
+  );
 }
 
 {
@@ -948,10 +1043,16 @@ console.log('6. 통합');
     if (!p.bld) continue;
     for (let i = 0; i < p.bld.length; i++) if (isFacilityAnchor(p.bld[i])) anyFacility = true;
   }
-  check('27 시설 없는 도시가 그대로 돈다', !anyFacility && sim.stats.population > 0,
-    `인구 ${sim.stats.population.toFixed(0)}`);
+  check(
+    '27 시설 없는 도시가 그대로 돈다',
+    !anyFacility && sim.stats.population > 0,
+    `인구 ${sim.stats.population.toFixed(0)}`,
+  );
   check('27 시설이 없으면 유지비도 0', sim.stats.facilityUpkeep === 0);
-  check('27 커버율이 전부 0', sim.stats.serviceCoverage.every((v) => v === 0));
+  check(
+    '27 커버율이 전부 0',
+    sim.stats.serviceCoverage.every((v) => v === 0),
+  );
   // 참조를 유지해 번들러가 상수를 지우지 않게 한다.
   void [ZONE_C, ZONE_I, ox, oy];
 }

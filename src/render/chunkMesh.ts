@@ -1,11 +1,5 @@
 import { Mesh, MeshGeometry } from 'pixi.js';
-import {
-  CHUNK_SIZE,
-  CHUNK_TILES,
-  HEIGHT_UNIT,
-  TILE_HH,
-  TILE_HW,
-} from '../core/constants';
+import { CHUNK_SIZE, CHUNK_TILES, HEIGHT_UNIT, TILE_HH, TILE_HW } from '../core/constants';
 import { tileToWorldX, tileToWorldY } from '../core/iso';
 import type { TopResolver } from '../world/build';
 import type { EdgeWall, SlopeSampler } from '../world/slope';
@@ -150,10 +144,14 @@ export class ChunkMesh {
         const cBR = -(s.zc + s.dzx - h) * HEIGHT_UNIT;
         const cBL = -(s.zc + s.dzy - h) * HEIGHT_UNIT;
         const top = [
-          cx - TILE_HW, cy - TILE_HH + cTL,
-          cx + TILE_HW, cy - TILE_HH + cTR,
-          cx + TILE_HW, cy + TILE_HH + cBR,
-          cx - TILE_HW, cy + TILE_HH + cBL,
+          cx - TILE_HW,
+          cy - TILE_HH + cTL,
+          cx + TILE_HW,
+          cy - TILE_HH + cTR,
+          cx + TILE_HW,
+          cy + TILE_HH + cBR,
+          cx - TILE_HW,
+          cy + TILE_HH + cBL,
         ];
         writeQuad(positions, q, top);
         if (h > 0) writeQuad(positions, q + 1, top);
@@ -239,9 +237,7 @@ export class ChunkMesh {
     writeQuad(
       this.uvs,
       quad,
-      isRight
-        ? [u0, vm, u1, v0, u1, vm, u0, v1]
-        : [u0, v0, u1, vm, u1, v1, u0, vm],
+      isRight ? [u0, vm, u1, v0, u1, vm, u0, v1] : [u0, v0, u1, vm, u1, v1, u0, vm],
     );
     this.uvDirty = true;
   }
@@ -310,9 +306,13 @@ function writeWallQuad(
   const b0 = wall.topB + (wall.botB - wall.topB) * t0;
   const b1 = wall.topB + (wall.botB - wall.topB) * t1;
   writeQuad(target, quad, [
-    ax, base + ay - a0 * HEIGHT_UNIT,
-    bx, base + by - b0 * HEIGHT_UNIT,
-    bx, base + by - b1 * HEIGHT_UNIT,
-    ax, base + ay - a1 * HEIGHT_UNIT,
+    ax,
+    base + ay - a0 * HEIGHT_UNIT,
+    bx,
+    base + by - b0 * HEIGHT_UNIT,
+    bx,
+    base + by - b1 * HEIGHT_UNIT,
+    ax,
+    base + ay - a1 * HEIGHT_UNIT,
   ]);
 }

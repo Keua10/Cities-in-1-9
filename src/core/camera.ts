@@ -1,11 +1,5 @@
 import type { Container } from 'pixi.js';
-import {
-  DEFAULT_ZOOM,
-  MAX_ZOOM,
-  MIN_ZOOM,
-  PAN_FRICTION,
-  PAN_MIN_SPEED,
-} from './constants';
+import { DEFAULT_ZOOM, MAX_ZOOM, MIN_ZOOM, PAN_FRICTION, PAN_MIN_SPEED } from './constants';
 import type { Bounds } from './iso';
 
 /**

@@ -1,6 +1,6 @@
+import type { World } from '../world/world';
 import { HEIGHT_UNIT, MAX_HEIGHT } from './constants';
 import { worldToTileF } from './iso';
-import type { World } from '../world/world';
 
 /**
  * 화면(월드 좌표)에서 실제로 눌린 타일을 찾는다.
@@ -15,41 +15,20 @@ import type { World } from '../world/world';
  * 고도가 있으면 높이 h 인 타일의 윗면은 화면에서 HEIGHT_UNIT * h 만큼 위로
  * 올라가 있으므로, 클릭 지점을 같은 양만큼 아래로 되돌린 뒤 후보 타일을 찾는다.
  */
-export function pickTile(
-  world: World,
-  wx: number,
-  wy: number,
-): { tx: number; ty: number } {
+export function pickTile(world: World, wx: number, wy: number): { tx: number; ty: number } {
   for (let h = MAX_HEIGHT; h > 0; h--) {
-    const t = nearestTile(
-      wx,
-      wy + h * HEIGHT_UNIT,
-    );
+    const t = nearestTile(wx, wy + h * HEIGHT_UNIT);
 
-    if (
-      world.getHeight(
-        t.tx,
-        t.ty,
-      ) === h
-    ) {
+    if (world.getHeight(t.tx, t.ty) === h) {
       return t;
     }
   }
 
-  return nearestTile(
-    wx,
-    wy,
-  );
+  return nearestTile(wx, wy);
 }
 
-function nearestTile(
-  wx: number,
-  wy: number,
-): { tx: number; ty: number } {
-  const f = worldToTileF(
-    wx,
-    wy,
-  );
+function nearestTile(wx: number, wy: number): { tx: number; ty: number } {
+  const f = worldToTileF(wx, wy);
 
   return {
     tx: Math.round(f.tx),

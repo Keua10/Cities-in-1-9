@@ -1,4 +1,5 @@
 import { Container, Graphics } from 'pixi.js';
+import type { Camera } from '../core/camera';
 import {
   BASE_CHUNK_SPAN,
   CHUNK_MESH_BUDGET,
@@ -9,7 +10,6 @@ import {
   TILE_HH,
   TILE_HW,
 } from '../core/constants';
-import type { Camera } from '../core/camera';
 import {
   chunkIndexOf,
   chunkKey,
@@ -18,25 +18,25 @@ import {
   tileToWorldY,
   visibleChunkRange,
 } from '../core/iso';
+import type { DisasterSim } from '../sim/disasters';
+import { FACILITY_SPECS } from '../sim/facilities';
+import { laneIsTurning } from '../sim/traffic/laneGeometry';
+import type { TrafficSim } from '../sim/traffic/trafficSim';
+import type { Vehicle } from '../sim/traffic/vehicles';
 import { Build, DIRS, makeTopResolver, type TopResolver } from '../world/build';
 import { makeSlopeSampler, surfaceAt, type SlopeSampler } from '../world/slope';
 import type { World } from '../world/world';
 import type { TileAtlas } from './atlas';
 import type { BuildingAtlas } from './buildingAtlas';
 import { BuildingMesh } from './buildingMesh';
+import { ChunkMesh } from './chunkMesh';
 import type { FacilityAtlas } from './facilityAtlas';
 import { FacilityMesh } from './facilityMesh';
-import { FACILITY_SPECS } from '../sim/facilities';
-import type { TrafficSim } from '../sim/traffic/trafficSim';
+import { IncidentLayer } from './incidentLayer';
+import { ParcelMeshLayer } from './parcelMeshLayer';
+import { SignalLayer } from './signalLayer';
 import type { VehicleAtlas } from './vehicleAtlas';
 import { VehicleMesh } from './vehicleMesh';
-import { SignalState, signalState } from '../sim/traffic/signals';
-import { laneIsTurning } from '../sim/traffic/laneGeometry';
-import { JUNCTION_LEG_MIN_TILES } from '../sim/simConstants';
-import type { Vehicle } from '../sim/traffic/vehicles';
-import { ChunkMesh } from './chunkMesh';
-import { IncidentLayer } from './incidentLayer';
-import type { DisasterSim } from '../sim/disasters';
 
 export interface RenderStats {
   visibleChunks: number;
@@ -85,7 +85,7 @@ export class WorldRenderer {
   private cursorLayer = new Graphics();
   /** 시설 배치 미리보기 사각형. 커서 레이어와 따로 둬야 서로 지우지 않는다. */
   private previewLayer = new Graphics();
-  private signalLayer = new Graphics();
+  private signalLayer = new SignalLayer();
   private incidentLayer = new IncidentLayer();
   private disasters: DisasterSim | null = null;
   private lastSignalDrawMs = -1;
@@ -96,12 +96,12 @@ export class WorldRenderer {
    * 그러면 자기 청크 지형 위, 다음 청크 지형 아래에 그려져서 앞쪽 청크의 언덕이
    * 뒤쪽 청크의 건물을 제대로 가린다.
    */
-  private buildings = new Map<string, BuildingMesh>();
+  private buildings: ParcelMeshLayer;
   /**
    * 시설 메시. 건물과 텍스처가 달라 합칠 수 없으므로 메시가 하나 늘어난다.
    * 시설이 하나도 없는 청크에는 아예 만들지 않으므로 대부분의 청크는 그대로다.
    */
-  private facilities = new Map<string, FacilityMesh>();
+  private facilities: ParcelMeshLayer;
   private vehicleMeshes = new Map<string, VehicleMesh>();
   private turningVehicleMesh: VehicleMesh | null = null;
   private traffic: TrafficSim | null = null;
@@ -134,7 +134,7 @@ export class WorldRenderer {
       this.groundLayer,
       this.turningVehicleLayer,
       this.fogLayer,
-      this.signalLayer,
+      this.signalLayer.graphics,
       this.incidentLayer.graphics,
       this.gridLayer,
       this.cursorLayer,
@@ -147,11 +147,27 @@ export class WorldRenderer {
     this.groundLayer.sortableChildren = true;
     this.sampleHeight = (tx, ty) => this.world.sampleHeight(tx, ty);
     this.resolveTop = makeTopResolver(world);
+    this.buildings = new ParcelMeshLayer(
+      this.groundLayer,
+      (p) => new BuildingMesh(p, this.buildingAtlas, this.sampleHeight),
+      0.5,
+    );
+    this.facilities = new ParcelMeshLayer(
+      this.groundLayer,
+      (p) => new FacilityMesh(p, this.facilityAtlas, this.sampleHeight),
+      0.6,
+      true,
+    );
     this.slope = makeSlopeSampler(world);
   }
 
-  attachTraffic(traffic: TrafficSim, atlas: VehicleAtlas): void { this.traffic = traffic; this.vehicleAtlas = atlas; }
-  attachDisasters(sim: DisasterSim): void { this.disasters = sim; }
+  attachTraffic(traffic: TrafficSim, atlas: VehicleAtlas): void {
+    this.traffic = traffic;
+    this.vehicleAtlas = atlas;
+  }
+  attachDisasters(sim: DisasterSim): void {
+    this.disasters = sim;
+  }
 
   private sampleHeight: (tx: number, ty: number) => number;
   private resolveTop: TopResolver;
@@ -298,12 +314,13 @@ export class WorldRenderer {
     }
 
     this.evict(now, range);
-    for (const key of [...this.vehicleMeshes.keys()]) if (!usedVehicleMeshes.has(key)) this.dropVehicles(key);
+    for (const key of [...this.vehicleMeshes.keys()])
+      if (!usedVehicleMeshes.has(key)) this.dropVehicles(key);
     this.updateTurningVehicles(turningVehicles);
 
     if (this.lastSignalDrawMs < 0 || now - this.lastSignalDrawMs >= 120) {
       this.lastSignalDrawMs = now;
-      this.drawSignals(range);
+      this.signalLayer.draw(this.world, this.traffic, this.showFog, range);
       if (this.disasters) this.incidentLayer.draw(this.world, this.disasters, range);
     }
 
@@ -364,44 +381,6 @@ export class WorldRenderer {
    * 그래서 폭 2타일 도로를 깔면 도로 전체에 신호등이 깔려 보였다. 지금은
    * 진짜 교차로에만, 그것도 차가 들어오는 방향 쪽에 등이 하나씩 붙는다.
    */
-  private drawSignals(range: { cx0: number; cy0: number; cx1: number; cy1: number }): void {
-    this.signalLayer.clear();
-    if (!this.traffic) return;
-    const signalTime = this.traffic.signalTimeMs;
-    const tx0 = range.cx0 * CHUNK_SIZE;
-    const ty0 = range.cy0 * CHUNK_SIZE;
-    const tx1 = (range.cx1 + 1) * CHUNK_SIZE - 1;
-    const ty1 = (range.cy1 + 1) * CHUNK_SIZE - 1;
-
-    for (const junction of this.traffic.junctions.junctions) {
-      if (!junction.signalized) continue;
-      if (junction.maxX < tx0 || junction.minX > tx1) continue;
-      if (junction.maxY < ty0 || junction.minY > ty1) continue;
-      if (this.showFog && !this.world.isExplored(chunkIndexOf(junction.minX), chunkIndexOf(junction.minY))) {
-        continue;
-      }
-      const cx = (junction.minX + junction.maxX) / 2;
-      const cy = (junction.minY + junction.maxY) / 2;
-      for (const leg of junction.legs) {
-        if (leg.length < JUNCTION_LEG_MIN_TILES) continue;
-        const dir = DIRS[leg.enterDir];
-        // 진입 방향의 반대쪽(=운전자가 보는 맞은편)에 등을 세운다.
-        const spanX = (junction.maxX - junction.minX + 1) / 2 + 0.55;
-        const spanY = (junction.maxY - junction.minY + 1) / 2 + 0.55;
-        const lx = cx + dir[0] * spanX;
-        const ly = cy + dir[1] * spanY;
-        const x = tileToWorldX(lx, ly);
-        const y = tileToWorldY(lx, ly, this.world.sampleHeight(junction.minX, junction.minY));
-        const state = signalState(junction, leg.enterDir, signalTime);
-        const color = state === SignalState.Green
-          ? 0x6fe27e
-          : state === SignalState.Yellow
-            ? 0xe8c15a
-            : 0xe25f5f;
-        this.signalLayer.rect(x - 2.5, y - 15, 5, 5).fill({ color, alpha: 0.95 });
-      }
-    }
-  }
 
   private ensureMesh(key: string, cx: number, cy: number): ChunkMesh {
     let mesh = this.meshes.get(key);
@@ -442,23 +421,7 @@ export class WorldRenderer {
    * 다시 구워도 부담이 없다.
    */
   private ensureBuildings(key: string, cx: number, cy: number): number {
-    const parcel = this.world.peekParcel(cx, cy);
-    if (!parcel || !parcel.bld) {
-      this.dropBuildings(key);
-      return 0;
-    }
-    let bm = this.buildings.get(key);
-    if (bm && bm.needsRebuild(parcel)) {
-      this.dropBuildings(key);
-      bm = undefined;
-    }
-    if (!bm) {
-      bm = new BuildingMesh(parcel, this.buildingAtlas, this.sampleHeight);
-      bm.mesh.zIndex = cx + cy + 0.5;
-      this.buildings.set(key, bm);
-      this.groundLayer.addChild(bm.mesh);
-    }
-    return bm.count;
+    return this.buildings.ensure(key, this.world.peekParcel(cx, cy));
   }
 
   /**
@@ -467,41 +430,14 @@ export class WorldRenderer {
    * 없으므로 드로우콜이 그대로 유지된다.
    */
   private ensureFacilities(key: string, cx: number, cy: number): number {
-    const parcel = this.world.peekParcel(cx, cy);
-    if (!parcel || !parcel.bld) {
-      this.dropFacilities(key);
-      return 0;
-    }
-    let fm = this.facilities.get(key);
-    if (fm && fm.needsRebuild(parcel)) {
-      this.dropFacilities(key);
-      fm = undefined;
-    }
-    if (!fm) {
-      fm = new FacilityMesh(parcel, this.facilityAtlas, this.sampleHeight);
-      if (fm.count === 0) {
-        // 시설이 없는 청크. 만들자마자 버려서 씬 그래프에 안 남긴다.
-        fm.destroy();
-        return 0;
-      }
-      // 지구 건물보다 조금 앞에 둔다. 같은 칸에 둘 다 설 일은 없지만
-      // 큰 시설이 뒤쪽 건물에 가리면 안 된다.
-      fm.mesh.zIndex = cx + cy + 0.6;
-      this.facilities.set(key, fm);
-      this.groundLayer.addChild(fm.mesh);
-    }
-    return fm.count;
+    return this.facilities.ensure(key, this.world.peekParcel(cx, cy));
   }
 
   private dropFacilities(key: string): void {
-    const fm = this.facilities.get(key);
-    if (!fm) return;
-    this.groundLayer.removeChild(fm.mesh);
-    fm.destroy();
-    this.facilities.delete(key);
+    this.facilities.drop(key);
   }
 
-  private ensureVehicles(key: string, cx: number, cy: number, vehicles: readonly import('../sim/traffic/vehicles').Vehicle[]): void {
+  private ensureVehicles(key: string, cx: number, cy: number, vehicles: readonly Vehicle[]): void {
     if (!this.vehicleAtlas) return;
     let vm = this.vehicleMeshes.get(key);
     if (!vm) {
@@ -535,11 +471,7 @@ export class WorldRenderer {
   }
 
   private dropBuildings(key: string): void {
-    const bm = this.buildings.get(key);
-    if (!bm) return;
-    this.groundLayer.removeChild(bm.mesh);
-    bm.destroy();
-    this.buildings.delete(key);
+    this.buildings.drop(key);
   }
 
   private ensureFog(key: string, cx: number, cy: number): void {
@@ -562,10 +494,7 @@ export class WorldRenderer {
   }
 
   /** 화면 밖 청크를 오래된 순으로 버린다. */
-  private evict(
-    now: number,
-    range: { cx0: number; cy0: number; cx1: number; cy1: number },
-  ): void {
+  private evict(now: number, range: { cx0: number; cy0: number; cx1: number; cy1: number }): void {
     if (this.meshes.size <= CHUNK_MESH_BUDGET) return;
     const stale = [...this.meshes.entries()]
       .filter(([, m]) => m.lastUsed !== now)
@@ -651,20 +580,19 @@ export class WorldRenderer {
  * 타일 윗면 마름모의 화면 좌표. 경사 도로면 네 꼭짓점이 지면 평면을 따라 기운다.
  * chunkMesh 의 정점 계산과 같은 식을 쓴다 — 두 곳이 갈라지면 커서만 어긋난다.
  */
-function surfaceDiamond(
-  world: World,
-  tx: number,
-  ty: number,
-  x: number,
-): number[] {
+function surfaceDiamond(world: World, tx: number, ty: number, x: number): number[] {
   const s = surfaceAt(world, tx, ty);
   const y = tileToWorldY(tx, ty, s.zc);
   const dx = (s.dzx * HEIGHT_UNIT) / 2;
   const dy = (s.dzy * HEIGHT_UNIT) / 2;
   return [
-    x, y - TILE_HH + dx + dy,
-    x + TILE_HW, y - dx + dy,
-    x, y + TILE_HH - dx - dy,
-    x - TILE_HW, y + dx - dy,
+    x,
+    y - TILE_HH + dx + dy,
+    x + TILE_HW,
+    y - dx + dy,
+    x,
+    y + TILE_HH - dx - dy,
+    x - TILE_HW,
+    y + dx - dy,
   ];
 }

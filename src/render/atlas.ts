@@ -4,11 +4,11 @@ import {
   ATLAS_CELL_W,
   ATLAS_COLUMNS,
   ATLAS_PAD,
+  MAX_HEIGHT,
   TILE_H,
   TILE_HH,
   TILE_HW,
   TILE_W,
-  MAX_HEIGHT,
   WALL_ART,
 } from '../core/constants';
 import { Terrain, TERRAIN_COLORS, TERRAIN_COUNT } from '../world/terrain';
@@ -143,12 +143,7 @@ export async function loadTileAtlas(): Promise<TileAtlas> {
       const row = Math.floor(index / columns);
       const x = col * ATLAS_CELL_W + ATLAS_PAD;
       const y = row * ATLAS_CELL_H + ATLAS_PAD;
-      return [
-        x / width,
-        y / height,
-        (x + WALL_ART) / width,
-        (y + WALL_ART) / height,
-      ];
+      return [x / width, y / height, (x + WALL_ART) / width, (y + WALL_ART) / height];
     },
   };
 }
@@ -278,12 +273,7 @@ function drawIsoDiamond(
 }
 
 /** 정사각형 십자 대신 두 아이소 축으로 벌어지는 V자형 풀잎. */
-function drawIsoTuft(
-  ctx: CanvasRenderingContext2D,
-  cx: number,
-  cy: number,
-  color: string,
-): void {
+function drawIsoTuft(ctx: CanvasRenderingContext2D, cx: number, cy: number, color: string): void {
   ctx.fillStyle = color;
   ctx.fillRect(cx, cy - 2, 2, 1);
   ctx.fillRect(cx - 2, cy - 1, 2, 1);

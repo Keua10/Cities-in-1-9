@@ -10,11 +10,7 @@ import {
 } from './buildings';
 import { FACILITY_SPECS, touchesRoadTiles } from './facilities';
 import { edgeNeighbors } from './roadGraph';
-import {
-  AMENITY_SCORE_SCALE,
-  OVERLOAD_SLOPE,
-  SERVICE_FIELD_MAX_DIST,
-} from './simConstants';
+import { AMENITY_SCORE_SCALE, OVERLOAD_SLOPE, SERVICE_FIELD_MAX_DIST } from './simConstants';
 
 /**
  * 3.3단계의 심장. **한 클래스가 두 가족을 모두 들고 있다.**
@@ -444,13 +440,7 @@ export class ServiceField {
   }
 
   /** 더 가까울 때만 쓴다. 실제로 썼으면 true(= 큐에 넣어야 한다). */
-  private write(
-    tx: number,
-    ty: number,
-    kind: number,
-    dist: number,
-    owner: number,
-  ): boolean {
+  private write(tx: number, ty: number, kind: number, dist: number, owner: number): boolean {
     const c = this.chunks.get(chunkKey(chunkIndexOf(tx), chunkIndexOf(ty)));
     const d = c?.dist[kind];
     const o = c?.owner[kind];
@@ -522,8 +512,7 @@ export class ServiceField {
           if (d > r) continue;
           const arr = acc.get(chunkKey(chunkIndexOf(tx), chunkIndexOf(ty)));
           if (!arr) continue; // 개발되지 않은 청크에는 격자가 없다
-          arr[localIndexOf(ty) * CHUNK_SIZE + localIndexOf(tx)] +=
-            spec.strength * (1 - d / r);
+          arr[localIndexOf(ty) * CHUNK_SIZE + localIndexOf(tx)] += spec.strength * (1 - d / r);
         }
       }
     }

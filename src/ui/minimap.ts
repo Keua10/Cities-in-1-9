@@ -1,11 +1,11 @@
-import './minimap.css';
 import type { Camera } from '../core/camera';
 import { CHUNK_SIZE } from '../core/constants';
 import { parseChunkKey, tileToWorldX, tileToWorldY, worldToTileF } from '../core/iso';
-import type { World } from '../world/world';
-import { Build } from '../world/build';
 import { isWelfareKind } from '../sim/buildings';
 import type { ServiceField } from '../sim/services';
+import { Build } from '../world/build';
+import type { World } from '../world/world';
+import './minimap.css';
 
 /**
  * 시설 도구를 든 동안 미니맵에 얹는 레이어.
@@ -271,11 +271,15 @@ export class Minimap {
   }
 
   private mapX(tx: number): number {
-    return ((tx - this.bounds.minTx) / Math.max(1, this.bounds.maxTx - this.bounds.minTx)) * MAP_RES;
+    return (
+      ((tx - this.bounds.minTx) / Math.max(1, this.bounds.maxTx - this.bounds.minTx)) * MAP_RES
+    );
   }
 
   private mapY(ty: number): number {
-    return ((ty - this.bounds.minTy) / Math.max(1, this.bounds.maxTy - this.bounds.minTy)) * MAP_RES;
+    return (
+      ((ty - this.bounds.minTy) / Math.max(1, this.bounds.maxTy - this.bounds.minTy)) * MAP_RES
+    );
   }
 }
 

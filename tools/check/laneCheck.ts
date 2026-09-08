@@ -30,7 +30,12 @@ import {
   VEHICLE_VARIANTS,
 } from '../../src/render/vehicleAtlas';
 
-const DIRS: ReadonlyArray<readonly [number, number]> = [[1, 0], [0, 1], [-1, 0], [0, -1]];
+const DIRS: ReadonlyArray<readonly [number, number]> = [
+  [1, 0],
+  [0, 1],
+  [-1, 0],
+  [0, -1],
+];
 
 function route(points: ReadonlyArray<[number, number]>): Route {
   const flat: number[] = [];
@@ -93,10 +98,7 @@ for (let d = 0; d < 4; d++) {
     allRight,
     `마주보는 차 간격 ${minSeparation.toFixed(3)} 타일`,
   );
-  check(
-    `우측통행 dir=${d} 마주보는 차가 겹치지 않음 (>= 차체폭 0.30)`,
-    minSeparation >= 0.3,
-  );
+  check(`우측통행 dir=${d} 마주보는 차가 겹치지 않음 (>= 차체폭 0.30)`, minSeparation >= 0.3);
 }
 
 /* ---------------- 2. 코너 ---------------- */
@@ -105,7 +107,10 @@ for (let d = 0; d < 4; d++) {
 const rightTurn = route(line([0, 0], [4, 0]).concat(line([4, 1], [4, 4])));
 const leftTurn = route(line([0, 0], [4, 0]).concat(line([4, -1], [4, -4])));
 
-for (const [name, r] of [['우회전', rightTurn], ['좌회전', leftTurn]] as const) {
+for (const [name, r] of [
+  ['우회전', rightTurn],
+  ['좌회전', leftTurn],
+] as const) {
   let maxStep = 0;
   let prev: [number, number] | null = null;
   const samples = 400;
@@ -153,7 +158,10 @@ for (let s = 0; s <= 200; s++) {
   const i = Math.floor(t);
   facings.add(laneFacing(rightTurn, i, t - i));
 }
-check('우회전 중 스프라이트 방향이 진입/진출 두 방향을 모두 쓴다', facings.has(0) && facings.has(1));
+check(
+  '우회전 중 스프라이트 방향이 진입/진출 두 방향을 모두 쓴다',
+  facings.has(0) && facings.has(1),
+);
 
 // 접선이 항상 단위벡터인지
 let headingOk = true;
@@ -179,8 +187,14 @@ check('마주 오는 좌회전끼리는 충돌', movementsConflict(0, L(0), 2, L
 check('마주 오는 우회전끼리는 통과', !movementsConflict(0, R(0), 2, R(2)));
 check('직교 직진끼리는 충돌', movementsConflict(0, S(0), 1, S(1)));
 check('좌회전과 마주 오는 직진은 충돌', movementsConflict(0, L(0), 2, S(2)));
-check('좌회전과 마주 오는 우회전은 같은 차선으로 합류 -> 충돌', movementsConflict(0, L(0), 2, R(2)));
-check('같은 방향에서 들어오면 예약이 아니라 줄서기 (충돌 아님)', !movementsConflict(0, S(0), 0, R(0)));
+check(
+  '좌회전과 마주 오는 우회전은 같은 차선으로 합류 -> 충돌',
+  movementsConflict(0, L(0), 2, R(2)),
+);
+check(
+  '같은 방향에서 들어오면 예약이 아니라 줄서기 (충돌 아님)',
+  !movementsConflict(0, S(0), 0, R(0)),
+);
 // L자 굽은 길: 한쪽은 우회전, 반대쪽은 좌회전이지만 차선이 달라 서로 막지 않아야 한다.
 check('L자 코너에서 양방향이 서로 막지 않음', !movementsConflict(0, 1, 3, 2));
 
@@ -245,10 +259,22 @@ ctx.strokeStyle = '#c9a227';
 ctx.setLineDash([6, 6]);
 ctx.lineWidth = 1;
 for (const [a, b] of [
-  [[0, 6], [12, 6]],
-  [[6, 0], [6, 12]],
-  [[0, 12], [12, 12]],
-  [[12, 6], [12, 12]],
+  [
+    [0, 6],
+    [12, 6],
+  ],
+  [
+    [6, 0],
+    [6, 12],
+  ],
+  [
+    [0, 12],
+    [12, 12],
+  ],
+  [
+    [12, 6],
+    [12, 12],
+  ],
 ] as [number, number][][]) {
   const p0 = toScreen(a[0], a[1]);
   const p1 = toScreen(b[0], b[1]);
@@ -264,8 +290,16 @@ const scenarios: Array<{ r: Route; color: string; label: string }> = [
   { r: route(line([12, 6], [0, 6])), color: '#f6ad55', label: '서쪽으로 (-tx)' },
   { r: route(line([6, 0], [6, 12])), color: '#68d391', label: '남쪽으로 (+ty)' },
   { r: route(line([6, 12], [6, 0])), color: '#fc8181', label: '북쪽으로 (-ty)' },
-  { r: route(line([12, 6], [12, 12]).concat(line([11, 12], [0, 12]))), color: '#d6bcfa', label: '우회전 경로' },
-  { r: route(line([0, 12], [12, 12]).concat(line([12, 11], [12, 6]))), color: '#f687b3', label: '좌회전 경로' },
+  {
+    r: route(line([12, 6], [12, 12]).concat(line([11, 12], [0, 12]))),
+    color: '#d6bcfa',
+    label: '우회전 경로',
+  },
+  {
+    r: route(line([0, 12], [12, 12]).concat(line([12, 11], [12, 6]))),
+    color: '#f687b3',
+    label: '좌회전 경로',
+  },
 ];
 
 for (const { r, color } of scenarios) {
@@ -292,8 +326,14 @@ for (const { r, color } of scenarios) {
     const sc = toScreen(p[0], p[1]);
     ctx.drawImage(
       atlasCanvas,
-      facing * VEHICLE_VARIANTS * VEHICLE_CELL, 0, VEHICLE_CELL, VEHICLE_CELL,
-      sc[0] - VEHICLE_CELL / 2, sc[1] - VEHICLE_CELL / 2 - VEHICLE_GROUND_DROP_PX, VEHICLE_CELL, VEHICLE_CELL,
+      facing * VEHICLE_VARIANTS * VEHICLE_CELL,
+      0,
+      VEHICLE_CELL,
+      VEHICLE_CELL,
+      sc[0] - VEHICLE_CELL / 2,
+      sc[1] - VEHICLE_CELL / 2 - VEHICLE_GROUND_DROP_PX,
+      VEHICLE_CELL,
+      VEHICLE_CELL,
     );
   }
 }

@@ -1,12 +1,5 @@
+import { LEVEL_COUNT, TIER_NAMES, ZONE_C, ZONE_I, ZONE_NAMES, ZONE_R } from '../sim/buildings';
 import type { MacroSim } from '../sim/macro';
-import {
-  LEVEL_COUNT,
-  TIER_NAMES,
-  ZONE_C,
-  ZONE_I,
-  ZONE_NAMES,
-  ZONE_R,
-} from '../sim/buildings';
 import { SERVICE_KIND_COUNT } from '../sim/services';
 import { FACILITY_NAMES, TICKS_PER_DAY } from '../sim/simConstants';
 
@@ -132,11 +125,12 @@ export class CityPanel {
     setText(this.safetyEl, `화재 ${fires} · 범죄 ${crimes} · 질병 ${illnesses}`);
     this.safetyEl.classList.toggle('active', fires + crimes + illnesses > 0);
     this.incidentButton.disabled = fires + crimes + illnesses === 0;
-    this.safetyNoteEl.textContent = fires > 0
-      ? '화재 건물은 비어 있습니다. 소방서의 도로 연결과 과부하를 확인하세요.'
-      : crimes + illnesses > 0
-        ? '범죄·질병으로 입주가 줄었습니다. 경찰서·병원 품질이 높을수록 빨리 회복합니다.'
-        : '진행 중인 사건이 없습니다. 소방서·경찰서·병원이 사고를 줄입니다.';
+    this.safetyNoteEl.textContent =
+      fires > 0
+        ? '화재 건물은 비어 있습니다. 소방서의 도로 연결과 과부하를 확인하세요.'
+        : crimes + illnesses > 0
+          ? '범죄·질병으로 입주가 줄었습니다. 경찰서·병원 품질이 높을수록 빨리 회복합니다.'
+          : '진행 중인 사건이 없습니다. 소방서·경찰서·병원이 사고를 줄입니다.';
     if (sim.disasters.burned || sim.disasters.extinguished) {
       this.safetyNoteEl.textContent += ` 누적 진압 ${sim.disasters.extinguished} · 전소 ${sim.disasters.burned}채`;
     }

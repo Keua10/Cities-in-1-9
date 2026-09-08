@@ -57,8 +57,7 @@ function showScreen(options: ScreenOptions): Promise<Session | null> {
     };
 
     if (options.offlineOnly) {
-      message.textContent =
-        '서버 설정이 없어 저장 없이 둘러보기만 할 수 있습니다.';
+      message.textContent = '서버 설정이 없어 저장 없이 둘러보기만 할 수 있습니다.';
       const browse = button('둘러보기', 'primary', () => finish(null));
       card.appendChild(browse);
       document.body.appendChild(overlay);
@@ -93,8 +92,7 @@ function showScreen(options: ScreenOptions): Promise<Session | null> {
       try {
         finish(await fn());
       } catch (err) {
-        error.textContent =
-          err instanceof AuthError ? err.message : '로그인에 실패했습니다.';
+        error.textContent = err instanceof AuthError ? err.message : '로그인에 실패했습니다.';
         if (!(err instanceof AuthError)) console.error(err);
         offerOffline();
         busy = false;
@@ -134,11 +132,7 @@ function showScreen(options: ScreenOptions): Promise<Session | null> {
   });
 }
 
-function field(
-  parent: HTMLElement,
-  label: string,
-  type: string,
-): HTMLInputElement {
+function field(parent: HTMLElement, label: string, type: string): HTMLInputElement {
   const wrap = document.createElement('label');
   wrap.className = 'login-field';
   const text = document.createElement('span');

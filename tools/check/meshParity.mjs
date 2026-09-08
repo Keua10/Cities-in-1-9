@@ -43,17 +43,37 @@ for(const count of [0,1,8,3,0]) {
 export default result;
 `;
 async function snapshot(original) {
-  const bundled = await build({ stdin:{contents:entry,resolveDir:resolve('.')},bundle:true,
-    platform:'node',format:'esm',write:false,plugins:[{name:'renderer-parity',setup(b){
-      b.onResolve({filter:/^pixi\.js$/},()=>({path:'pixi',namespace:'parity'}));
-      b.onLoad({filter:/.*/,namespace:'parity'},()=>({contents:stub,loader:'js'}));
-      if(original) b.onLoad({filter:/(buildingMesh|facilityMesh|vehicleMesh)\.ts$/},args=>({
-        contents:execFileSync('git',['show',baseline+':'+relative(resolve('.'),args.path).replaceAll('\\','/')],{encoding:'utf8'}),loader:'ts'}));
-    }}] });
+  const bundled = await build({
+    stdin: { contents: entry, resolveDir: resolve('.') },
+    bundle: true,
+    platform: 'node',
+    format: 'esm',
+    write: false,
+    plugins: [
+      {
+        name: 'renderer-parity',
+        setup(b) {
+          b.onResolve({ filter: /^pixi\.js$/ }, () => ({ path: 'pixi', namespace: 'parity' }));
+          b.onLoad({ filter: /.*/, namespace: 'parity' }, () => ({ contents: stub, loader: 'js' }));
+          if (original)
+            b.onLoad({ filter: /(buildingMesh|facilityMesh|vehicleMesh)\.ts$/ }, (args) => ({
+              contents: execFileSync(
+                'git',
+                ['show', baseline + ':' + relative(resolve('.'), args.path).replaceAll('\\', '/')],
+                { encoding: 'utf8' },
+              ),
+              loader: 'ts',
+            }));
+        },
+      },
+    ],
+  });
   mkdirSync('.check', { recursive: true });
   const output = resolve('.check', `mesh-parity-${original ? 'baseline' : 'current'}.mjs`);
   writeFileSync(output, bundled.outputFiles[0].text);
   return (await import(pathToFileURL(output).href)).default;
 }
-assert.deepEqual(await snapshot(false),await snapshot(true));
-console.log('PASS renderer parity: 17 populated/empty/negative-coordinate/vehicle-shrink snapshots; positions, UVs and indices identical');
+assert.deepEqual(await snapshot(false), await snapshot(true));
+console.log(
+  'PASS renderer parity: 17 populated/empty/negative-coordinate/vehicle-shrink snapshots; positions, UVs and indices identical',
+);

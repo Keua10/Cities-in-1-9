@@ -1,17 +1,11 @@
-import {
-  collection,
-  deleteDoc,
-  doc,
-  getDocs,
-  runTransaction,
-} from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDocs, runTransaction } from 'firebase/firestore';
 import { CHUNK_TILES, SCHEMA_VERSION } from '../core/constants';
-import { START_MONEY } from '../sim/simConstants';
 import { chunkKey } from '../core/iso';
+import { START_MONEY } from '../sim/simConstants';
 import type { ChunkOverride, ChunkSnapshot } from '../world/world';
+import type { Session } from './auth';
 import { decodeOverride, encodeOverride } from './codec';
 import { getFirebase } from './firebase';
-import type { Session } from './auth';
 import { emptyMacro, newSaveToken, type CityDoc, type MacroState } from './types';
 
 /** 다른 기기가 이 도시를 가져갔을 때 던진다. */

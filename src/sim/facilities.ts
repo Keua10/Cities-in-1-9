@@ -111,12 +111,7 @@ const OK: PlaceResult = { ok: true, reason: '' };
  * 거부 사유는 **학생이 읽을 문장으로** 돌려준다. 순서대로 검사한다.
  * 돈 검사(7번)는 여기서 하지 않는다 — 호출부가 MacroSim.spend 로 처리한다.
  */
-export function canPlaceFacility(
-  world: World,
-  tx: number,
-  ty: number,
-  kind: number,
-): PlaceResult {
+export function canPlaceFacility(world: World, tx: number, ty: number, kind: number): PlaceResult {
   if (!isFacilityKind(kind)) return { ok: false, reason: '없는 시설입니다' };
   const spec = FACILITY_SPECS[kind];
   const span = spec.span;
@@ -175,12 +170,7 @@ export function canPlaceFacility(
 }
 
 /** footprint 테두리에 도로가 한 칸이라도 닿아 있는가. */
-export function touchesRoadTiles(
-  world: World,
-  tx: number,
-  ty: number,
-  span: number,
-): boolean {
+export function touchesRoadTiles(world: World, tx: number, ty: number, span: number): boolean {
   for (const [rx, ry] of edgeNeighbors(tx, ty, span)) {
     if (world.getBuild(rx, ry) === Build.Road) return true;
   }

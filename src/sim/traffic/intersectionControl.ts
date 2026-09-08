@@ -7,19 +7,19 @@ import {
   EXIT_ROOM_TILES,
   GRIDLOCK_RELIEF_MS,
   LEFT_YIELD_LOOKAHEAD_TILES,
-  PRIORITY_AGING_PER_MS,
   PRIORITY_AGING_MAX,
+  PRIORITY_AGING_PER_MS,
   RED_RIGHT_STOP_DWELL_MS,
   RIGHT_ON_RED_GAP_TILES,
   YIELD_MOVING_SPEED,
 } from '../simConstants';
+import { JunctionIndex, TurnKind, turnKind, type Junction } from './junctions';
 import {
   MOVEMENT_CLEARANCE_TILES,
   movementPathAt,
   pathDistance,
   routeSegmentDir,
 } from './laneGeometry';
-import { JunctionIndex, TurnKind, turnKind, type Junction } from './junctions';
 import type { Route } from './router';
 import { SignalState, signalState } from './signals';
 import type { Vehicle } from './vehicles';
@@ -235,11 +235,7 @@ export class IntersectionControl {
    * 들어온다. 실제로 통행권을 요청하는 것은 정지선 가까이 온 차량뿐이지만,
    * 비보호 좌회전이 "마주 오는 직진차" 를 보려면 아직 멀리 있는 차도 알아야 한다.
    */
-  arbitrate(
-    timeMs: number,
-    approaches: readonly Approach[],
-    index: JunctionIndex,
-  ): void {
+  arbitrate(timeMs: number, approaches: readonly Approach[], index: JunctionIndex): void {
     if (approaches.length === 0) return;
 
     const groups = new Map<number, Approach[]>();
@@ -285,7 +281,10 @@ export class IntersectionControl {
         const path = approach.path;
         let blocked = false;
         for (const held of rt.reservations) {
-          if (pathsConflict(path, held.path)) { blocked = true; break; }
+          if (pathsConflict(path, held.path)) {
+            blocked = true;
+            break;
+          }
         }
         if (blocked) continue;
         // 꼬리물기 판정은 여기서 한다. 이 프레임에 방금 통행권을 준 차까지
@@ -352,7 +351,9 @@ export class IntersectionControl {
     // 이미 교차로 안에 들어와 있는 차(경계에서 생성됐거나 색인이 다시 만들어진
     // 경우)는 신호를 따질 대상이 아니다. 궤적이 비면 최우선으로 내보낸다.
     if (vehicle.routeIdx >= path.entryIndex) {
-      return 5000 + (simHash(WORLD_SEED, vehicle.destTx, vehicle.destTy, path.entryIndex) % 97) * 0.01;
+      return (
+        5000 + (simHash(WORLD_SEED, vehicle.destTx, vehicle.destTy, path.entryIndex) % 97) * 0.01
+      );
     }
 
     const state = signalState(junction, path.enterDir, timeMs);
@@ -369,8 +370,12 @@ export class IntersectionControl {
       // 적신호. 우회전만 예외다.
       if (path.turn !== TurnKind.Right) return null;
       // 실제 법: 정지선에서 **일시정지** 후, 진행 차량이 없고 보행자가 없으면 진행.
-      if (Math.abs(a.distance) > 0.02 || a.speed >= 0.05 ||
-          vehicle.stoppedMs < RED_RIGHT_STOP_DWELL_MS) return null;
+      if (
+        Math.abs(a.distance) > 0.02 ||
+        a.speed >= 0.05 ||
+        vehicle.stoppedMs < RED_RIGHT_STOP_DWELL_MS
+      )
+        return null;
       if (pedestrianBlocking()) return null;
       // "차량 없으면" — 녹색을 받은 축에서 다가오는 차와 궤적이 겹치면 못 간다.
       for (const other of all) {

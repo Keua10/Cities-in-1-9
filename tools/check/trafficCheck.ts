@@ -65,29 +65,47 @@ console.log('1. 교차로 검출');
 {
   // 폭 2타일 가로도로(y=0,1) x 폭 2타일 세로도로(x=10,11).
   const { world, ox, oy } = roadWorld((set) => {
-    for (let x = 0; x < 24; x++) { set(x, 0); set(x, 1); }
-    for (let y = -10; y < 12; y++) { set(10, y); set(11, y); }
+    for (let x = 0; x < 24; x++) {
+      set(x, 0);
+      set(x, 1);
+    }
+    for (let y = -10; y < 12; y++) {
+      set(10, y);
+      set(11, y);
+    }
   });
   const index = new JunctionIndex();
   index.build(world, ox - 20, oy - 20, ox + 40, oy + 30);
 
-  const straight = [2, 5, 8, 15, 20].every((x) => index.idAt(ox + x, oy + 0) < 0 && index.idAt(ox + x, oy + 1) < 0);
+  const straight = [2, 5, 8, 15, 20].every(
+    (x) => index.idAt(ox + x, oy + 0) < 0 && index.idAt(ox + x, oy + 1) < 0,
+  );
   check('4차로 직선 구간은 교차로가 아니다', straight);
 
   const ids = new Set<number>();
   for (const x of [10, 11]) for (const y of [0, 1]) ids.add(index.idAt(ox + x, oy + y));
-  check('4차로 x 4차로 교차로는 하나의 영역이다', ids.size === 1 && !ids.has(-1), `ids=${[...ids]}`);
+  check(
+    '4차로 x 4차로 교차로는 하나의 영역이다',
+    ids.size === 1 && !ids.has(-1),
+    `ids=${[...ids]}`,
+  );
 
   const junction = index.at(ox + 10, oy + 0);
-  check('교차로 영역은 2x2 = 4칸이다', junction !== null && junction.cells.length === 8,
-    `cells=${(junction?.cells.length ?? 0) / 2}`);
+  check(
+    '교차로 영역은 2x2 = 4칸이다',
+    junction !== null && junction.cells.length === 8,
+    `cells=${(junction?.cells.length ?? 0) / 2}`,
+  );
   check('4갈래 교차로에 신호등이 선다', junction?.signalized === true);
   check('진입로 폭이 2로 잡힌다', junction?.maxLegWidth === 2, `w=${junction?.maxLegWidth}`);
 }
 {
   // 1차로 도로에 폭 2타일 도로가 붙는 T자.
   const { world, ox, oy } = roadWorld((set) => {
-    for (let x = 0; x < 24; x++) { set(x, 0); set(x, 1); }
+    for (let x = 0; x < 24; x++) {
+      set(x, 0);
+      set(x, 1);
+    }
     for (let y = 2; y < 14; y++) set(10, y);
   });
   const index = new JunctionIndex();
@@ -96,12 +114,18 @@ console.log('1. 교차로 검출');
   const b = index.idAt(ox + 10, oy + 1);
   check('T자 교차로는 주도로 폭만큼(2칸) 잡힌다', a >= 0 && a === b);
   check('T자에도 신호등이 선다', index.byId(a)?.signalized === true);
-  check('T자 옆 칸은 교차로가 아니다', index.idAt(ox + 9, oy + 0) < 0 && index.idAt(ox + 12, oy + 1) < 0);
+  check(
+    'T자 옆 칸은 교차로가 아니다',
+    index.idAt(ox + 9, oy + 0) < 0 && index.idAt(ox + 12, oy + 1) < 0,
+  );
 }
 {
   // 도로 옆에 한 칸만 튀어나온 진입로(차고지). 신호등이 서면 안 된다.
   const { world, ox, oy } = roadWorld((set) => {
-    for (let x = 0; x < 24; x++) { set(x, 0); set(x, 1); }
+    for (let x = 0; x < 24; x++) {
+      set(x, 0);
+      set(x, 1);
+    }
     set(10, 2);
   });
   const index = new JunctionIndex();
@@ -112,15 +136,22 @@ console.log('1. 교차로 검출');
 {
   // 1차로 격자. 예전 규칙과 결과가 같아야 한다(교차점만 교차로).
   const { world, ox, oy } = roadWorld((set) => {
-    for (let i = 0; i < 30; i++) { set(i, 6); set(6, i); set(i, 18); set(18, i); }
+    for (let i = 0; i < 30; i++) {
+      set(i, 6);
+      set(6, i);
+      set(i, 18);
+      set(18, i);
+    }
   });
   const index = new JunctionIndex();
   index.build(world, ox - 20, oy - 20, ox + 50, oy + 50);
-  check('1차로 격자: 교차점만 교차로다',
+  check(
+    '1차로 격자: 교차점만 교차로다',
     index.idAt(ox + 6, oy + 6) >= 0 &&
-    index.idAt(ox + 18, oy + 6) >= 0 &&
-    index.idAt(ox + 10, oy + 6) < 0 &&
-    index.idAt(ox + 6, oy + 12) < 0);
+      index.idAt(ox + 18, oy + 6) >= 0 &&
+      index.idAt(ox + 10, oy + 6) < 0 &&
+      index.idAt(ox + 6, oy + 12) < 0,
+  );
   check('1차로 4갈래 교차로는 1칸이다', index.at(ox + 6, oy + 6)?.cells.length === 2);
 }
 
@@ -131,8 +162,14 @@ console.log('1. 교차로 검출');
 console.log('2. 신호');
 {
   const { world, ox, oy } = roadWorld((set) => {
-    for (let x = 0; x < 24; x++) { set(x, 0); set(x, 1); }
-    for (let y = -10; y < 12; y++) { set(10, y); set(11, y); }
+    for (let x = 0; x < 24; x++) {
+      set(x, 0);
+      set(x, 1);
+    }
+    for (let y = -10; y < 12; y++) {
+      set(10, y);
+      set(11, y);
+    }
   });
   const index = new JunctionIndex();
   index.build(world, ox - 20, oy - 20, ox + 40, oy + 30);
@@ -171,7 +208,10 @@ console.log('3. 회전/궤적');
 
   const index = new JunctionIndex();
   const { world, ox, oy } = roadWorld((set) => {
-    for (let i = 0; i < 30; i++) { set(i, 10); set(10, i); }
+    for (let i = 0; i < 30; i++) {
+      set(i, 10);
+      set(10, i);
+    }
   });
   index.build(world, ox - 20, oy - 20, ox + 50, oy + 50);
 
@@ -182,11 +222,41 @@ console.log('3. 회전/궤적');
       index,
     )!;
 
-  const eastStraight = path([[8, 10], [9, 10], [10, 10], [11, 10], [12, 10]]);
-  const westStraight = path([[12, 10], [11, 10], [10, 10], [9, 10], [8, 10]]);
-  const southStraight = path([[10, 8], [10, 9], [10, 10], [10, 11], [10, 12]]);
-  const eastLeft = path([[8, 10], [9, 10], [10, 10], [10, 9], [10, 8]]);
-  const eastRight = path([[8, 10], [9, 10], [10, 10], [10, 11], [10, 12]]);
+  const eastStraight = path([
+    [8, 10],
+    [9, 10],
+    [10, 10],
+    [11, 10],
+    [12, 10],
+  ]);
+  const westStraight = path([
+    [12, 10],
+    [11, 10],
+    [10, 10],
+    [9, 10],
+    [8, 10],
+  ]);
+  const southStraight = path([
+    [10, 8],
+    [10, 9],
+    [10, 10],
+    [10, 11],
+    [10, 12],
+  ]);
+  const eastLeft = path([
+    [8, 10],
+    [9, 10],
+    [10, 10],
+    [10, 9],
+    [10, 8],
+  ]);
+  const eastRight = path([
+    [8, 10],
+    [9, 10],
+    [10, 10],
+    [10, 11],
+    [10, 12],
+  ]);
 
   check('마주 오는 직진끼리는 통과', !pathsConflict(eastStraight, westStraight));
   check('직교하는 직진끼리는 충돌', pathsConflict(eastStraight, southStraight));
@@ -197,8 +267,14 @@ console.log('3. 회전/궤적');
   // 넓은 교차로: 서로 다른 칸을 지나도 차체가 스치면 충돌이어야 한다.
   const wide = new JunctionIndex();
   const w2 = roadWorld((set) => {
-    for (let x = 0; x < 24; x++) { set(x, 0); set(x, 1); }
-    for (let y = -10; y < 12; y++) { set(10, y); set(11, y); }
+    for (let x = 0; x < 24; x++) {
+      set(x, 0);
+      set(x, 1);
+    }
+    for (let y = -10; y < 12; y++) {
+      set(10, y);
+      set(11, y);
+    }
   });
   wide.build(w2.world, w2.ox - 20, w2.oy - 20, w2.ox + 40, w2.oy + 30);
   const wpath = (pts: [number, number][]) =>
@@ -207,9 +283,30 @@ console.log('3. 회전/궤적');
       0,
       wide,
     )!;
-  const rowEast = wpath([[8, 0], [9, 0], [10, 0], [11, 0], [12, 0], [13, 0]]);
-  const rowWest = wpath([[13, 1], [12, 1], [11, 1], [10, 1], [9, 1], [8, 1]]);
-  const colSouth = wpath([[10, -2], [10, -1], [10, 0], [10, 1], [10, 2], [10, 3]]);
+  const rowEast = wpath([
+    [8, 0],
+    [9, 0],
+    [10, 0],
+    [11, 0],
+    [12, 0],
+    [13, 0],
+  ]);
+  const rowWest = wpath([
+    [13, 1],
+    [12, 1],
+    [11, 1],
+    [10, 1],
+    [9, 1],
+    [8, 1],
+  ]);
+  const colSouth = wpath([
+    [10, -2],
+    [10, -1],
+    [10, 0],
+    [10, 1],
+    [10, 2],
+    [10, 3],
+  ]);
   check('4차로: 마주 오는 직진은 서로 다른 칸을 써서 통과', !pathsConflict(rowEast, rowWest));
   check('4차로: 직교 직진은 칸이 달라도 충돌', pathsConflict(rowEast, colSouth));
 }
@@ -230,10 +327,16 @@ console.log('4. 실제 주행 (4차로 격자 도시)');
     dry = true;
     for (let y = 0; y < SIZE && dry; y++) {
       for (let x = 0; x < SIZE; x++) {
-        if (isWater(world.getTile(base.x + x, base.y + y))) { dry = false; break; }
+        if (isWater(world.getTile(base.x + x, base.y + y))) {
+          dry = false;
+          break;
+        }
       }
     }
-    if (!dry) { base.x += 3; base.y += 2; }
+    if (!dry) {
+      base.x += 3;
+      base.y += 2;
+    }
   }
 
   // 폭 2타일(=4차로) 격자. 12칸 간격.
@@ -278,7 +381,9 @@ console.log('4. 실제 주행 (4차로 격자 도시)');
   let junctionCells = 0;
   for (const j of index.junctions) junctionCells += j.cells.length / 2;
   const signalized = index.junctions.filter((j) => j.signalized).length;
-  console.log(`     교차로 ${index.junctions.length}개 (신호등 ${signalized}개, 총 ${junctionCells}칸)`);
+  console.log(
+    `     교차로 ${index.junctions.length}개 (신호등 ${signalized}개, 총 ${junctionCells}칸)`,
+  );
   check('격자 도시에 교차로가 검출된다', index.junctions.length >= 4);
 
   let worstOverlap = 0;
@@ -294,7 +399,8 @@ console.log('4. 실제 주행 (4차로 격자 도시)');
   let lateAvgSpeed = 0;
   let lateSamples = 0;
   const framePattern = process.env.TRAFFIC_FRAME_MS?.split(',').map(Number) ?? [16.67];
-  if (framePattern.some(n => !Number.isFinite(n) || n <= 0 || n > 100)) throw new Error('TRAFFIC_FRAME_MS must be 0..100ms');
+  if (framePattern.some((n) => !Number.isFinite(n) || n <= 0 || n > 100))
+    throw new Error('TRAFFIC_FRAME_MS must be 0..100ms');
   const meanFrame = framePattern.reduce((a, b) => a + b, 0) / framePattern.length;
   const FRAMES = Math.ceil(200_000 / meanFrame);
 
@@ -332,9 +438,17 @@ console.log('4. 실제 주행 (4차로 격자 도시)');
       let entry = watch.get(v);
       if (!entry || entry.route !== v.route || v.routeIdx > entry.path.exitIndex) {
         const path = buildJunctionPath(v.route, v.routeIdx, index);
-        if (!path) { watch.delete(v); continue; }
-        entry = { route: v.route, path, progress: v.routeIdx + v.tileT, didStop: false,
-          crossed: v.routeIdx + v.tileT > path.entryIndex - 1 + INTERSECTION_STOP_T + 0.02 };
+        if (!path) {
+          watch.delete(v);
+          continue;
+        }
+        entry = {
+          route: v.route,
+          path,
+          progress: v.routeIdx + v.tileT,
+          didStop: false,
+          crossed: v.routeIdx + v.tileT > path.entryIndex - 1 + INTERSECTION_STOP_T + 0.02,
+        };
         watch.set(v, entry);
         continue;
       }
@@ -391,7 +505,10 @@ console.log('4. 실제 주행 (4차로 격자 도시)');
         if (bodiesOverlap(bodies[i], bodies[j])) hit++;
       }
     }
-    if (hit > 0) { overlapFrames++; worstOverlap = Math.max(worstOverlap, hit); }
+    if (hit > 0) {
+      overlapFrames++;
+      worstOverlap = Math.max(worstOverlap, hit);
+    }
 
     // 같은 교차로 안에서 서로 교차하는 궤적이 동시에 존재하는가.
     const inside = new Map<number, NonNullable<ReturnType<typeof buildJunctionPath>>[]>();
@@ -427,18 +544,30 @@ console.log('4. 실제 주행 (4차로 격자 도시)');
     `     최대 동시 ${peak}대 · 주행 비율 평균 ${(movingRatio * 100).toFixed(0)}%` +
       ` · 후반 평균 속도 ${lateSpeed.toFixed(2)} 타일/초 · 남은 차량 ${traffic.activeCount}대`,
   );
-  check('차체가 한 번도 겹치지 않는다', overlapFrames === 0,
-    `겹친 프레임 ${overlapFrames}개, 최대 ${worstOverlap}쌍`);
-  check('통행권 없이 적신호에 진입하는 차가 없다(우회전 제외)', signalViolations === 0,
-    `${signalViolations}회`);
-  check('교차하는 궤적이 교차로 안에 동시에 존재하지 않는다', concurrentConflicts === 0,
-    `${concurrentConflicts}회`);
+  check(
+    '차체가 한 번도 겹치지 않는다',
+    overlapFrames === 0,
+    `겹친 프레임 ${overlapFrames}개, 최대 ${worstOverlap}쌍`,
+  );
+  check(
+    '통행권 없이 적신호에 진입하는 차가 없다(우회전 제외)',
+    signalViolations === 0,
+    `${signalViolations}회`,
+  );
+  check(
+    '교차하는 궤적이 교차로 안에 동시에 존재하지 않는다',
+    concurrentConflicts === 0,
+    `${concurrentConflicts}회`,
+  );
   check('차량이 실제로 다닌다', peak >= 5, `최대 ${peak}대`);
   check('교착 없이 계속 흐른다', lateSpeed > 0.3, `후반 평균 속도 ${lateSpeed.toFixed(2)}`);
   console.log(`     적신호 우회전 ${redRightTurns}회 (일시정지 없이 진행 ${redRightNoStop}회)`);
   check('적신호 우회전을 실제로 관측한다 (공허한 통과 방지)', redRightTurns > 0);
-  check('적신호 우회전은 반드시 일시정지 뒤에 이루어진다', redRightNoStop === 0,
-    `${redRightNoStop}회`);
+  check(
+    '적신호 우회전은 반드시 일시정지 뒤에 이루어진다',
+    redRightNoStop === 0,
+    `${redRightNoStop}회`,
+  );
 }
 
 /* ------------------------------------------------------------------ *
@@ -448,7 +577,10 @@ console.log('4. 실제 주행 (4차로 격자 도시)');
 console.log('5. 회전 규칙');
 {
   const { world, ox, oy } = roadWorld((set) => {
-    for (let i = 0; i < 30; i++) { set(i, 10); set(10, i); }
+    for (let i = 0; i < 30; i++) {
+      set(i, 10);
+      set(10, i);
+    }
   });
   const index = new JunctionIndex();
   index.build(world, ox - 20, oy - 20, ox + 50, oy + 50);
@@ -461,13 +593,28 @@ console.log('5. 회전 규칙');
       index,
     )!;
 
-  const stub = (name: string): Vehicle => ({
-    kind: 0, tier: 1, purpose: 0, routeIdx: 0, tileT: 0, lane: 0, speed: 0, dir: 0,
-    destTx: name.length, destTy: name.charCodeAt(0), aggressive: false,
-    waitMs: 0, stoppedMs: 0, stuckMs: 0, frozenMs: 0,
-    jPath: null, jPathRoute: null, jPathRev: -1,
-    route: { tiles: Int32Array.from([0, 0]), costAtPlan: 0 },
-  } as unknown as Vehicle);
+  const stub = (name: string): Vehicle =>
+    ({
+      kind: 0,
+      tier: 1,
+      purpose: 0,
+      routeIdx: 0,
+      tileT: 0,
+      lane: 0,
+      speed: 0,
+      dir: 0,
+      destTx: name.length,
+      destTy: name.charCodeAt(0),
+      aggressive: false,
+      waitMs: 0,
+      stoppedMs: 0,
+      stuckMs: 0,
+      frozenMs: 0,
+      jPath: null,
+      jPathRoute: null,
+      jPathRev: -1,
+      route: { tiles: Int32Array.from([0, 0]), costAtPlan: 0 },
+    }) as unknown as Vehicle;
 
   // 축 0(±tx)이 적색인 시각을 찾는다.
   let redForX = -1;
@@ -475,16 +622,42 @@ console.log('5. 회전 규칙');
     if (
       signalState(junction, 0, t) === SignalState.Red &&
       signalState(junction, 1, t) === SignalState.Green
-    ) { redForX = t; break; }
+    ) {
+      redForX = t;
+      break;
+    }
   }
   check('축 0 적색 / 축 1 녹색인 시각이 존재한다', redForX >= 0);
 
-  const rightOnRed = makePath([[8, 10], [9, 10], [10, 10], [10, 11], [10, 12]]);
-  const straightOnRed = makePath([[8, 10], [9, 10], [10, 10], [11, 10], [12, 10]]);
-  const greenStraight = makePath([[10, 8], [10, 9], [10, 10], [10, 11], [10, 12]]);
+  const rightOnRed = makePath([
+    [8, 10],
+    [9, 10],
+    [10, 10],
+    [10, 11],
+    [10, 12],
+  ]);
+  const straightOnRed = makePath([
+    [8, 10],
+    [9, 10],
+    [10, 10],
+    [11, 10],
+    [12, 10],
+  ]);
+  const greenStraight = makePath([
+    [10, 8],
+    [10, 9],
+    [10, 10],
+    [10, 11],
+    [10, 12],
+  ]);
 
   const approach = (v: Vehicle, path: typeof rightOnRed, distance: number): Approach => ({
-    vehicle: v, path, distance, speed: 0, exitFree: Infinity, clearAhead: Infinity,
+    vehicle: v,
+    path,
+    distance,
+    speed: 0,
+    exitFree: Infinity,
+    clearAhead: Infinity,
   });
 
   // (1) 일시정지 없이 적신호 우회전 -> 불가
@@ -518,20 +691,29 @@ console.log('5. 회전 규칙');
   {
     let lastYellow = 0;
     for (let t = 0; t < 40_000; t++) {
-      if (signalState(junction, 0, t) === SignalState.Yellow &&
-          signalState(junction, 0, t + 1) === SignalState.Red) { lastYellow = t; break; }
+      if (
+        signalState(junction, 0, t) === SignalState.Yellow &&
+        signalState(junction, 0, t + 1) === SignalState.Red
+      ) {
+        lastYellow = t;
+        break;
+      }
     }
     const control = new IntersectionControl();
     const v = stub('dilemma');
     const a = approach(v, rightOnRed, 0.37);
     a.speed = 6;
     control.arbitrate(lastYellow, [a], index);
-    check('황색 딜레마 존 진입 허가는 황색으로 기록된다',
-      control.grantSignalOf(v) === SignalState.Yellow);
+    check(
+      '황색 딜레마 존 진입 허가는 황색으로 기록된다',
+      control.grantSignalOf(v) === SignalState.Yellow,
+    );
     control.arbitrate(lastYellow + 50, [a], index);
-    check('50ms 뒤 적색으로 바뀌어도 이미 허가된 통과는 유지된다',
+    check(
+      '50ms 뒤 적색으로 바뀌어도 이미 허가된 통과는 유지된다',
       signalState(junction, 0, lastYellow + 50) === SignalState.Red &&
-      control.grantSignalOf(v) === SignalState.Yellow);
+        control.grantSignalOf(v) === SignalState.Yellow,
+    );
   }
   {
     const control = new IntersectionControl();
@@ -557,17 +739,36 @@ console.log('5. 회전 규칙');
   {
     let greenForX = -1;
     for (let t = 0; t < 40_000; t += 100) {
-      if (signalState(junction, 0, t) === SignalState.Green) { greenForX = t; break; }
+      if (signalState(junction, 0, t) === SignalState.Green) {
+        greenForX = t;
+        break;
+      }
     }
-    const left = makePath([[8, 10], [9, 10], [10, 10], [10, 9], [10, 8]]);
-    const oncoming = makePath([[12, 10], [11, 10], [10, 10], [9, 10], [8, 10]]);
+    const left = makePath([
+      [8, 10],
+      [9, 10],
+      [10, 10],
+      [10, 9],
+      [10, 8],
+    ]);
+    const oncoming = makePath([
+      [12, 10],
+      [11, 10],
+      [10, 10],
+      [9, 10],
+      [8, 10],
+    ]);
     const control = new IntersectionControl();
     const v = stub('f');
     const other = stub('g');
     other.speed = 5;
     const oncomingApproach: Approach = {
-      vehicle: other, path: oncoming, distance: 1, speed: 5,
-      exitFree: Infinity, clearAhead: Infinity,
+      vehicle: other,
+      path: oncoming,
+      distance: 1,
+      speed: 5,
+      exitFree: Infinity,
+      clearAhead: Infinity,
     };
     control.arbitrate(greenForX, [approach(v, left, 0), oncomingApproach], index);
     check('비보호 좌회전은 마주 오는 직진에 양보한다', !control.hasReservation(v));
@@ -584,14 +785,22 @@ console.log('5. 회전 규칙');
     const control = new IntersectionControl();
     const straightV = stub('i');
     const leftV = stub('j');
-    const left = makePath([[12, 10], [11, 10], [10, 10], [10, 11], [10, 12]]);
+    const left = makePath([
+      [12, 10],
+      [11, 10],
+      [10, 10],
+      [10, 11],
+      [10, 12],
+    ]);
     control.arbitrate(
       redForX + 0,
       [approach(leftV, left, 0), approach(straightV, greenStraight, 0)],
       index,
     );
-    check('충돌하는 두 요청 중 하나만 통행권을 받는다',
-      control.hasReservation(straightV) !== control.hasReservation(leftV));
+    check(
+      '충돌하는 두 요청 중 하나만 통행권을 받는다',
+      control.hasReservation(straightV) !== control.hasReservation(leftV),
+    );
   }
 }
 

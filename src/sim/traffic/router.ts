@@ -40,25 +40,37 @@ interface HeapNode {
 }
 
 export class Router {
-  private queue: Pending[] = [];
+  private queue: (Pending | undefined)[] = [];
+  private queueHead = 0;
   /** 신호 대기 비용을 교차로 단위로 매기기 위한 색인. 없으면 비용을 매기지 않는다. */
   private junctions: JunctionIndex | null = null;
   private cache = new Map<string, Route>();
   /** Route 인터페이스를 늘리지 않고 재탐색용 계획 당시 타일별 혼잡을 보관한다. */
   private planSamples = new WeakMap<Route, Float32Array>();
 
-  constructor(private world: World, private congestion: CongestionMap) {}
+  constructor(
+    private world: World,
+    private congestion: CongestionMap,
+  ) {}
 
   setJunctions(index: JunctionIndex): void {
     this.junctions = index;
   }
 
   update(budget: number): void {
-    for (let i = 0; i < budget && this.queue.length > 0; i++) {
-      const p = this.queue.shift()!;
+    for (let i = 0; i < budget && this.queueHead < this.queue.length; i++) {
+      const p = this.queue[this.queueHead]!;
+      this.queue[this.queueHead++] = undefined;
       const route = this.find(p.fromTx, p.fromTy, p.toTx, p.toTy, p.tier);
       if (route) this.cache.set(this.key(p.fromTx, p.fromTy, p.toTx, p.toTy, p.tier), route);
       p.onDone(route ? this.cloneRoute(route) : null);
+    }
+    if (this.queueHead === this.queue.length) {
+      this.queue.length = 0;
+      this.queueHead = 0;
+    } else if (this.queueHead > 1024 && this.queueHead * 2 >= this.queue.length) {
+      this.queue = this.queue.slice(this.queueHead);
+      this.queueHead = 0;
     }
   }
 
@@ -121,7 +133,10 @@ export class Router {
       return null;
     }
     if (sx === gx && sy === gy) {
-      const route: Route = { tiles: Int32Array.from([sx, sy]), costAtPlan: this.congestion.at(sx, sy) };
+      const route: Route = {
+        tiles: Int32Array.from([sx, sy]),
+        costAtPlan: this.congestion.at(sx, sy),
+      };
       this.planSamples.set(route, Float32Array.from([route.costAtPlan]));
       return route;
     }
@@ -157,8 +172,7 @@ export class Router {
         if (this.world.getBuild(nx, ny) !== Build.Road) continue;
 
         let step =
-          BASE_TILE_COST *
-          (1 + (CONGESTION_WEIGHT[tier - 1] ?? 1) * this.congestion.at(nx, ny));
+          BASE_TILE_COST * (1 + (CONGESTION_WEIGHT[tier - 1] ?? 1) * this.congestion.at(nx, ny));
         if (this.world.sampleHeight(nx, ny) !== this.world.sampleHeight(cur.x, cur.y)) {
           step *= SLOPE_COST_MUL;
         }
@@ -175,12 +189,7 @@ export class Router {
           // (L자 코너는 교차로로 잡히므로 여기 걸리지 않는다.)
           // 값싸게 두면 A*가 넓은 도로에서 지그재그로 차선을 갈아타는 경로를
           // 만들고, 그 지그재그가 마주 오는 차선을 가로질러 겹침의 원인이 된다.
-          if (
-            jid < 0 &&
-            cur.dir !== 4 &&
-            cur.dir !== nextDir &&
-            this.junctions.covers(nx, ny)
-          ) {
+          if (jid < 0 && cur.dir !== 4 && cur.dir !== nextDir && this.junctions.covers(nx, ny)) {
             step += LANE_CHANGE_COST;
           }
         }
@@ -233,7 +242,9 @@ export class Router {
 
 class MinHeap {
   private data: HeapNode[] = [];
-  get size(): number { return this.data.length; }
+  get size(): number {
+    return this.data.length;
+  }
   push(node: HeapNode): void {
     const a = this.data;
     let i = a.length;
@@ -270,7 +281,9 @@ class MinHeap {
 function heuristic(x: number, y: number, gx: number, gy: number): number {
   return (Math.abs(gx - x) + Math.abs(gy - y)) * BASE_TILE_COST;
 }
-function stateKey(x: number, y: number, dir: number): string { return `${x},${y},${dir}`; }
+function stateKey(x: number, y: number, dir: number): string {
+  return `${x},${y},${dir}`;
+}
 function parseState(key: string): [number, number] {
   const a = key.indexOf(',');
   const b = key.indexOf(',', a + 1);

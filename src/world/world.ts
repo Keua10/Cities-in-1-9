@@ -1,9 +1,4 @@
-import {
-  BASE_CHUNK_SPAN,
-  CHUNK_SIZE,
-  CHUNK_TILES,
-  OVERRIDE_NONE,
-} from '../core/constants';
+import { BASE_CHUNK_SPAN, CHUNK_SIZE, CHUNK_TILES, OVERRIDE_NONE } from '../core/constants';
 import { chunkIndexOf, chunkKey, localIndexOf } from '../core/iso';
 import {
   BLD_COVERED,
@@ -21,11 +16,7 @@ import {
 import { facilitySpan } from '../sim/facilities';
 import { Build } from './build';
 import { baseOriginChunk } from './spawn';
-import {
-  generateChunk,
-  heightAt,
-  type TerrainId,
-} from './terrain';
+import { generateChunk, heightAt, type TerrainId } from './terrain';
 
 /** 생성값과 달라진 칸만 담는 배열. OVERRIDE_NONE 인 칸은 "생성값 그대로". */
 export interface ChunkOverride {
@@ -332,8 +323,7 @@ export class World {
     if (cur === value) return;
 
     // 이 칸을 덮고 있던 건물은 지구가 바뀌는 순간 존재 근거를 잃는다.
-    const removed =
-      p.bld && p.bld[i] !== BLD_NONE ? this.demolishAt(tx, ty) : null;
+    const removed = p.bld && p.bld[i] !== BLD_NONE ? this.demolishAt(tx, ty) : null;
     // 헐린 것이 시설이면 build 쪽에 Civic 칸이 그대로 남는다. 유령 칸이 되므로
     // 여기서 함께 지운다. 아래에서 p.build[i] = value 가 이 칸을 다시 덮어쓴다.
     if (removed && removed.kind !== null) {
@@ -430,13 +420,7 @@ export class World {
    *
    * 부지 검사는 growth.ts 가 이미 끝낸 상태로 부른다.
    */
-  placeBuilding(
-    tx: number,
-    ty: number,
-    zone: number,
-    level: number,
-    bornDay: number,
-  ): void {
+  placeBuilding(tx: number, ty: number, zone: number, level: number, bornDay: number): void {
     const p = this.getParcel(chunkIndexOf(tx), chunkIndexOf(ty));
     if (!p.bld) {
       p.bld = new Uint8Array(CHUNK_TILES).fill(BLD_NONE);
@@ -534,12 +518,7 @@ export class World {
    * 지역 index 가 옆줄로 넘어가 엉뚱한 칸을 덮어쓴다. 칸마다 찾는 비용은
    * Map 조회 한 번이고, 시설은 최대 9칸이라 부담이 없다.
    */
-  private writeBldCell(
-    tx: number,
-    ty: number,
-    code: number,
-    bornDay: number | null,
-  ): Parcel {
+  private writeBldCell(tx: number, ty: number, code: number, bornDay: number | null): Parcel {
     const p = this.getParcel(chunkIndexOf(tx), chunkIndexOf(ty));
     if (!p.bld) p.bld = new Uint8Array(CHUNK_TILES).fill(BLD_NONE);
     if (!p.bornLo) p.bornLo = new Uint8Array(CHUNK_TILES).fill(BLD_NONE);
@@ -622,9 +601,7 @@ export class World {
     // 여기서 내리면 지구 건물 수가 음수로 샌다. 지구 건물은 앵커가 있는
     // 필지에서만 세므로 그쪽에서만 내린다.
     if (info.kind === null) {
-      const anchorParcel = this.parcels.get(
-        chunkKey(chunkIndexOf(info.tx), chunkIndexOf(info.ty)),
-      );
+      const anchorParcel = this.parcels.get(chunkKey(chunkIndexOf(info.tx), chunkIndexOf(info.ty)));
       if (anchorParcel) anchorParcel.buildingCount--;
     }
     for (const p of touched) {
@@ -864,4 +841,3 @@ export function recountParcel(p: Parcel): void {
   p.bldRevision++;
   p.scanCursor = 0;
 }
-

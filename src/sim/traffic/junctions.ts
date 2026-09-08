@@ -2,11 +2,7 @@ import { WORLD_SEED } from '../../core/constants';
 import { Build, DIRS } from '../../world/build';
 import type { World } from '../../world/world';
 import { simHash } from '../buildings';
-import {
-  JUNCTION_LEG_MIN_TILES,
-  JUNCTION_LEG_SCAN_MAX,
-  SIGNAL_CYCLE_MS,
-} from '../simConstants';
+import { JUNCTION_LEG_MIN_TILES, JUNCTION_LEG_SCAN_MAX, SIGNAL_CYCLE_MS } from '../simConstants';
 
 /**
  * 교차로 영역 검출 — "도로 폭에 상관없이" 진짜 교차로만 찾는다.
@@ -149,7 +145,10 @@ export class JunctionIndex {
     for (let ly = 0; ly < h; ly++) {
       let lx = 0;
       while (lx < w) {
-        if (!road[ly * w + lx]) { lx++; continue; }
+        if (!road[ly * w + lx]) {
+          lx++;
+          continue;
+        }
         let end = lx;
         while (end + 1 < w && road[ly * w + end + 1]) end++;
         const len = end - lx + 1;
@@ -164,7 +163,10 @@ export class JunctionIndex {
     for (let lx = 0; lx < w; lx++) {
       let ly = 0;
       while (ly < h) {
-        if (!road[ly * w + lx]) { ly++; continue; }
+        if (!road[ly * w + lx]) {
+          ly++;
+          continue;
+        }
         let end = ly;
         while (end + 1 < h && road[(end + 1) * w + lx]) end++;
         const len = end - ly + 1;

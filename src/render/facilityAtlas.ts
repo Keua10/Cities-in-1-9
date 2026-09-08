@@ -131,9 +131,12 @@ async function loadImage(url: string): Promise<HTMLImageElement | null> {
   }
   return new Promise((resolve) => {
     const img = new Image();
-    img.onload = () => resolve(
-      img.naturalWidth === FACILITY_ATLAS_W && img.naturalHeight === FACILITY_ATLAS_H ? img : null,
-    );
+    img.onload = () =>
+      resolve(
+        img.naturalWidth === FACILITY_ATLAS_W && img.naturalHeight === FACILITY_ATLAS_H
+          ? img
+          : null,
+      );
     img.onerror = () => resolve(null);
     img.src = url;
   });
@@ -261,8 +264,18 @@ function drawFacility(
       const t = (f + 0.6) / (floors + 0.2);
       const y = midY - body * t;
       const w = Math.max(2, dx * 0.5);
-      ctx.fillRect(cxm + dx * 0.25, y - Math.max(1, body * 0.06), w * 0.6, Math.max(2, body * 0.09));
-      ctx.fillRect(cxm - dx * 0.25 - w * 0.6, y - Math.max(1, body * 0.06), w * 0.6, Math.max(2, body * 0.09));
+      ctx.fillRect(
+        cxm + dx * 0.25,
+        y - Math.max(1, body * 0.06),
+        w * 0.6,
+        Math.max(2, body * 0.09),
+      );
+      ctx.fillRect(
+        cxm - dx * 0.25 - w * 0.6,
+        y - Math.max(1, body * 0.06),
+        w * 0.6,
+        Math.max(2, body * 0.09),
+      );
     }
   }
 

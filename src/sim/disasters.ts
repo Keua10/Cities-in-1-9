@@ -3,9 +3,14 @@ import type { World } from '../world/world';
 import { isAnchor, levelOfCode, simRandom } from './buildings';
 import type { ServiceField } from './services';
 import {
-  DISASTER_MAX_ACTIVE, DISASTER_RATE_PER_TICK, DISASTER_PREVENTION,
-  DISASTER_RECOVERY, DISASTER_SERVICE_RECOVERY, DISASTER_DURATION,
-  DISASTER_PENALTY, FIRE_SPREAD_CHANCE,
+  DISASTER_DURATION,
+  DISASTER_MAX_ACTIVE,
+  DISASTER_PENALTY,
+  DISASTER_PREVENTION,
+  DISASTER_RATE_PER_TICK,
+  DISASTER_RECOVERY,
+  DISASTER_SERVICE_RECOVERY,
+  FIRE_SPREAD_CHANCE,
 } from './simConstants';
 
 /** 시설 kind 0/1/2 와 같은 순서. 기존 건물/시설 ID와 별개의 사건 종류. */
@@ -21,25 +26,47 @@ const counter = (v: unknown): number =>
 
 /** 오래된 저장본은 사건 없음. 외부 저장 데이터의 잘못된 값/중복도 여기서 거른다. */
 export function normalizeDisasters(raw: unknown, tick: number): DisasterState {
-  const out: DisasterState = { version: 1, active: [], started: [0, 0, 0], extinguished: 0, burned: 0 };
+  const out: DisasterState = {
+    version: 1,
+    active: [],
+    started: [0, 0, 0],
+    extinguished: 0,
+    burned: 0,
+  };
   if (!raw || typeof raw !== 'object') return out;
   const s = raw as Partial<DisasterState>;
   if (s.version !== 1) return out;
-  out.started = [0, 1, 2].map(k => counter(s.started?.[k]));
+  out.started = [0, 1, 2].map((k) => counter(s.started?.[k]));
   out.extinguished = counter(s.extinguished);
   out.burned = counter(s.burned);
   const seen = new Set<string>();
-  if (Array.isArray(s.active)) for (const e of s.active) {
-    if (!e || ![0, 1, 2].includes(e.kind) ||
+  if (Array.isArray(s.active))
+    for (const e of s.active) {
+      if (
+        !e ||
+        ![0, 1, 2].includes(e.kind) ||
         ![e.tx, e.ty, e.code, e.born, e.startedTick].every(Number.isSafeInteger) ||
-        e.code < 0 || !isAnchor(e.code) || e.born < 0 || e.born > 65535 ||
-        e.startedTick < 0 || e.startedTick > tick) continue;
-    const key = keyOf(e.tx, e.ty);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.active.push({ kind: e.kind, tx: e.tx, ty: e.ty, code: e.code, born: e.born, startedTick: e.startedTick });
-    if (out.active.length >= DISASTER_MAX_ACTIVE) break;
-  }
+        e.code < 0 ||
+        !isAnchor(e.code) ||
+        e.born < 0 ||
+        e.born > 65535 ||
+        e.startedTick < 0 ||
+        e.startedTick > tick
+      )
+        continue;
+      const key = keyOf(e.tx, e.ty);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.active.push({
+        kind: e.kind,
+        tx: e.tx,
+        ty: e.ty,
+        code: e.code,
+        born: e.born,
+        startedTick: e.startedTick,
+      });
+      if (out.active.length >= DISASTER_MAX_ACTIVE) break;
+    }
   out.active.sort(order);
   return out;
 }
@@ -57,16 +84,26 @@ export class DisasterSim {
     this.reindex();
   }
 
-  get active(): readonly Incident[] { return this.state.active; }
+  get active(): readonly Incident[] {
+    return this.state.active;
+  }
   get counts(): number[] {
     const counts = [0, 0, 0];
     for (const e of this.active) counts[e.kind]++;
     return counts;
   }
-  get burned(): number { return this.state.burned; }
-  get extinguished(): number { return this.state.extinguished; }
+  get burned(): number {
+    return this.state.burned;
+  }
+  get extinguished(): number {
+    return this.state.extinguished;
+  }
   snapshot(): DisasterState {
-    return { ...this.state, active: this.active.map(e => ({ ...e })), started: [...this.state.started] };
+    return {
+      ...this.state,
+      active: this.active.map((e) => ({ ...e })),
+      started: [...this.state.started],
+    };
   }
 
   at(tx: number, ty: number, world: World): Incident | null {
@@ -80,19 +117,25 @@ export class DisasterSim {
     return e ? DISASTER_PENALTY[e.kind] : 0;
   }
   blocksRebuild(tx: number, ty: number, span: number, world: World): boolean {
-    for (let dy = 0; dy < span; dy++) for (let dx = 0; dx < span; dx++) {
-      if (this.at(tx + dx, ty + dy, world)) return true;
-    }
+    for (let dy = 0; dy < span; dy++)
+      for (let dx = 0; dx < span; dx++) {
+        if (this.at(tx + dx, ty + dy, world)) return true;
+      }
     return false;
   }
 
   /** 제거/재건축된 건물에 옛 사건이 붙어 있지 않도록 로드 직후와 매 틱 검사한다. */
   reconcile(world: World): boolean {
-    if (this.active.every(e =>
-      world.getBld(e.tx, e.ty) === e.code && world.bornDayAt(e.tx, e.ty) === e.born)) return false;
+    if (
+      this.active.every(
+        (e) => world.getBld(e.tx, e.ty) === e.code && world.bornDayAt(e.tx, e.ty) === e.born,
+      )
+    )
+      return false;
     const before = this.active.length;
-    this.state.active = this.state.active.filter(e =>
-      world.getBld(e.tx, e.ty) === e.code && world.bornDayAt(e.tx, e.ty) === e.born);
+    this.state.active = this.state.active.filter(
+      (e) => world.getBld(e.tx, e.ty) === e.code && world.bornDayAt(e.tx, e.ty) === e.born,
+    );
     this.reindex();
     return before !== this.active.length;
   }
@@ -108,7 +151,10 @@ export class DisasterSim {
       const q = quality(services, e.tx, e.ty, e.kind);
       const age = tick - e.startedTick;
       if (age <= 0) continue;
-      if (roll(20 + e.kind, tick, e.tx, e.ty) < DISASTER_RECOVERY[e.kind] + q * DISASTER_SERVICE_RECOVERY[e.kind]) {
+      if (
+        roll(20 + e.kind, tick, e.tx, e.ty) <
+        DISASTER_RECOVERY[e.kind] + q * DISASTER_SERVICE_RECOVERY[e.kind]
+      ) {
         finished.add(e);
         if (e.kind === 0) this.state.extinguished++;
         continue;
@@ -124,8 +170,12 @@ export class DisasterSim {
       if (e.kind !== 0) continue;
       const span = levelOfCode(e.code);
       for (let i = 0; i < span; i++) {
-        for (const [x, y] of [[e.tx + i, e.ty - 1], [e.tx + i, e.ty + span],
-          [e.tx - 1, e.ty + i], [e.tx + span, e.ty + i]]) {
+        for (const [x, y] of [
+          [e.tx + i, e.ty - 1],
+          [e.tx + i, e.ty + span],
+          [e.tx - 1, e.ty + i],
+          [e.tx + span, e.ty + i],
+        ]) {
           const b = world.buildingCovering(x, y);
           if (!b || b.kind !== null || this.byTile.has(keyOf(b.tx, b.ty))) continue;
           const targetQ = quality(services, b.tx, b.ty, 0);
@@ -136,13 +186,16 @@ export class DisasterSim {
       }
     }
     if (finished.size) {
-      this.state.active = this.state.active.filter(e => !finished.has(e));
+      this.state.active = this.state.active.filter((e) => !finished.has(e));
       changed = true;
       this.reindex();
     }
-    const touched = new Set(prior.map(e => keyOf(e.tx, e.ty)));
+    const touched = new Set(prior.map((e) => keyOf(e.tx, e.ty)));
     for (const b of [...spread.values()].sort((a, b) => a.ty - b.ty || a.tx - b.tx)) {
-      if (this.start(world, 0, b.tx, b.ty, tick)) { changed = true; touched.add(keyOf(b.tx, b.ty)); }
+      if (this.start(world, 0, b.tx, b.ty, tick)) {
+        changed = true;
+        touched.add(keyOf(b.tx, b.ty));
+      }
     }
     // 도시가 작은 동안 자연 발생만 유예. 이미 생긴 화재는 인구가 줄어도 해결해야 한다.
     if (grace > 0) {
@@ -151,12 +204,15 @@ export class DisasterSim {
         if (!p.bld || this.active.length >= DISASTER_MAX_ACTIVE) continue;
         for (let i = 0; i < p.bld.length; i++) {
           if (!isAnchor(p.bld[i])) continue;
-          const tx = p.cx * CHUNK_SIZE + i % CHUNK_SIZE;
+          const tx = p.cx * CHUNK_SIZE + (i % CHUNK_SIZE);
           const ty = p.cy * CHUNK_SIZE + Math.floor(i / CHUNK_SIZE);
           if (touched.has(keyOf(tx, ty)) || this.byTile.has(keyOf(tx, ty))) continue;
           for (const kind of DISASTER_KINDS) {
             const q = quality(services, tx, ty, kind);
-            if (roll(kind, tick, tx, ty) < DISASTER_RATE_PER_TICK[kind] * grace * (1 - q * DISASTER_PREVENTION[kind])) {
+            if (
+              roll(kind, tick, tx, ty) <
+              DISASTER_RATE_PER_TICK[kind] * grace * (1 - q * DISASTER_PREVENTION[kind])
+            ) {
               if (this.start(world, kind, tx, ty, tick)) changed = true;
               break;
             }

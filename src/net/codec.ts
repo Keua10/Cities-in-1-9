@@ -49,10 +49,7 @@ export function encodeOverride(arr: Uint8Array | null | undefined): string | nul
  * 값이 없거나 깨져 있으면 null 을 돌려준다 — 저장 데이터가 이상해도
  * 게임이 죽지 않고 "생성된 지형 그대로" 로 떨어지게 하기 위해서다.
  */
-export function decodeOverride(
-  text: string | null | undefined,
-  length: number,
-): Uint8Array | null {
+export function decodeOverride(text: string | null | undefined, length: number): Uint8Array | null {
   if (!text) return null;
 
   let bytes: Uint8Array;

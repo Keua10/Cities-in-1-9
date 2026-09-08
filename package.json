@@ -11,6 +11,9 @@
     "check:traffic": "node tools/check/run.mjs traffic",
     "check:service": "node tools/check/run.mjs service",
     "check:disaster": "node tools/check/run.mjs disaster",
+    "check:parity": "node tools/check/meshParity.mjs && node tools/check/refactorParity.mjs",
+    "format": "prettier --write \"src/**/*.{ts,css}\" \"tools/**/*.{ts,mjs}\" \"*.ts\" index.html tsconfig.json package.json .prettierrc.json",
+    "format:check": "prettier --check \"src/**/*.{ts,css}\" \"tools/**/*.{ts,mjs}\" \"*.ts\" index.html tsconfig.json package.json .prettierrc.json",
     "art:facilities": "node tools/buildFacilityAtlas.mjs"
   },
   "dependencies": {
@@ -20,6 +23,7 @@
   "devDependencies": {
     "@napi-rs/canvas": "^1.0.8",
     "esbuild": "^0.21.5",
+    "prettier": "^3.6.2",
     "typescript": "^5.6.0",
     "vite": "^5.4.0"
   }

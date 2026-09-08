@@ -14,9 +14,9 @@ import {
   type RoadField,
 } from './roadGraph';
 import {
+  COMMUTE_RANGE_BY_TIER,
   CONGESTION_ALPHA,
   CONGESTION_DECAY,
-  COMMUTE_RANGE_BY_TIER,
   CONGESTION_ESTIMATE_BIAS,
   ESTIMATE_CAPACITY,
   SHOP_RANGE_BY_TIER,
@@ -30,10 +30,7 @@ import {
  * 링크는 배정표가 이미 통근·쇼핑 반경 안에서만 만든 것이라, 그보다 먼 거리는
  * 계산해도 아무도 안 읽는다. 도시가 커질수록 이 낭비가 그대로 정지 시간이 된다.
  */
-const ROUTE_MAX_DIST = Math.max(
-  ...COMMUTE_RANGE_BY_TIER,
-  ...SHOP_RANGE_BY_TIER,
-);
+const ROUTE_MAX_DIST = Math.max(...COMMUTE_RANGE_BY_TIER, ...SHOP_RANGE_BY_TIER);
 
 /** 거리장 캐시 상한(개). 넘으면 가장 오래된 것부터 버린다. */
 const DISTANCE_CACHE_MAX = 256;
@@ -103,7 +100,8 @@ export class CongestionMap {
         Math.abs(p.cx - this.activeCx) > this.activeRadius ||
         Math.abs(p.cy - this.activeCy) > this.activeRadius ||
         !p.build
-      ) continue;
+      )
+        continue;
       const bx = p.cx * CHUNK_SIZE;
       const by = p.cy * CHUNK_SIZE;
       for (let ly = 0; ly < CHUNK_SIZE; ly++) {
@@ -114,7 +112,7 @@ export class CongestionMap {
           const cap = this.capacityAt(world, tx, ty);
           if (cap <= 0) continue;
           const count = this.samples.get(`${tx},${ty}`) ?? 0;
-          const measured = Math.min(1, (count / frames) / (cap * VEHICLES_PER_TILE));
+          const measured = Math.min(1, count / frames / (cap * VEHICLES_PER_TILE));
           const c = this.ensure(tx, ty);
           const i = idx(tx, ty);
           const old = c.value[i] / 255;
@@ -127,12 +125,7 @@ export class CongestionMap {
     this.sampleFrames = 0;
   }
 
-  decayOutside(
-    _world: World,
-    activeCx: number,
-    activeCy: number,
-    radius: number,
-  ): void {
+  decayOutside(_world: World, activeCx: number, activeCy: number, radius: number): void {
     for (const [key, c] of this.chunks) {
       const [cx, cy] = key.split(',').map(Number);
       if (Math.abs(cx - activeCx) <= radius && Math.abs(cy - activeCy) <= radius) continue;
@@ -173,12 +166,7 @@ export class CongestionMap {
     this.routeCache.clear();
 
     for (const { fromTx, fromTy, link } of table.allLinks()) {
-      const start = entry(
-        world,
-        fromTx,
-        fromTy,
-        world.buildingCovering(fromTx, fromTy)?.span ?? 1,
-      );
+      const start = entry(world, fromTx, fromTy, world.buildingCovering(fromTx, fromTy)?.span ?? 1);
       const goal = entry(world, link.tx, link.ty, link.level);
       if (!start || !goal) continue;
       const goalKey = tileKey(goal[0], goal[1]);
@@ -206,8 +194,7 @@ export class CongestionMap {
       if (cap <= 0) continue;
       const c = this.ensure(tx, ty);
       const i = idx(tx, ty);
-      const estimate =
-        Math.min(1, count / (cap * ESTIMATE_CAPACITY)) * CONGESTION_ESTIMATE_BIAS;
+      const estimate = Math.min(1, count / (cap * ESTIMATE_CAPACITY)) * CONGESTION_ESTIMATE_BIAS;
       c.estimate[i] = u8(estimate);
       if (!c.observed[i]) c.value[i] = c.estimate[i];
     }

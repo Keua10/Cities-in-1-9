@@ -65,12 +65,9 @@ export function isTurnNode(route: Route, nodeIndex: number): boolean {
 export function nodeMovement(route: Route, nodeIndex: number): [number, number] {
   const points = route.tiles.length / 2;
   if (points < 2) return [0, 0];
-  const incoming = nodeIndex <= 0
-    ? routeSegmentDir(route, 0)
-    : routeSegmentDir(route, nodeIndex - 1);
-  const outgoing = nodeIndex >= points - 1
-    ? incoming
-    : routeSegmentDir(route, nodeIndex);
+  const incoming =
+    nodeIndex <= 0 ? routeSegmentDir(route, 0) : routeSegmentDir(route, nodeIndex - 1);
+  const outgoing = nodeIndex >= points - 1 ? incoming : routeSegmentDir(route, nodeIndex);
   return [incoming, outgoing];
 }
 
@@ -87,20 +84,12 @@ export function rightOffset(dir: number): [number, number] {
  * 그 값이 가리키는 점은 도로 중앙선이 아니라 우측 차선 중심이다.
  * 시뮬레이션(간격/예약)과 렌더링이 같은 이 함수를 본다.
  */
-export function lanePosition(
-  route: Route,
-  routeIdx: number,
-  tileT: number,
-): [number, number] {
+export function lanePosition(route: Route, routeIdx: number, tileT: number): [number, number] {
   return laneSample(route, routeIdx, tileT).pos;
 }
 
 /** 차량이 향한 방향(타일 좌표 단위벡터). 코너에서는 베지에 접선이다. */
-export function laneHeading(
-  route: Route,
-  routeIdx: number,
-  tileT: number,
-): [number, number] {
+export function laneHeading(route: Route, routeIdx: number, tileT: number): [number, number] {
   return laneSample(route, routeIdx, tileT).tangent;
 }
 
@@ -277,10 +266,7 @@ export function movementMid(dIn: number, dOut: number): [number, number] {
   const cy = riy + roy;
   const q2x = b[0] * CORNER_R + rox;
   const q2y = b[1] * CORNER_R + roy;
-  return [
-    0.25 * q0x + 0.5 * cx + 0.25 * q2x,
-    0.25 * q0y + 0.5 * cy + 0.25 * q2y,
-  ];
+  return [0.25 * q0x + 0.5 * cx + 0.25 * q2x, 0.25 * q0y + 0.5 * cy + 0.25 * q2y];
 }
 
 /**
@@ -300,16 +286,19 @@ export function movementPathAt(
 }
 
 /** 두 꺾은선 사이의 최단거리. */
-export function pathDistance(
-  a: readonly number[],
-  b: readonly number[],
-): number {
+export function pathDistance(a: readonly number[], b: readonly number[]): number {
   let best = Infinity;
   for (let i = 0; i + 3 < a.length; i += 2) {
     for (let j = 0; j + 3 < b.length; j += 2) {
       const d = segmentDistance(
-        a[i], a[i + 1], a[i + 2], a[i + 3],
-        b[j], b[j + 1], b[j + 2], b[j + 3],
+        a[i],
+        a[i + 1],
+        a[i + 2],
+        a[i + 3],
+        b[j],
+        b[j + 1],
+        b[j + 2],
+        b[j + 3],
       );
       if (d < best) best = d;
       if (best === 0) return 0;
@@ -332,22 +321,25 @@ export function pathDistance(
  *   - 마주 보는 좌회전끼리는 0.354타일까지 붙는다. 차 폭이 0.30이므로 이건
  *     실제로 스치는 거리다. 예전에는 통과시켰지만 지금은 막는다.
  */
-export function movementsConflict(
-  inA: number,
-  outA: number,
-  inB: number,
-  outB: number,
-): boolean {
+export function movementsConflict(inA: number, outA: number, inB: number, outB: number): boolean {
   if (inA === inB) return false;
   if (outA === outB) return true;
-  return pathDistance(movementPathAt(0, 0, inA, outA), movementPathAt(0, 0, inB, outB)) <
-    MOVEMENT_CLEARANCE_TILES;
+  return (
+    pathDistance(movementPathAt(0, 0, inA, outA), movementPathAt(0, 0, inB, outB)) <
+    MOVEMENT_CLEARANCE_TILES
+  );
 }
 
 /** 두 선분 사이의 최단거리. */
 export function segmentDistance(
-  ax0: number, ay0: number, ax1: number, ay1: number,
-  bx0: number, by0: number, bx1: number, by1: number,
+  ax0: number,
+  ay0: number,
+  ax1: number,
+  ay1: number,
+  bx0: number,
+  by0: number,
+  bx1: number,
+  by1: number,
 ): number {
   if (segmentsCross(ax0, ay0, ax1, ay1, bx0, by0, bx1, by1)) return 0;
   return Math.min(
@@ -359,8 +351,12 @@ export function segmentDistance(
 }
 
 function pointSegment(
-  px: number, py: number,
-  x0: number, y0: number, x1: number, y1: number,
+  px: number,
+  py: number,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
 ): number {
   const dx = x1 - x0;
   const dy = y1 - y0;
@@ -371,14 +367,20 @@ function pointSegment(
 }
 
 function segmentsCross(
-  ax0: number, ay0: number, ax1: number, ay1: number,
-  bx0: number, by0: number, bx1: number, by1: number,
+  ax0: number,
+  ay0: number,
+  ax1: number,
+  ay1: number,
+  bx0: number,
+  by0: number,
+  bx1: number,
+  by1: number,
 ): boolean {
   const d1 = cross(bx1 - bx0, by1 - by0, ax0 - bx0, ay0 - by0);
   const d2 = cross(bx1 - bx0, by1 - by0, ax1 - bx0, ay1 - by0);
   const d3 = cross(ax1 - ax0, ay1 - ay0, bx0 - ax0, by0 - ay0);
   const d4 = cross(ax1 - ax0, ay1 - ay0, bx1 - ax0, by1 - ay0);
-  return ((d1 > 0) !== (d2 > 0)) && ((d3 > 0) !== (d4 > 0));
+  return d1 > 0 !== d2 > 0 && d3 > 0 !== d4 > 0;
 }
 
 function cross(ax: number, ay: number, bx: number, by: number): number {

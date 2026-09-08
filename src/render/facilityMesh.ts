@@ -1,4 +1,3 @@
-import { quadIndices, writeQuad } from './quadBuffers';
 import { Mesh, MeshGeometry } from 'pixi.js';
 import { CHUNK_SIZE, TILE_HH } from '../core/constants';
 import { tileToWorldX, tileToWorldY } from '../core/iso';
@@ -6,6 +5,7 @@ import { facilityKindOfCode, isFacilityAnchor } from '../sim/buildings';
 import { FACILITY_SPECS } from '../sim/facilities';
 import type { Parcel } from '../world/world';
 import { facilityCellSize, type FacilityAtlas } from './facilityAtlas';
+import { quadIndices, writeQuad } from './quadBuffers';
 
 export type HeightSampler = (tx: number, ty: number) => number;
 

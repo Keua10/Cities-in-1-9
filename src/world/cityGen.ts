@@ -340,8 +340,7 @@ class CityBuilder {
           const seed = this.seeds[s];
           // 도심은 조금 더 넓게 잡는다. 실제 도시도 도심이 구역을 빨아들인다.
           const bias = seed.kind === K_DOWNTOWN ? 0.82 : 1;
-          const d =
-            Math.hypot(x - seed.x, y - seed.y) * wobble * bias;
+          const d = Math.hypot(x - seed.x, y - seed.y) * wobble * bias;
           if (d < bestD) {
             bestD = d;
             best = s;
@@ -515,9 +514,7 @@ class CityBuilder {
       if (run.length >= 6) {
         // 막다른 길: 20% 확률로 끝을 두어 칸 자른다.
         const cut =
-          this.rnd(run[0], fixed, 61) < 0.2
-            ? 1 + Math.floor(this.rnd(run[0], fixed, 62) * 3)
-            : 0;
+          this.rnd(run[0], fixed, 61) < 0.2 ? 1 + Math.floor(this.rnd(run[0], fixed, 62) * 3) : 0;
         for (let k = 0; k < run.length - cut; k++) this.plan[run[k]] = 1;
       }
       run = [];
