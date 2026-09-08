@@ -1,3 +1,4 @@
+import { quadIndices, writeQuad } from './quadBuffers';
 import { Mesh, MeshGeometry } from 'pixi.js';
 import { MAX_ACTIVE_VEHICLES, TILE_W, WORLD_SEED } from '../core/constants';
 import { tileToWorldX, tileToWorldY } from '../core/iso';
@@ -38,17 +39,8 @@ export class VehicleMesh {
     const n = MAX_ACTIVE_VEHICLES;
     this.positions = new Float32Array(n * 8);
     this.uvs = new Float32Array(n * 8);
-    const indices = new Uint32Array(n * 6);
-    for (let q = 0; q < n; q++) {
-      const v = q * 4;
-      const o = q * 6;
-      indices[o] = v;
-      indices[o + 1] = v + 1;
-      indices[o + 2] = v + 2;
-      indices[o + 3] = v;
-      indices[o + 4] = v + 2;
-      indices[o + 5] = v + 3;
-    }
+    const indices = quadIndices(n);
+
     this.geometry = new MeshGeometry({ positions: this.positions, uvs: this.uvs, indices });
     this.mesh = new Mesh({ geometry: this.geometry, texture: atlas.texture });
   }
@@ -89,20 +81,18 @@ export class VehicleMesh {
       const x1 = wx + half;
       const y0 = wy - half - VEHICLE_GROUND_DROP_PX;
       const y1 = y0 + VEHICLE_RENDER_SIZE_PX;
-      write(this.positions, q, [x0, y0, x1, y0, x1, y1, x0, y1]);
+      writeQuad(this.positions, q, x0, y0, x1, y1);
 
       // 스프라이트 방향은 차선 접선에서 뽑는다. 코너에서도 실제 향한 쪽을 쓴다.
       const facing = laneFacing(vehicle.route, vehicle.routeIdx, t);
       const variant = simHash(WORLD_SEED, vehicle.destTx, vehicle.destTy, vehicle.tier) % VEHICLE_VARIANTS;
       const [u0, v0, u1, v1] = this.atlas.uv(vehicle.kind, facing, variant);
-      write(this.uvs, q, [u0, v0, u1, v0, u1, v1, u0, v1]);
+      writeQuad(this.uvs, q, u0, v0, u1, v1);
       q++;
     }
 
-    for (; q < MAX_ACTIVE_VEHICLES; q++) {
-      write(this.positions, q, [0, 0, 0, 0, 0, 0, 0, 0]);
-      write(this.uvs, q, [0, 0, 0, 0, 0, 0, 0, 0]);
-    }
+    this.positions.fill(0, q * 8);
+    this.uvs.fill(0, q * 8);
     this.geometry.getBuffer('aPosition').update();
     this.geometry.getBuffer('aUV').update();
   }
@@ -111,11 +101,6 @@ export class VehicleMesh {
     this.mesh.destroy();
     try { this.geometry.destroy(true); } catch {}
   }
-}
-
-function write(array: Float32Array, q: number, values: number[]): void {
-  let p = q * 8;
-  for (let i = 0; i < 8; i++) array[p + i] = values[i];
 }
 
 export const VEHICLE_PIXEL_DENSITY_CHECK = TILE_W === 64;

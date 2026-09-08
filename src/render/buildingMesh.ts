@@ -1,3 +1,4 @@
+import { quadIndices, writeQuad } from './quadBuffers';
 import { Mesh, MeshGeometry } from 'pixi.js';
 import { CHUNK_SIZE, TILE_H, TILE_HH, TILE_W, WORLD_SEED } from '../core/constants';
 import { tileToWorldX, tileToWorldY } from '../core/iso';
@@ -42,7 +43,7 @@ export class BuildingMesh {
     const n = Math.max(1, quads.length);
     const positions = new Float32Array(n * 8);
     const uvs = new Float32Array(n * 8);
-    const indices = new Uint32Array(n * 6);
+    const indices = quads.length ? quadIndices(quads.length) : new Uint32Array(6);
 
     for (let q = 0; q < quads.length; q++) {
       const b = quads[q];
@@ -53,27 +54,13 @@ export class BuildingMesh {
       const x1 = b.bottomX + halfW;
       const y1 = b.bottomY;
       const y0 = y1 - size;
-      write(positions, q, [x0, y0, x1, y0, x1, y1, x0, y1]);
+      writeQuad(positions, q, x0, y0, x1, y1);
 
       const [u0, v0, u1, v1] = this.atlas.uv(b.level, b.zone, b.variant);
-      write(uvs, q, [u0, v0, u1, v0, u1, v1, u0, v1]);
-
-      const v = q * 4;
-      const o = q * 6;
-      indices[o] = v;
-      indices[o + 1] = v + 1;
-      indices[o + 2] = v + 2;
-      indices[o + 3] = v;
-      indices[o + 4] = v + 2;
-      indices[o + 5] = v + 3;
+      writeQuad(uvs, q, u0, v0, u1, v1);
     }
 
-    // 건물이 하나도 없으면 빈 메시가 된다. 정점 0 개짜리 지오메트리는 Pixi 가
-    // 싫어하므로 화면 밖 사각형 하나를 남겨둔다(투명 UV 라 아무것도 안 보인다).
-    if (quads.length === 0) {
-      write(positions, 0, [0, 0, 0, 0, 0, 0, 0, 0]);
-      write(uvs, 0, [0, 0, 0, 0, 0, 0, 0, 0]);
-    }
+    // Typed arrays are already zeroed for the empty-mesh placeholder.
 
     this.geometry = new MeshGeometry({ positions, uvs, indices });
     this.mesh = new Mesh({ geometry: this.geometry, texture: atlas.texture });
@@ -140,11 +127,6 @@ function collect(parcel: Parcel, sampleHeight: HeightSampler): Quad[] {
   // 뒤에서 앞으로. 같은 깊이면 큰 건물을 먼저 깔아 작은 건물이 위에 오게 한다.
   out.sort((a, b) => a.depth - b.depth || b.level - a.level);
   return out;
-}
-
-function write(target: Float32Array, quad: number, values: number[]): void {
-  const p = quad * 8;
-  for (let i = 0; i < 8; i++) target[p + i] = values[i];
 }
 
 /** 규격 확인용. TILE_W/TILE_H 가 바뀌면 셀 크기 계산도 같이 봐야 한다. */

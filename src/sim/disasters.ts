@@ -9,23 +9,10 @@ import {
 } from './simConstants';
 
 /** 시설 kind 0/1/2 와 같은 순서. 기존 건물/시설 ID와 별개의 사건 종류. */
-export type DisasterKind = 0 | 1 | 2;
+import type { DisasterKind, DisasterState, Incident } from './disasterTypes';
+export type { DisasterKind, DisasterState, Incident } from './disasterTypes';
 export const DISASTER_NAMES = ['화재', '범죄', '질병'] as const;
-export interface Incident {
-  kind: DisasterKind;
-  tx: number;
-  ty: number;
-  code: number;
-  born: number;
-  startedTick: number;
-}
-export interface DisasterState {
-  version: 1;
-  active: Incident[];
-  started: number[];
-  extinguished: number;
-  burned: number;
-}
+const DISASTER_KINDS = [0, 1, 2] as const;
 type QualitySource = Pick<ServiceField, 'serviceQualityAt'>;
 const keyOf = (tx: number, ty: number): string => `${tx},${ty}`;
 const order = (a: Incident, b: Incident): number => a.ty - b.ty || a.tx - b.tx;
@@ -101,6 +88,8 @@ export class DisasterSim {
 
   /** 제거/재건축된 건물에 옛 사건이 붙어 있지 않도록 로드 직후와 매 틱 검사한다. */
   reconcile(world: World): boolean {
+    if (this.active.every(e =>
+      world.getBld(e.tx, e.ty) === e.code && world.bornDayAt(e.tx, e.ty) === e.born)) return false;
     const before = this.active.length;
     this.state.active = this.state.active.filter(e =>
       world.getBld(e.tx, e.ty) === e.code && world.bornDayAt(e.tx, e.ty) === e.born);
@@ -110,6 +99,7 @@ export class DisasterSim {
 
   step(world: World, services: QualitySource, tick: number, grace: number): boolean {
     let changed = this.reconcile(world);
+    if (this.active.length === 0 && grace <= 0) return changed;
     const prior = [...this.active];
     const finished = new Set<Incident>();
     const spread = new Map<string, { tx: number; ty: number }>();
@@ -164,7 +154,7 @@ export class DisasterSim {
           const tx = p.cx * CHUNK_SIZE + i % CHUNK_SIZE;
           const ty = p.cy * CHUNK_SIZE + Math.floor(i / CHUNK_SIZE);
           if (touched.has(keyOf(tx, ty)) || this.byTile.has(keyOf(tx, ty))) continue;
-          for (const kind of [0, 1, 2] as const) {
+          for (const kind of DISASTER_KINDS) {
             const q = quality(services, tx, ty, kind);
             if (roll(kind, tick, tx, ty) < DISASTER_RATE_PER_TICK[kind] * grace * (1 - q * DISASTER_PREVENTION[kind])) {
               if (this.start(world, kind, tx, ty, tick)) changed = true;

@@ -1,5 +1,5 @@
 import { START_MONEY } from '../sim/simConstants';
-import type { DisasterState } from '../sim/disasters';
+import type { DisasterState } from '../sim/disasterTypes';
 
 /**
  * Firestore 에 실제로 저장되는 것들의 타입.

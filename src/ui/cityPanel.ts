@@ -81,20 +81,20 @@ export class CityPanel {
     if (now - this.lastPaint < 250) return;
     this.lastPaint = now;
 
-    this.moneyEl.textContent = formatMoney(sim.money);
+    setText(this.moneyEl, formatMoney(sim.money));
     this.moneyEl.classList.toggle('broke', sim.money <= 0);
-    this.popEl.textContent = Math.round(sim.stats.population).toLocaleString('ko-KR');
+    setText(this.popEl, Math.round(sim.stats.population).toLocaleString('ko-KR'));
 
     const occupancy = Math.max(0, Math.min(1, sim.stats.occupancy));
     const vacancy = 1 - occupancy;
-    this.occupancyEl.textContent = `${Math.round(vacancy * 100)}%`;
+    setText(this.occupancyEl, `${Math.round(vacancy * 100)}%`);
     this.occupancyFillEl.style.width = `${Math.round(occupancy * 100)}%`;
     this.occupancyFillEl.classList.toggle('warning', occupancy < 0.75);
     this.occupancyFillEl.classList.toggle('critical', occupancy < 0.5);
 
     const day = sim.day;
     const hour = sim.tick % TICKS_PER_DAY;
-    this.dateEl.textContent = `${day}일차 ${String(hour).padStart(2, '0')}시`;
+    setText(this.dateEl, `${day}일차 ${String(hour).padStart(2, '0')}시`);
 
     for (let z = 0; z < 3; z++) {
       for (let t = 0; t < LEVEL_COUNT; t++) {
@@ -113,18 +113,23 @@ export class CityPanel {
       this.serviceFills[kind].style.width = `${Math.round(v * 100)}%`;
       this.serviceFills[kind].classList.toggle('warning', v < 0.7);
       this.serviceFills[kind].classList.toggle('critical', v < 0.4);
-      this.serviceValues[kind].textContent = `${Math.round(v * 100)}%`;
+      setText(this.serviceValues[kind], `${Math.round(v * 100)}%`);
     }
 
     const amenity = Math.max(0, Math.min(1, sim.stats.amenityFulfilled));
     this.amenityFillEl.style.width = `${Math.round(amenity * 100)}%`;
     this.amenityFillEl.classList.toggle('warning', amenity < 0.7);
     this.amenityFillEl.classList.toggle('critical', amenity < 0.4);
-    this.amenityValueEl.textContent = `${Math.round(amenity * 100)}%`;
+    setText(this.amenityValueEl, `${Math.round(amenity * 100)}%`);
 
-    this.facilityNoteEl.textContent = describeFacilities(sim);
+    setText(this.facilityNoteEl, describeFacilities(sim));
+    this.updateSafety(sim);
+    setText(this.noteEl, describe(sim));
+  }
+
+  private updateSafety(sim: MacroSim): void {
     const [fires, crimes, illnesses] = sim.disasters.counts;
-    this.safetyEl.textContent = `화재 ${fires} · 범죄 ${crimes} · 질병 ${illnesses}`;
+    setText(this.safetyEl, `화재 ${fires} · 범죄 ${crimes} · 질병 ${illnesses}`);
     this.safetyEl.classList.toggle('active', fires + crimes + illnesses > 0);
     this.incidentButton.disabled = fires + crimes + illnesses === 0;
     this.safetyNoteEl.textContent = fires > 0
@@ -135,7 +140,6 @@ export class CityPanel {
     if (sim.disasters.burned || sim.disasters.extinguished) {
       this.safetyNoteEl.textContent += ` 누적 진압 ${sim.disasters.extinguished} · 전소 ${sim.disasters.burned}채`;
     }
-    this.noteEl.textContent = describe(sim);
   }
 }
 
@@ -277,4 +281,9 @@ function gaugeRow(cls: string, label: string, attrs: string): string {
       <b class="cp-gauge-value">0%</b>
     </div>
   `;
+}
+
+/** Skip unchanged text to avoid replacing DOM text nodes and repeating live announcements. */
+function setText(element: HTMLElement, value: string): void {
+  if (element.textContent !== value) element.textContent = value;
 }

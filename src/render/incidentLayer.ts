@@ -5,6 +5,8 @@ import { levelOfCode } from '../sim/buildings';
 import type { DisasterSim } from '../sim/disasters';
 import type { World } from '../world/world';
 
+const INCIDENT_COLORS = [0xf26b38, 0xf5bd4f, 0xb999ff] as const;
+
 /** 최대 128개 사건만 단일 Graphics에 표시. 건물 메시나 저장 타일은 건드리지 않는다. */
 export class IncidentLayer {
   readonly graphics = new Graphics();
@@ -19,7 +21,7 @@ export class IncidentLayer {
       const tx = e.tx + (span - 1) / 2, ty = e.ty + (span - 1) / 2;
       const x = tileToWorldX(tx, ty);
       const y = tileToWorldY(tx, ty, world.sampleHeight(e.tx, e.ty)) - TILE_HH * span * 1.8;
-      const color = [0xf26b38, 0xf5bd4f, 0xb999ff][e.kind];
+      const color = INCIDENT_COLORS[e.kind];
       g.moveTo(x, y + 12).lineTo(x, y + 24).stroke({ color, width: 2 });
       g.circle(x, y, 12).fill({ color: 0x17212d, alpha: 0.95 }).stroke({ color, width: 2 });
       if (e.kind === 0) {
