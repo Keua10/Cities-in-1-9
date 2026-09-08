@@ -170,6 +170,7 @@ interface Reservation {
   vehicle: Vehicle;
   path: JunctionPath;
   grantedMs: number;
+  signal: SignalState;
 }
 
 interface JunctionRuntime {
@@ -193,6 +194,11 @@ export class IntersectionControl {
 
   reservationOf(vehicle: Vehicle): JunctionPath | null {
     return this.byVehicle.get(vehicle)?.path ?? null;
+  }
+
+  /** 진입 시점 검증용. 단순 예약 유무로 적신호 우회전 검사를 면제하면 안 된다. */
+  grantSignalOf(vehicle: Vehicle): SignalState | null {
+    return this.byVehicle.get(vehicle)?.signal ?? null;
   }
 
   release(vehicle: Vehicle): void {
@@ -298,6 +304,7 @@ export class IntersectionControl {
           vehicle: approach.vehicle,
           path,
           grantedMs: timeMs,
+          signal: signalState(junction, path.enterDir, timeMs),
         };
         rt.reservations.push(reservation);
         this.byVehicle.set(approach.vehicle, reservation);
@@ -362,7 +369,8 @@ export class IntersectionControl {
       // 적신호. 우회전만 예외다.
       if (path.turn !== TurnKind.Right) return null;
       // 실제 법: 정지선에서 **일시정지** 후, 진행 차량이 없고 보행자가 없으면 진행.
-      if (vehicle.stoppedMs < RED_RIGHT_STOP_DWELL_MS) return null;
+      if (Math.abs(a.distance) > 0.02 || a.speed >= 0.05 ||
+          vehicle.stoppedMs < RED_RIGHT_STOP_DWELL_MS) return null;
       if (pedestrianBlocking()) return null;
       // "차량 없으면" — 녹색을 받은 축에서 다가오는 차와 궤적이 겹치면 못 간다.
       for (const other of all) {

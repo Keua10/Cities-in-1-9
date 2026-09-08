@@ -22,6 +22,10 @@ import { FACILITY_NAMES, TICKS_PER_DAY } from '../sim/simConstants';
  *   2) 수요 막대는 CSS 변수로 폭만 바꾼다. DOM 을 새로 만들지 않는다.
  */
 export class CityPanel {
+  onIncidentFocus: (() => void) | null = null;
+  private safetyEl: HTMLElement;
+  private safetyNoteEl: HTMLElement;
+  private incidentButton: HTMLButtonElement;
   private root: HTMLElement;
   private moneyEl: HTMLElement;
   private popEl: HTMLElement;
@@ -44,6 +48,10 @@ export class CityPanel {
     if (!el) throw new Error(`도시 상태판을 찾을 수 없습니다: ${selector}`);
     this.root = el;
     this.root.innerHTML = template();
+    this.safetyEl = must(el, '.cp-safety-counts');
+    this.safetyNoteEl = must(el, '.cp-safety-note');
+    this.incidentButton = must(el, '.cp-incident-focus') as HTMLButtonElement;
+    this.incidentButton.addEventListener('click', () => this.onIncidentFocus?.());
 
     this.moneyEl = must(el, '.cp-money');
     this.popEl = must(el, '.cp-pop');
@@ -115,6 +123,18 @@ export class CityPanel {
     this.amenityValueEl.textContent = `${Math.round(amenity * 100)}%`;
 
     this.facilityNoteEl.textContent = describeFacilities(sim);
+    const [fires, crimes, illnesses] = sim.disasters.counts;
+    this.safetyEl.textContent = `화재 ${fires} · 범죄 ${crimes} · 질병 ${illnesses}`;
+    this.safetyEl.classList.toggle('active', fires + crimes + illnesses > 0);
+    this.incidentButton.disabled = fires + crimes + illnesses === 0;
+    this.safetyNoteEl.textContent = fires > 0
+      ? '화재 건물은 비어 있습니다. 소방서의 도로 연결과 과부하를 확인하세요.'
+      : crimes + illnesses > 0
+        ? '범죄·질병으로 입주가 줄었습니다. 경찰서·병원 품질이 높을수록 빨리 회복합니다.'
+        : '진행 중인 사건이 없습니다. 소방서·경찰서·병원이 사고를 줄입니다.';
+    if (sim.disasters.burned || sim.disasters.extinguished) {
+      this.safetyNoteEl.textContent += ` 누적 진압 ${sim.disasters.extinguished} · 전소 ${sim.disasters.burned}채`;
+    }
     this.noteEl.textContent = describe(sim);
   }
 }
@@ -227,6 +247,11 @@ function template(): string {
       ${gauges}
     </div>
     <div class="cp-facility-note"></div>
+    <div class="cp-safety">
+      <div class="cp-section-title">도시 안전 <button class="cp-incident-focus" type="button" disabled>사건 위치 보기</button></div>
+      <div class="cp-safety-counts" role="status" aria-live="polite">화재 0 · 범죄 0 · 질병 0</div>
+      <div class="cp-safety-note"></div>
+    </div>
     <div class="cp-note"></div>
   `;
 }

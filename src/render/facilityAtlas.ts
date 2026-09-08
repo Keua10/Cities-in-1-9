@@ -131,7 +131,9 @@ async function loadImage(url: string): Promise<HTMLImageElement | null> {
   }
   return new Promise((resolve) => {
     const img = new Image();
-    img.onload = () => resolve(img);
+    img.onload = () => resolve(
+      img.naturalWidth === FACILITY_ATLAS_W && img.naturalHeight === FACILITY_ATLAS_H ? img : null,
+    );
     img.onerror = () => resolve(null);
     img.src = url;
   });

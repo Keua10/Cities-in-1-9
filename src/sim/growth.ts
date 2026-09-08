@@ -49,6 +49,8 @@ export interface GrowthContext {
   tick: number;
   /** 쓸 수 있는 돈. 이 함수는 읽기만 하고, 실제 차감은 반환값으로 돌려준다. */
   money: number;
+  /** 사건 처리 중인 건물을 재건축해 사건을 지우지 않는다. */
+  blocksRebuild?: (tx: number, ty: number, span: number) => boolean;
 }
 
 export interface GrowthResult {
@@ -354,6 +356,7 @@ function rebuildPass(world: World, p: Parcel, ctx: GrowthContext): GrowthResult 
         continue;
       }
       if (!rebuildFits(world, ctx.field, tx, ty, target, zone, ctx.today)) continue;
+      if (ctx.blocksRebuild?.(tx, ty, target)) continue;
 
       const cost = Math.round(BUILD_COST[target - 1] * REBUILD_SURCHARGE);
       if (ctx.money - spent < cost) return { built, demolished, spent };

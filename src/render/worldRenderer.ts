@@ -34,6 +34,8 @@ import { laneIsTurning } from '../sim/traffic/laneGeometry';
 import { JUNCTION_LEG_MIN_TILES } from '../sim/simConstants';
 import type { Vehicle } from '../sim/traffic/vehicles';
 import { ChunkMesh } from './chunkMesh';
+import { IncidentLayer } from './incidentLayer';
+import type { DisasterSim } from '../sim/disasters';
 
 export interface RenderStats {
   visibleChunks: number;
@@ -83,6 +85,8 @@ export class WorldRenderer {
   /** 시설 배치 미리보기 사각형. 커서 레이어와 따로 둬야 서로 지우지 않는다. */
   private previewLayer = new Graphics();
   private signalLayer = new Graphics();
+  private incidentLayer = new IncidentLayer();
+  private disasters: DisasterSim | null = null;
   private lastSignalDrawMs = -1;
 
   private meshes = new Map<string, ChunkMesh>();
@@ -130,6 +134,7 @@ export class WorldRenderer {
       this.turningVehicleLayer,
       this.fogLayer,
       this.signalLayer,
+      this.incidentLayer.graphics,
       this.gridLayer,
       this.cursorLayer,
       this.previewLayer,
@@ -144,6 +149,7 @@ export class WorldRenderer {
   }
 
   attachTraffic(traffic: TrafficSim, atlas: VehicleAtlas): void { this.traffic = traffic; this.vehicleAtlas = atlas; }
+  attachDisasters(sim: DisasterSim): void { this.disasters = sim; }
 
   private sampleHeight: (tx: number, ty: number) => number;
   private resolveTop: TopResolver;
@@ -245,9 +251,10 @@ export class WorldRenderer {
     for (const key of [...this.vehicleMeshes.keys()]) if (!usedVehicleMeshes.has(key)) this.dropVehicles(key);
     this.updateTurningVehicles(turningVehicles);
 
-    if (this.traffic && (this.lastSignalDrawMs < 0 || now - this.lastSignalDrawMs >= 120)) {
+    if (this.lastSignalDrawMs < 0 || now - this.lastSignalDrawMs >= 120) {
       this.lastSignalDrawMs = now;
       this.drawSignals(range);
+      if (this.disasters) this.incidentLayer.draw(this.world, this.disasters, range);
     }
 
     this.stats.visibleChunks = visible;

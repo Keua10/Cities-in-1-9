@@ -19,6 +19,7 @@ import { CongestionMap } from './congestion';
 import { RoadField } from './roadGraph';
 import { SERVICE_KIND_COUNT, ServiceField } from './services';
 import { FACILITY_COUNT } from './buildings';
+import { DisasterSim } from './disasters';
 import {
   AMENITY_GAP_MAX,
   AMENITY_HALF,
@@ -174,6 +175,7 @@ export class MacroSim {
    * 반드시 같이 바뀌기 때문이다. 별도 주기를 만들지 마라.
    */
   readonly services = new ServiceField();
+  readonly disasters: DisasterSim;
   private assignment: AssignmentTable | null = null;
   private congestion: CongestionMap | null = null;
 
@@ -203,7 +205,9 @@ export class MacroSim {
   constructor(
     private world: World,
     private macro: MacroState,
-  ) {}
+  ) {
+    this.disasters = new DisasterSim(macro.disasters, macro.tick);
+  }
 
   /** STEP 3.2 파생 레이어를 연결한다. 저장 상태에는 포함하지 않는다. */
   attachTraffic(congestion: CongestionMap, assignment: AssignmentTable): void {
@@ -250,6 +254,8 @@ export class MacroSim {
    * "아무도 없으면 시간이 느려지다가 멈춘다" 는 설계가 이 두 줄이다.
    */
   primeCatchup(nowMs: number): void {
+    this.disasters.reconcile(this.world);
+    this.macro.disasters = this.disasters.snapshot();
     const gap = Math.max(0, nowMs - (this.macro.tickedAt || nowMs));
     const ticks = Math.floor((gap / MS_PER_TICK) * OFFLINE_SPEED);
     this.catchupLeft = Math.min(ticks, MAX_CATCHUP_TICKS);
@@ -291,6 +297,11 @@ export class MacroSim {
   private step(): void {
     this.macro.tick++;
 
+    if (this.disasters.step(this.world, this.services, this.tick, graceFactor(this.stats.population))) {
+      this.macro.disasters = this.disasters.snapshot();
+      this.onMacroChange?.();
+    }
+
     this.evaluate(this.macro.tick % STATS_INTERVAL === 0);
     if (this.catchupLeft > 0) this.congestion?.decayAll();
     // 도로가 바뀌면 개발 가능 범위가 바뀐다. 하루를 기다리면 학생이 도로를 깔고도
@@ -331,6 +342,7 @@ export class MacroSim {
       today: this.day,
       tick: this.macro.tick,
       money: this.macro.money,
+      blocksRebuild: (tx, ty, span) => this.disasters.blocksRebuild(tx, ty, span, this.world),
     };
 
     for (const p of this.world.developedParcels()) {
@@ -464,7 +476,9 @@ export class MacroSim {
           // 유일한 바닥이기 때문이다.
           const needsGap = Math.min(NEEDS_PENALTY_MAX, serviceGap + amenityGap);
 
-          const sat = satisfaction(zone, dist, nui, congestion, needsGap, amenityBonus);
+          const incidentPenalty = this.disasters.penaltyAt(tx, ty);
+          const sat = incidentPenalty >= 1 ? 0 : Math.max(0,
+            satisfaction(zone, dist, nui, congestion, needsGap, amenityBonus) - incidentPenalty);
           const floor = SATISFACTION_FLOOR[level - 1];
           const target =
             sat <= floor ? 0 : Math.min(1, (sat - floor) / Math.max(0.05, 1 - floor));

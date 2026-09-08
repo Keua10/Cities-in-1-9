@@ -33,6 +33,7 @@ import { CATCHUP_TICKS_PER_FRAME, START_MONEY } from './sim/simConstants';
 import { TIER_NAMES, ZONE_NAMES } from './sim/buildings';
 import { FACILITY_SPECS } from './sim/facilities';
 import { SERVICE_KIND_COUNT } from './sim/services';
+import { DISASTER_NAMES } from './sim/disasters';
 import { AMENITY_NEED_BY_TIER, FACILITY_NAMES } from './sim/simConstants';
 import { SEASON_NAMES, WEEKDAY_NAMES } from './sim/time';
 import { CityPanel } from './ui/cityPanel';
@@ -146,8 +147,16 @@ async function boot(): Promise<void> {
   sim.primeCatchup(Date.now());
   const traffic = new TrafficSim(world, sim, congestion, assignment);
   renderer.attachTraffic(traffic, vehicleAtlas);
+  renderer.attachDisasters(sim.disasters);
 
   const cityPanel = new CityPanel();
+  let incidentFocusIndex = 0;
+  cityPanel.onIncidentFocus = () => {
+    const events = sim.disasters.active.filter(e => sim.disasters.at(e.tx, e.ty, world));
+    if (!events.length) return;
+    const e = events[incidentFocusIndex++ % events.length];
+    camera.centerOnWorld(tileToWorldX(e.tx, e.ty), tileToWorldY(e.tx, e.ty, world.sampleHeight(e.tx, e.ty)));
+  };
 
   // 6) 2단계 도구. 도로·지구 지정은 전부 여기를 지난다.
   const tools = new Tools(world, renderer, sim);
@@ -252,6 +261,10 @@ async function boot(): Promise<void> {
         : null,
       service: cursor ? describeService(sim, cursor.tx, cursor.ty, here) : null,
       amenity: cursor ? describeAmenity(sim, cursor.tx, cursor.ty, here) : null,
+      incident: cursor ? (() => {
+        const e = sim.disasters.at(cursor.tx, cursor.ty, world);
+        return e ? `${DISASTER_NAMES[e.kind]} · 발생 후 ${sim.tick - e.startedTick}시간` : null;
+      })() : null,
       visibleBuildings: renderer.stats.visibleBuildings,
       visibleFacilities: renderer.stats.visibleFacilities,
       activeVehicles: traffic.activeCount,

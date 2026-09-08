@@ -140,7 +140,9 @@ export class SaveManager {
         this.token,
         {
           explored: this.world.exploredKeys(),
-          macro: this.city.macro,
+          // 청크 스냅샷과 같은 순간의 사건/틱을 고정한다. 트랜잭션 재시도 중
+          // 실시간 시뮬레이션이 다음 사건을 만들더라도 이 저장에 섞이지 않는다.
+          macro: structuredClone(this.city.macro),
           cityName: this.city.cityName,
         },
         taken.chunks,

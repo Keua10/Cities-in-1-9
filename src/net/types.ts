@@ -1,4 +1,5 @@
 import { START_MONEY } from '../sim/simConstants';
+import type { DisasterState } from '../sim/disasters';
 
 /**
  * Firestore 에 실제로 저장되는 것들의 타입.
@@ -20,12 +21,12 @@ import { START_MONEY } from '../sim/simConstants';
 /**
  * 매크로 상태. 3.1단계에서 실제로 쓰이기 시작했다.
  *
- * **여기 있는 네 개가 전부다.** 인구 구성, 수요, 만족도, 입주율, 통근 거리는
+ * 기본 네 필드와 3.4의 희소 사건 목록만 저장한다. 인구 구성, 수요, 만족도, 입주율, 통근 거리는
  * 저장하지 않는다. 전부 (건물 배치 + 도로 배치 + 틱) 에서 다시 계산되는
  * 값이고, 매 틱 변하는 값을 저장하면 도시의 모든 청크가 매 틱 저장 대상이
  * 되어 Spark 무료 한도가 하루 만에 날아간다.
  *
- * 필드가 1단계와 같으므로 SCHEMA_VERSION 은 그대로 둔다.
+ * 사건 목록은 선택 필드이며 없는 저장본도 읽을 수 있어 SCHEMA_VERSION 은 그대로 둔다.
  */
 export interface MacroState {
   /** 도시 자금. 3.1단계에서는 클라이언트가 계산한다. */
@@ -36,6 +37,8 @@ export interface MacroState {
   tick: number;
   /** 마지막으로 시뮬레이션이 진행된 실제 시각(ms). 접속 공백을 재는 데 쓴다. */
   tickedAt: number;
+  /** 3.4: 재접속으로 사건이 사라지지 않도록 희소 목록만 저장. 옛 저장본은 없음. */
+  disasters?: DisasterState;
 }
 
 export function emptyMacro(): MacroState {

@@ -58,7 +58,7 @@ import {
   type JunctionPath,
 } from './intersectionControl';
 import { Router, type Route } from './router';
-import { signalState } from './signals';
+import { SignalState, signalState } from './signals';
 import { VehicleKind, type Vehicle } from './vehicles';
 
 type ReadySpawn = { trip: Trip; route: Route; readyAtMs: number };
@@ -143,6 +143,10 @@ export class TrafficSim {
   /** 개발용 진단. 이 차량이 교차로 통행권을 쥐고 있는가. */
   debugHasRight(vehicle: Vehicle): boolean {
     return this.control.hasReservation(vehicle);
+  }
+
+  debugGrantSignal(vehicle: Vehicle): SignalState | null {
+    return this.control.grantSignalOf(vehicle);
   }
 
   /** 개발용 진단. 이 차량이 지금 무엇 때문에 서 있는가. */

@@ -32,6 +32,7 @@ export interface HudData {
   service: string | null;
   /** 커서 칸의 복지 상태. 점수와 계층별 요구량을 나란히 담는다. */
   amenity: string | null;
+  incident: string | null;
   /** 화면에 그려지고 있는 시설 수. */
   visibleFacilities: number;
   /** 메모리에 남아 있는 필지 수. 지형 청크와 따로 센다. */
@@ -85,6 +86,7 @@ export class Hud {
       `건물 ${data.building ?? '—'}`,
       `필수 ${data.service ?? '—'}`,
       `복지 ${data.amenity ?? '—'}`,
+      `사건 ${data.incident ?? '없음'}`,
       `화면 청크 ${data.visibleChunks}   메시 ${data.loadedMeshes}   필지 ${data.parcels}`,
       `화면 건물 ${data.visibleBuildings}   화면 시설 ${data.visibleFacilities}`,
       `차량 ${data.activeVehicles}   평균 혼잡 ${Math.round(data.averageCongestion * 100)}%`,

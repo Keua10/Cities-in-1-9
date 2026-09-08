@@ -639,3 +639,12 @@ export const AMENITY_FIELD_MAX_RANGE = 16;
  * **이 값만 따로 올리지 마라.** 올리려면 6장 표를 다시 계산해라.
  */
 export const NEEDS_PENALTY_MAX = 0.50;
+/* STEP 3.4: 1틱 = 게임 내 1시간. 발생률은 건물 한 채당 확률이다. */
+export const DISASTER_MAX_ACTIVE = 128;
+export const DISASTER_RATE_PER_TICK = [0.000012, 0.00003, 0.000025] as const;
+export const DISASTER_PREVENTION = [0.85, 0.90, 0.85] as const;
+export const DISASTER_RECOVERY = [0.002, 0.04, 0.02] as const;
+export const DISASTER_SERVICE_RECOVERY = [0.40, 0.30, 0.22] as const;
+export const DISASTER_DURATION = [12, 12, 24] as const;
+export const DISASTER_PENALTY = [1, 0.08, 0.12] as const;
+export const FIRE_SPREAD_CHANCE = 0.04;

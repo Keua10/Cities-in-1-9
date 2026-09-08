@@ -1,4 +1,23 @@
-# Cities-in-1-9 — STEP 3.1 인수인계 (매크로 시뮬레이션 / 건물 성장·재개발)
+# Cities-in-1-9
+
+## 현재 상태 (2026-09-08)
+
+STEP 3.3 시설 그림·UI 마무리, trafficCheck 실패 분석·수정, STEP 3.4 화재·범죄·질병을 구현했다. 최신 결과는 [완료 보고서](STEP3_3_3_4_COMPLETION.md), 사건 규칙과 초기 밸런스는 [STEP3_4.md](STEP3_4.md)를 참고한다. 아래 STEP 3.1 인계 내용은 당시 기록이다.
+
+```sh
+npm ci
+npm run dev
+npm run build
+npm run check
+```
+
+`npm run check`는 서비스·교통·차선·220일 성장·재해·시설 아틀라스를 검사한다. 선택 실행은 `node tools/check/run.mjs traffic disaster`처럼 지정한다. 교통 프레임 변동 검사는 PowerShell에서 `$env:TRAFFIC_FRAME_MS='8.33,16.67,33.33,50'; npm run check:traffic`으로 실행한다. 검사 종료 뒤 `Remove-Item Env:TRAFFIC_FRAME_MS`로 기본 프레임으로 돌아간다.
+
+개발 서버의 `/tools/check/visual.html`은 시설 7종과 사건 3종을 한 화면에서 확인하는 저장 없는 시험 도시다. 일반 게임은 `/`에서 시작한다. 시설 원본과 재생성 절차는 [tools/art/README.md](tools/art/README.md)에 있다. 검사 산출물은 `.check/`에 생성하며 Git에서 제외한다.
+
+---
+
+# STEP 3.1 인수인계 (과거 기록)
 
 > 이 문서는 Claude가 설계를 확정한 뒤 ChatGPT에게 세부 구현/디버깅을 맡기기 위한 핸드오프 문서입니다.
 > **구조적 결정은 이미 Claude가 완료했습니다. GPT는 아래 명세를 그대로 구현하고, 세부 로직/문법 오류만 처리하세요. 명세 해석을 임의로 바꾸지 마세요.**

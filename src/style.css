@@ -588,6 +588,9 @@ canvas {
   gap: 10px;
 }
 
+/* author display:flex 가 브라우저의 기본 [hidden] 규칙을 덮지 않게 한다. */
+#facility-sheet[hidden] { display: none; }
+
 #facility-sheet .fs-label {
   flex: 0 0 62px;
   color: var(--ink-dim);
@@ -727,3 +730,10 @@ canvas {
 .cp-facility-note:empty {
   display: none;
 }
+.cp-safety { border-top: 1px solid rgba(255,255,255,.12); padding-top: 10px; margin-top: 10px; }
+.cp-safety .cp-section-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.cp-incident-focus { color: #f5bd4f; background: transparent; border: 1px solid #655638; border-radius: 5px; padding: 3px 6px; font-size: 10px; cursor: pointer; pointer-events: auto; }
+.cp-incident-focus:disabled { opacity: .4; cursor: default; }
+.cp-safety-counts { margin-top: 7px; font-size: 12px; color: #abc4b7; }
+.cp-safety-counts.active { color: #ffc16d; }
+.cp-safety-note { margin-top: 5px; color: #a5b1bf; font-size: 10px; line-height: 1.5; }

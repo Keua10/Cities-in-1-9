@@ -9,8 +9,9 @@
  * 2) 그림 검증: /tmp/lane_scene.png, /tmp/vehicle_atlas.png
  */
 import { createCanvas } from '@napi-rs/canvas';
-import { writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { TILE_HH, TILE_HW } from '../../src/core/constants';
+mkdirSync('.check', { recursive: true });
 import { tileToWorldX, tileToWorldY } from '../../src/core/iso';
 import {
   LANE_OFFSET_TILES,
@@ -201,7 +202,7 @@ const dirNames = ['+tx (RD)', '+ty (LD)', '-tx (LU)', '-ty (RU)'];
 for (let d = 0; d < 4; d++) {
   bigCtx.fillText(dirNames[d], d * VEHICLE_VARIANTS * VEHICLE_CELL * zoom + 8, 22);
 }
-writeFileSync('/tmp/vehicle_atlas.png', bigAtlas.toBuffer('image/png'));
+writeFileSync('.check/vehicle_atlas.png', bigAtlas.toBuffer('image/png'));
 
 // 도로망 + 차선 + 차량
 const scene = createCanvas(1100, 720);
@@ -309,7 +310,7 @@ for (const { color, label } of scenarios) {
 ctx.fillStyle = '#e2e8f0';
 ctx.fillText('yellow dashed = road centre line', 16, ly + 6);
 
-writeFileSync('/tmp/lane_scene.png', scene.toBuffer('image/png'));
+writeFileSync('.check/lane_scene.png', scene.toBuffer('image/png'));
 
 // 교차로 주변 확대. 마주 오는 차가 중앙선을 사이에 두고 갈라지는지 눈으로 본다.
 const zoomCanvas = createCanvas(1100, 720);
@@ -318,6 +319,6 @@ zc.imageSmoothingEnabled = false;
 zc.fillStyle = '#20262c';
 zc.fillRect(0, 0, 1100, 720);
 zc.drawImage(scene, 340, 168, 440, 288, 0, 0, 1100, 720);
-writeFileSync('/tmp/lane_zoom.png', zoomCanvas.toBuffer('image/png'));
+writeFileSync('.check/lane_zoom.png', zoomCanvas.toBuffer('image/png'));
 console.log(`\n${failures === 0 ? 'ALL PASS' : failures + ' FAILED'}`);
 process.exit(failures === 0 ? 0 : 1);

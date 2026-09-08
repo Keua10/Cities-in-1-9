@@ -293,7 +293,10 @@ console.log('4. 실제 주행 (4차로 격자 도시)');
   let samples = 0;
   let lateAvgSpeed = 0;
   let lateSamples = 0;
-  const FRAMES = 12_000; // 16.67ms x 12000 = 200초
+  const framePattern = process.env.TRAFFIC_FRAME_MS?.split(',').map(Number) ?? [16.67];
+  if (framePattern.some(n => !Number.isFinite(n) || n <= 0 || n > 100)) throw new Error('TRAFFIC_FRAME_MS must be 0..100ms');
+  const meanFrame = framePattern.reduce((a, b) => a + b, 0) / framePattern.length;
+  const FRAMES = Math.ceil(200_000 / meanFrame);
 
   const all = (): Vehicle[] => {
     const out: Vehicle[] = [];
@@ -313,11 +316,12 @@ console.log('4. 실제 주행 (4차로 격자 도시)');
     progress: number;
     /** 정지선 앞에서 실제로 한 번 멈췄는가. 적신호 우회전의 "일시정지" 검증용. */
     didStop: boolean;
+    crossed: boolean;
   }
   const watch = new Map<Vehicle, Watch>();
 
   for (let frame = 0; frame < FRAMES; frame++) {
-    traffic.update(16.67);
+    traffic.update(framePattern[frame % framePattern.length]);
     const vehicles = all();
     peak = Math.max(peak, vehicles.length);
     seen = Math.max(seen, traffic.activeCount);
@@ -329,17 +333,21 @@ console.log('4. 실제 주행 (4차로 격자 도시)');
       if (!entry || entry.route !== v.route || v.routeIdx > entry.path.exitIndex) {
         const path = buildJunctionPath(v.route, v.routeIdx, index);
         if (!path) { watch.delete(v); continue; }
-        entry = { route: v.route, path, progress: v.routeIdx + v.tileT, didStop: false };
+        entry = { route: v.route, path, progress: v.routeIdx + v.tileT, didStop: false,
+          crossed: v.routeIdx + v.tileT > path.entryIndex - 1 + INTERSECTION_STOP_T + 0.02 };
         watch.set(v, entry);
         continue;
       }
       const progress = v.routeIdx + v.tileT;
       const stopLine = entry.path.entryIndex - 1 + INTERSECTION_STOP_T;
-      if (v.speed < 0.05 && progress > stopLine - 1.5) entry.didStop = true;
+      if (v.speed < 0.05 && Math.abs(progress - stopLine) <= 0.02) entry.didStop = true;
       // 정지선에 정확히 붙어 선 차(진행도 == 정지선)는 넘은 것이 아니다.
       // 부동소수 오차로 아주 미세하게 커질 수 있어 여유를 둔다.
-      if (entry.progress <= stopLine + 1e-3 && progress > stopLine + 0.02) {
+      if (!entry.crossed && progress > stopLine + 0.02) {
+        entry.crossed = true;
         const junction = index.byId(entry.path.junctionId);
+        const grant = traffic.debugGrantSignal(v);
+        const clearedOnNonRed = grant === SignalState.Green || grant === SignalState.Yellow;
         // 통행권을 이미 쥔 차는 제외한다. 황색에 "지금 제동해도 정지선을 넘는"
         // 상태로 진입 허가를 받은 뒤, 정지선을 넘는 사이에 적색으로 바뀐 경우가
         // 있다. 실제 도로에서도 그건 위반이 아니다. 허가 없이 적신호에 넘어가는
@@ -347,6 +355,7 @@ console.log('4. 실제 주행 (4차로 격자 도시)');
         if (
           junction?.signalized &&
           entry.path.turn === TurnKind.Right &&
+          !clearedOnNonRed &&
           signalState(junction, entry.path.enterDir, traffic.signalTimeMs) === SignalState.Red
         ) {
           // 적신호 우회전: 반드시 정지선에서 한 번 멈춘 뒤여야 한다.
@@ -356,7 +365,7 @@ console.log('4. 실제 주행 (4차로 격자 도시)');
         if (
           junction?.signalized &&
           entry.path.turn !== TurnKind.Right &&
-          !traffic.debugHasRight(v) &&
+          !clearedOnNonRed &&
           signalState(junction, entry.path.enterDir, traffic.signalTimeMs) === SignalState.Red
         ) {
           signalViolations++;
@@ -427,6 +436,7 @@ console.log('4. 실제 주행 (4차로 격자 도시)');
   check('차량이 실제로 다닌다', peak >= 5, `최대 ${peak}대`);
   check('교착 없이 계속 흐른다', lateSpeed > 0.3, `후반 평균 속도 ${lateSpeed.toFixed(2)}`);
   console.log(`     적신호 우회전 ${redRightTurns}회 (일시정지 없이 진행 ${redRightNoStop}회)`);
+  check('적신호 우회전을 실제로 관측한다 (공허한 통과 방지)', redRightTurns > 0);
   check('적신호 우회전은 반드시 일시정지 뒤에 이루어진다', redRightNoStop === 0,
     `${redRightNoStop}회`);
 }
@@ -494,6 +504,35 @@ console.log('5. 회전 규칙');
     check('적신호 우회전: 일시정지 후 차량이 없으면 진행 가능', control.hasReservation(v));
   }
   // (3) 일시정지했어도 녹색 축에서 오는 차와 궤적이 겹치면 -> 불가
+  {
+    const control = new IntersectionControl();
+    const v = stub('queue');
+    v.stoppedMs = 2_000;
+    control.arbitrate(redForX, [approach(v, rightOnRed, 1)], index);
+    check('정지선 1타일 앞의 대기 이력으로 적신호 우회전 불가', !control.hasReservation(v));
+    const rolling = approach(v, rightOnRed, 0);
+    rolling.speed = 0.2;
+    control.arbitrate(redForX, [rolling], index);
+    check('정지 시간이 남아 있어도 움직이는 차량은 우회전 불가', !control.hasReservation(v));
+  }
+  {
+    let lastYellow = 0;
+    for (let t = 0; t < 40_000; t++) {
+      if (signalState(junction, 0, t) === SignalState.Yellow &&
+          signalState(junction, 0, t + 1) === SignalState.Red) { lastYellow = t; break; }
+    }
+    const control = new IntersectionControl();
+    const v = stub('dilemma');
+    const a = approach(v, rightOnRed, 0.37);
+    a.speed = 6;
+    control.arbitrate(lastYellow, [a], index);
+    check('황색 딜레마 존 진입 허가는 황색으로 기록된다',
+      control.grantSignalOf(v) === SignalState.Yellow);
+    control.arbitrate(lastYellow + 50, [a], index);
+    check('50ms 뒤 적색으로 바뀌어도 이미 허가된 통과는 유지된다',
+      signalState(junction, 0, lastYellow + 50) === SignalState.Red &&
+      control.grantSignalOf(v) === SignalState.Yellow);
+  }
   {
     const control = new IntersectionControl();
     const v = stub('c');
