@@ -201,6 +201,8 @@ export class MacroSim {
   private lastFieldTick = 0;
   /** 최소 갱신 간격 안에 들어온 도로 변경 신호를 잃지 않게 보관한다. */
   private roadChangePending = false;
+  /** 거리장을 다시 만든 뒤 남은 후속 작업. 1 = 배정표, 2 = 혼잡 추정. */
+  private pendingStage = 0;
 
   constructor(
     private world: World,
@@ -317,9 +319,21 @@ export class MacroSim {
       this.services.rebuild(this.world);
       // 새 도로망을 배정표가 읽기 전에 입주율/통근 상태도 같은 거리장으로 맞춘다.
       this.evaluate(false);
-      this.rebuildTrafficFields();
+      // 배정표와 혼잡 추정은 **다음 틱들로 미룬다.** 도시가 커지면 셋을 한 틱에
+      // 돌릴 때 0.9초씩 화면이 멈춘다(집·직장마다 도로망 BFS 라 도시 크기에
+      // 비례한다). 틱 간격이 2.5초이므로 한 단계씩 나눠 돌리면 체감 정지가
+      // 3분의 1로 줄고, 하루에 한 번 하는 일이라 한두 틱 늦어도 아무 차이가 없다.
+      this.pendingStage = 1;
       this.lastFieldTick = this.macro.tick;
       this.roadChangePending = false;
+    } else if (this.pendingStage === 1) {
+      this.assignment?.rebuild(this.world, this.roadField, this.stats);
+      this.pendingStage = 2;
+    } else if (this.pendingStage === 2) {
+      if (this.assignment) {
+        this.congestion?.rebuildEstimate(this.world, this.roadField, this.assignment);
+      }
+      this.pendingStage = 0;
     }
     if (this.macro.tick % TICKS_PER_DAY === 0) this.settleFinance();
 
@@ -661,6 +675,22 @@ export class MacroSim {
     this.stats.dailyUpkeep = upkeep;
     this.stats.facilityUpkeep = facilityUpkeep;
     this.macro.money = Math.round((this.macro.money + income - upkeep) * 100) / 100;
+    this.onMacroChange?.();
+  }
+
+  /**
+   * "맵 초기화" 가 부른다. 저장에 실리는 도시 상태를 새 도시의 것으로 되돌린다.
+   *
+   * macro 객체는 CityDoc 의 것을 그대로 들고 있으므로, 여기서 고치면 다음
+   * 저장에 그대로 실린다(saveManager 가 city.macro 를 복사해 보낸다).
+   * disasters 는 **키째로 지운다** — undefined 를 남기면 Firestore 가 거부한다.
+   */
+  resetState(money: number, nowMs: number): void {
+    this.macro.money = money;
+    this.macro.population = 0;
+    this.macro.tick = 0;
+    this.macro.tickedAt = nowMs;
+    delete this.macro.disasters;
     this.onMacroChange?.();
   }
 

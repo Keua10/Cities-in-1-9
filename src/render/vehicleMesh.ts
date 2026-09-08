@@ -4,6 +4,7 @@ import { tileToWorldX, tileToWorldY } from '../core/iso';
 import { simHash } from '../sim/buildings';
 import { laneFacing, lanePosition } from '../sim/traffic/laneGeometry';
 import type { Vehicle } from '../sim/traffic/vehicles';
+import { surfaceHeightAt } from '../world/slope';
 import type { World } from '../world/world';
 import {
   VEHICLE_CELL,
@@ -67,19 +68,18 @@ export class VehicleMesh {
     let q = 0;
     for (const vehicle of this.sorted) {
       if (q >= MAX_ACTIVE_VEHICLES) break;
-      const i = vehicle.routeIdx * 2;
-      const tx = vehicle.route.tiles[i];
-      const ty = vehicle.route.tiles[i + 1];
-      const ni = Math.min(i + 2, vehicle.route.tiles.length - 2);
-      const nx = vehicle.route.tiles[ni];
-      const ny = vehicle.route.tiles[ni + 1];
       const t = vehicle.tileT;
 
       // 렌더링과 시뮬레이션이 laneGeometry 하나만 본다. 화면 픽셀 보정은 없다.
       const [laneTx, laneTy] = lanePosition(vehicle.route, vehicle.routeIdx, t);
-      const h0 = this.world.sampleHeight(tx, ty);
-      const h1 = this.world.sampleHeight(nx, ny);
-      const height = h0 + (h1 - h0) * t;
+      /*
+       * 높이는 **도로면(slope.ts)** 에서 읽는다.
+       *
+       * 예전에는 타일 중심 고도 두 개를 tileT 로 섞었다. 도로가 계단으로
+       * 그려지던 때는 그것도 근사였지만, 이제 지면이 진짜 램프라서 차가 그 위를
+       * 떠다니거나 파묻히게 된다. 같은 평면을 읽으면 바퀴가 노면에 붙는다.
+       */
+      const height = surfaceHeightAt(this.world, laneTx, laneTy);
       const wx = tileToWorldX(laneTx, laneTy);
       const wy = tileToWorldY(laneTx, laneTy, height);
 

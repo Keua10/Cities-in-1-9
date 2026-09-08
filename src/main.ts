@@ -45,7 +45,7 @@ import { bindToolButtons, Tools, TOOL_LABELS } from './ui/tools';
 import { Build, hasRoadAccess, isZone } from './world/build';
 import { findDryTileNearBase } from './world/spawn';
 import { World } from './world/world';
-import { seedTestCityIfEmpty } from './world/testCity';
+import { SEEDED_CITY_MONEY, seedCityIfEmpty } from './world/cityGen';
 
 /** 카메라가 base 밖으로 나갈 수 있는 거리(청크). 이웃의 안개까지는 보이게 둔다. */
 const ROAM_CHUNKS = 8;
@@ -81,8 +81,17 @@ async function boot(): Promise<void> {
     world.setExploredKeys(city.explored);
     world.setPersistedOverrides(overrides);
   }
-  // 테스트가 빈 맵에서 시작하지 않게 한다. 기존 도시가 있으면 절대 손대지 않는다.
-  const testCityCenter = seedTestCityIfEmpty(world, Math.floor((city?.macro.tick ?? 0) / 24));
+  // 빈 맵에서 시작하지 않게 한다. 기존 도시가 있으면 절대 손대지 않는다.
+  // 처음 접속(또는 맵 초기화 직후)에는 여기서 구역이 나뉜 대도시가 통째로 생긴다.
+  const macro = city?.macro ?? {
+    money: START_MONEY,
+    population: 0,
+    tick: 0,
+    tickedAt: Date.now(),
+  };
+  const seededCenter = seedCityIfEmpty(world, Math.floor(macro.tick / 24));
+  // 이미 다 자란 도시를 받아 든 셈이니 금고도 그에 맞춰 연다.
+  if (seededCenter && macro.money < SEEDED_CITY_MONEY) macro.money = SEEDED_CITY_MONEY;
 
   const app = new Application();
   await app.init({
@@ -109,7 +118,7 @@ async function boot(): Promise<void> {
   camera.zoom = DEFAULT_ZOOM;
   camera.limit = roamLimit(world);
 
-  const start = testCityCenter ?? findDryTileNearBase(world);
+  const start = seededCenter ?? findDryTileNearBase(world);
   const centerCamera = (): void => {
     camera.zoom = DEFAULT_ZOOM;
     camera.centerOnWorld(
@@ -136,10 +145,7 @@ async function boot(): Promise<void> {
   // 5) 3.1단계 매크로 시뮬레이션.
   //    city.macro 객체를 그대로 넘긴다. 시뮬레이션이 그 자리에서 고치므로
   //    SaveManager 가 따로 옮겨 담을 필요 없이 저장에 그대로 실린다.
-  const sim = new MacroSim(
-    world,
-    city?.macro ?? { money: START_MONEY, population: 0, tick: 0, tickedAt: Date.now() },
-  );
+  const sim = new MacroSim(world, macro);
   sim.onMacroChange = () => saver.noteMacroChange();
   const congestion = new CongestionMap();
   const assignment = new AssignmentTable();
@@ -199,6 +205,22 @@ async function boot(): Promise<void> {
     renderer,
     saver,
     loggedIn: Boolean(session),
+    resetCity: async () => {
+      // 시뮬레이션을 먼저 멈춘다. 도로가 사라진 세계 위에서 차량 경로가 한 틱
+      // 더 도는 것을 막는다.
+      app.ticker.stop();
+      // 지운 뒤 **저장까지 끝내고** 새로고침한다. 새로 뜬 페이지가 빈 도시를
+      // 읽고 seedCityIfEmpty 로 새 대도시를 만든다. 메시·도로망·경로·입주율
+      // 캐시를 하나하나 무효화하는 것보다 이 편이 확실하다.
+      world.clearBuilt();
+      sim.resetState(SEEDED_CITY_MONEY, Date.now());
+      try {
+        await saver.saveNow();
+      } catch (err) {
+        console.error('초기화 저장 실패', err);
+      }
+      location.reload();
+    },
   });
   bindToolButtons(tools);
 
@@ -424,6 +446,8 @@ interface ToolbarDeps {
   renderer: WorldRenderer;
   saver: AnySaveManager;
   loggedIn: boolean;
+  /** 도시를 통째로 지우고 새 대도시를 심는다. 되돌릴 수 없다. */
+  resetCity: () => Promise<void>;
 }
 
 function bindToolbar(deps: ToolbarDeps): void {
@@ -432,6 +456,7 @@ function bindToolbar(deps: ToolbarDeps): void {
   const gridBtn = document.getElementById('btn-grid');
   const centerBtn = document.getElementById('btn-center');
   const saveBtn = document.getElementById('btn-save');
+  const resetBtn = document.getElementById('btn-reset');
   const logoutBtn = document.getElementById('btn-logout');
 
   fogBtn?.setAttribute('aria-pressed', String(renderer.showFog));
@@ -450,6 +475,15 @@ function bindToolbar(deps: ToolbarDeps): void {
 
   saveBtn?.addEventListener('click', () => {
     void deps.saver.saveNow();
+  });
+
+  resetBtn?.addEventListener('click', () => {
+    if (!window.confirm('지금 도시를 전부 지우고 새 도시를 만듭니다. 되돌릴 수 없습니다. 계속할까요?')) {
+      return;
+    }
+    resetBtn.setAttribute('disabled', '');
+    resetBtn.textContent = '만드는 중…';
+    void deps.resetCity();
   });
 
   if (!deps.loggedIn) {

@@ -714,6 +714,36 @@ export class World {
     }
   }
 
+  /**
+   * 도시를 통째로 비운다. "맵 초기화" 가 부른다.
+   *
+   * 필지를 지도에서 지우지 않고 **배열만 비운다.** 키가 남아 있어야 저장할 때
+   * "빈 청크" 로 나가고, citySave 가 그 문서를 지운다. 필지를 지워 버리면
+   * 서버에는 예전 도시가 그대로 남고 새로고침할 때 되살아난다.
+   *
+   * 지형 수정분(tileOverride/heightOverride)까지 지운다. 초기화는 도시를
+   * 지우는 것이지 남기는 게 아니다.
+   */
+  clearBuilt(): void {
+    for (const p of this.parcels.values()) {
+      p.tileOverride = null;
+      p.heightOverride = null;
+      p.build = null;
+      p.bld = null;
+      p.bornLo = null;
+      p.bornHi = null;
+      p.emptyPlots = 0;
+      p.roadCount = 0;
+      p.buildingCount = 0;
+      p.bldRevision++;
+      p.scanCursor = 0;
+      this.markDirty(p.key, true);
+    }
+    // 지형 배열은 좌표에서 다시 만들어진다. 메모리에 있던 청크만 버리면 된다.
+    this.chunks.clear();
+    this.roadDirty = true;
+  }
+
   /** 불러온 개척 목록으로 갈아끼운다. base 4x4 는 항상 남긴다. */
   setExploredKeys(keys: readonly string[]): void {
     for (const key of keys) this.explored.add(key);

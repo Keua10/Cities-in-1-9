@@ -14,6 +14,7 @@ import {
   zoneOfBuild,
   zoneOfCode,
 } from './buildings';
+import { touchesRoadTiles } from './facilities';
 import type { RoadField } from './roadGraph';
 import {
   DEMAND_SCALE,
@@ -82,11 +83,20 @@ function fitsInChunk(tx: number, ty: number, span: number): boolean {
  *   - 전부 건물 없음
  *   - 전부 같은 고도 (안 그러면 건물이 절벽에 걸친다)
  *   - 물 아님
- *   - 도로에 한 칸이라도 접함
+ *   - **부지가 도로에 맞닿음** (테두리 4방향에 도로 한 칸)
+ *
+ * 마지막 조건이 예전에는 `field.nearRoad`(반경 2칸 안에 도로가 있는가) 였다.
+ * 그런데 통근 거리는 roadGraph.commuteFor 가 **부지에 맞닿은 도로** 에서만
+ * 잰다. 두 기준이 어긋나 있어서, 도로에서 두 칸 떨어진 자리에 건물이 서고는
+ * 통근 거리가 무한대라 영원히 비어 있었다 — HUD 의 "도로와 연결되지 않은 건물
+ * N채가 비어 있습니다" 가 그것이다. 큰 도시에서는 그런 건물이 수천 채까지
+ * 늘어난다. 지을 때의 기준을 통근의 기준에 맞춘다.
+ *
+ * 지구를 도로에서 두 칸 넓게 칠했을 때 "가운데가 안 자란다" 는 STEP 3.1 의
+ * 설계 의도는 그대로다. 오히려 이제야 그대로 지켜진다.
  */
 export function plotFits(
   world: World,
-  field: RoadField,
   tx: number,
   ty: number,
   span: number,
@@ -94,7 +104,6 @@ export function plotFits(
 ): boolean {
   if (!fitsInChunk(tx, ty, span)) return false;
   const h = world.sampleHeight(tx, ty);
-  let reachable = false;
   for (let dy = 0; dy < span; dy++) {
     for (let dx = 0; dx < span; dx++) {
       const x = tx + dx;
@@ -103,10 +112,10 @@ export function plotFits(
       if (world.getBld(x, y) !== BLD_NONE) return false;
       if (world.sampleHeight(x, y) !== h) return false;
       if (isWater(world.getTile(x, y))) return false;
-      if (field.nearRoad(x, y)) reachable = true;
     }
   }
-  return reachable;
+  // 도로 접함은 칸마다가 아니라 **부지 테두리** 로 본다. 통근 거리와 같은 기준이다.
+  return touchesRoadTiles(world, tx, ty, span);
 }
 
 /**
@@ -122,7 +131,6 @@ export function plotFits(
  */
 export function rebuildFits(
   world: World,
-  field: RoadField,
   tx: number,
   ty: number,
   span: number,
@@ -131,7 +139,6 @@ export function rebuildFits(
 ): boolean {
   if (!fitsInChunk(tx, ty, span)) return false;
   const h = world.sampleHeight(tx, ty);
-  let reachable = false;
 
   for (let dy = 0; dy < span; dy++) {
     for (let dx = 0; dx < span; dx++) {
@@ -139,7 +146,6 @@ export function rebuildFits(
       const y = ty + dy;
       if (zoneOfBuild(world.getBuild(x, y)) !== zone) return false;
       if (world.sampleHeight(x, y) !== h) return false;
-      if (field.nearRoad(x, y)) reachable = true;
 
       const info = world.buildingCovering(x, y);
       if (!info) return false; // 빈 칸이 있으면 재건축 대상이 아니다
@@ -157,7 +163,7 @@ export function rebuildFits(
       }
     }
   }
-  return reachable;
+  return touchesRoadTiles(world, tx, ty, span);
 }
 
 /**
@@ -281,7 +287,7 @@ function buildPass(world: World, p: Parcel, ctx: GrowthContext): GrowthResult {
     const tx = baseX + lx;
     const ty = baseY + ly;
 
-    if (!plotFits(world, ctx.field, tx, ty, 1, zone)) continue;
+    if (!plotFits(world, tx, ty, 1, zone)) continue;
 
     const roll = simRandom(WORLD_SEED, ctx.tick, tx, ty);
     let level = pickLevel(ctx.demand[zone], roll);
@@ -289,7 +295,7 @@ function buildPass(world: World, p: Parcel, ctx: GrowthContext): GrowthResult {
 
     // 원하는 레벨이 안 들어가면 한 단계씩 낮춘다.
     // 1x1 은 위에서 이미 확인했으므로 결국 뭔가는 지어진다.
-    while (level > 1 && !plotFits(world, ctx.field, tx, ty, level, zone)) level--;
+    while (level > 1 && !plotFits(world, tx, ty, level, zone)) level--;
 
     const cost = BUILD_COST[level - 1];
     if (ctx.money - spent < cost) break; // 돈이 없으면 이번 틱은 여기까지
@@ -355,7 +361,7 @@ function rebuildPass(world: World, p: Parcel, ctx: GrowthContext): GrowthResult 
       if (ctx.demand[zone][target - 1] - ctx.demand[zone][level - 1] < REBUILD_DEMAND_GAP) {
         continue;
       }
-      if (!rebuildFits(world, ctx.field, tx, ty, target, zone, ctx.today)) continue;
+      if (!rebuildFits(world, tx, ty, target, zone, ctx.today)) continue;
       if (ctx.blocksRebuild?.(tx, ty, target)) continue;
 
       const cost = Math.round(BUILD_COST[target - 1] * REBUILD_SURCHARGE);

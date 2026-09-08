@@ -18,7 +18,8 @@ import {
   tileToWorldY,
   visibleChunkRange,
 } from '../core/iso';
-import { DIRS, makeTopResolver, type TopResolver } from '../world/build';
+import { Build, DIRS, makeTopResolver, type TopResolver } from '../world/build';
+import { makeSlopeSampler, surfaceAt, type SlopeSampler } from '../world/slope';
 import type { World } from '../world/world';
 import type { TileAtlas } from './atlas';
 import type { BuildingAtlas } from './buildingAtlas';
@@ -146,6 +147,7 @@ export class WorldRenderer {
     this.groundLayer.sortableChildren = true;
     this.sampleHeight = (tx, ty) => this.world.sampleHeight(tx, ty);
     this.resolveTop = makeTopResolver(world);
+    this.slope = makeSlopeSampler(world);
   }
 
   attachTraffic(traffic: TrafficSim, atlas: VehicleAtlas): void { this.traffic = traffic; this.vehicleAtlas = atlas; }
@@ -153,6 +155,19 @@ export class WorldRenderer {
 
   private sampleHeight: (tx: number, ty: number) => number;
   private resolveTop: TopResolver;
+  /** 경사 도로의 지면 평면·절벽 판정. 청크 메시가 정점을 만들 때 쓴다. */
+  private slope: SlopeSampler;
+  /**
+   * 정점을 다시 구워야 하는 청크.
+   *
+   * 도로는 원래 UV 만 바꾸면 됐다(그래서 invalidateTile 이 있다). 그런데 비탈에
+   * 놓인 도로는 **지면 모양 자체가 달라진다** — 램프가 생기고 그 자리의 흙벽이
+   * 사라진다. UV 만 고치면 예전 계단이 그대로 남는다.
+   *
+   * 매번 통째로 다시 굽지 않으려고, 고도 단이 지나가는 자리에 도로가 걸린
+   * 경우에만 여기에 담아 두고 다음 프레임에 한 번만 다시 굽는다.
+   */
+  private geomDirty = new Set<string>();
 
   /**
    * 타일 한 칸의 윗면만 다시 그린다. 도로·지구를 놓거나 지울 때 부른다.
@@ -174,6 +189,41 @@ export class WorldRenderer {
     const lx = localIndexOf(tx);
     const ly = localIndexOf(ty);
     mesh.setTile(lx, ly, this.resolveTop(chunk, ly * CHUNK_SIZE + lx, tx, ty));
+    if (this.changesSlope(tx, ty)) this.markGeometryDirty(tx, ty);
+  }
+
+  /**
+   * 이 칸의 변화가 경사 지면을 바꿀 수 있는가.
+   *
+   * 조건 두 개를 모두 만족할 때만 참이다.
+   *   1. 이웃과 고도가 한 단계 어긋나는 자리다(= 램프가 생길 수 있는 자리).
+   *   2. 자기 또는 이웃이 지금 도로다(= 램프의 한쪽 끝이 있다).
+   * 도로를 헐어도 남은 반대쪽 도로가 2번을 만족시키므로 계단으로 되돌아가는
+   * 경우까지 함께 잡힌다.
+   */
+  private changesSlope(tx: number, ty: number): boolean {
+    const h = this.world.sampleHeight(tx, ty);
+    let step = false;
+    let road = this.world.getBuild(tx, ty) === Build.Road;
+    for (const [dx, dy] of DIRS) {
+      const nx = tx + dx;
+      const ny = ty + dy;
+      if (Math.abs(this.world.sampleHeight(nx, ny) - h) === 1) step = true;
+      if (this.world.getBuild(nx, ny) === Build.Road) road = true;
+    }
+    return step && road;
+  }
+
+  /** 이 칸과 이웃이 걸친 청크 중 **화면에 올라와 있는 것만** 다시 굽는다. */
+  private markGeometryDirty(tx: number, ty: number): void {
+    this.touchGeometry(tx, ty);
+    for (const [dx, dy] of DIRS) this.touchGeometry(tx + dx, ty + dy);
+  }
+
+  private touchGeometry(tx: number, ty: number): void {
+    const key = chunkKey(chunkIndexOf(tx), chunkIndexOf(ty));
+    // 아직 안 구워진 청크는 담아둘 필요가 없다. 처음 구울 때 현재 지형을 읽는다.
+    if (this.meshes.has(key)) this.geomDirty.add(key);
   }
 
   /** 격자/안개 토글처럼 카메라와 무관한 변화가 생겼을 때 다음 프레임에 다시 그린다. */
@@ -356,12 +406,13 @@ export class WorldRenderer {
   private ensureMesh(key: string, cx: number, cy: number): ChunkMesh {
     let mesh = this.meshes.get(key);
     const chunk = this.world.getChunk(cx, cy);
-    if (mesh && mesh.needsRebuild(chunk)) {
+    if (mesh && (mesh.needsRebuild(chunk) || this.geomDirty.has(key))) {
       this.dropMesh(key);
       mesh = undefined;
     }
+    this.geomDirty.delete(key);
     if (!mesh) {
-      mesh = new ChunkMesh(chunk, this.atlas, this.sampleHeight, this.resolveTop);
+      mesh = new ChunkMesh(chunk, this.atlas, this.resolveTop, this.slope);
       mesh.mesh.zIndex = cx + cy;
       this.meshes.set(key, mesh);
       this.groundLayer.addChild(mesh.mesh);
@@ -580,12 +631,13 @@ export class WorldRenderer {
     g.clear();
     const t = this.cursorTile;
     if (!t) return;
-    const h = this.world.getHeight(t.tx, t.ty);
     const x = tileToWorldX(t.tx, t.ty);
-    const y = tileToWorldY(t.tx, t.ty, h);
-    g.poly([x, y - TILE_HH, x + TILE_HW, y, x, y + TILE_HH, x - TILE_HW, y]);
+    // 커서도 지면 평면을 따른다. 비탈 도로 위에서 평평한 마름모를 그리면
+    // 노면과 어긋나 보인다.
+    const diamond = surfaceDiamond(this.world, t.tx, t.ty, x);
+    g.poly(diamond);
     g.fill({ color: 0x6fd3b8, alpha: 0.18 });
-    g.poly([x, y - TILE_HH, x + TILE_HW, y, x, y + TILE_HH, x - TILE_HW, y]);
+    g.poly(diamond);
     g.stroke({ width: Math.max(1, 1 / this.lastZoom), color: 0x9df0da, alpha: 0.95 });
   }
 
@@ -593,4 +645,26 @@ export class WorldRenderer {
   flush(): void {
     for (const mesh of this.meshes.values()) mesh.flush();
   }
+}
+
+/**
+ * 타일 윗면 마름모의 화면 좌표. 경사 도로면 네 꼭짓점이 지면 평면을 따라 기운다.
+ * chunkMesh 의 정점 계산과 같은 식을 쓴다 — 두 곳이 갈라지면 커서만 어긋난다.
+ */
+function surfaceDiamond(
+  world: World,
+  tx: number,
+  ty: number,
+  x: number,
+): number[] {
+  const s = surfaceAt(world, tx, ty);
+  const y = tileToWorldY(tx, ty, s.zc);
+  const dx = (s.dzx * HEIGHT_UNIT) / 2;
+  const dy = (s.dzy * HEIGHT_UNIT) / 2;
+  return [
+    x, y - TILE_HH + dx + dy,
+    x + TILE_HW, y - dx + dy,
+    x, y + TILE_HH - dx - dy,
+    x - TILE_HW, y + dx - dy,
+  ];
 }

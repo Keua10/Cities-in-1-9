@@ -265,19 +265,46 @@ export function* edgeNeighbors(
  * sx, sy 도로 칸에서 시작해 max 칸까지의 도로 전용 BFS 거리.
  * sx, sy 가 도로가 아니면 빈 맵을 돌려준다.
  */
+/**
+ * BFS 결과 맵의 키.
+ *
+ * 예전에는 `${x},${y}` 문자열이었다. 작은 도시에서는 문제가 없었지만, 통근
+ * 배정과 혼잡 추정이 **집·직장마다 도로망 BFS 를 한 번씩** 돌기 때문에 도시가
+ * 커지면 문자열 수백만 개가 만들어진다. 인구 3만짜리 도시에서 하루치 재계산에
+ * 6.5초가 걸렸고, 그 시간 동안 화면이 멈춘다.
+ *
+ * 좌표를 정수 하나로 접으면 할당이 사라진다. ±1,048,576 타일까지 담기므로
+ * (도시 간격이 청크 8칸 = 512타일이니 도시 2천 개분) 어떤 도시에서도 겹치지 않고,
+ * 값은 2^42 이하라 double 로 정확히 표현된다.
+ */
+const KEY_OFFSET = 1 << 20;
+const KEY_SPAN = 1 << 21;
+
+export function tileKey(x: number, y: number): number {
+  return (x + KEY_OFFSET) * KEY_SPAN + (y + KEY_OFFSET);
+}
+
+export function keyTx(key: number): number {
+  return Math.floor(key / KEY_SPAN) - KEY_OFFSET;
+}
+
+export function keyTy(key: number): number {
+  return (key % KEY_SPAN) - KEY_OFFSET;
+}
+
 export function roadDistancesFrom(
   world: World,
   sx: number,
   sy: number,
   max: number,
-): Map<string, number> {
-  const out = new Map<string, number>();
+): Map<number, number> {
+  const out = new Map<number, number>();
   if (world.getBuild(sx, sy) !== Build.Road) return out;
   const qx = [sx];
   const qy = [sy];
   const qd = [0];
   let head = 0;
-  out.set(`${sx},${sy}`, 0);
+  out.set(tileKey(sx, sy), 0);
   while (head < qx.length) {
     const x = qx[head];
     const y = qy[head];
@@ -286,7 +313,7 @@ export function roadDistancesFrom(
     for (const [dx, dy] of DIRS) {
       const nx = x + dx;
       const ny = y + dy;
-      const key = `${nx},${ny}`;
+      const key = tileKey(nx, ny);
       if (out.has(key) || world.getBuild(nx, ny) !== Build.Road) continue;
       out.set(key, d + 1);
       qx.push(nx);

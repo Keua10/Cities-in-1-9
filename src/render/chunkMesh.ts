@@ -8,6 +8,7 @@ import {
 } from '../core/constants';
 import { tileToWorldX, tileToWorldY } from '../core/iso';
 import type { TopResolver } from '../world/build';
+import type { EdgeWall, SlopeSampler } from '../world/slope';
 import { wallMaterial } from '../world/terrain';
 import type { Chunk } from '../world/world';
 import { shadeCellFor, WallCell, type TileAtlas } from './atlas';
@@ -34,6 +35,11 @@ export type HeightSampler = (tx: number, ty: number) => number;
  * 절벽이 필요한 타일에만 벽 사각형을 만든다. 지형 특성상 절벽은 한 번에
  * 한 단계씩만 생기므로(이웃 고도 차이 최대 1), 실제 벽 개수는 타일 수의
  * 10~20% 수준이다.
+ *
+ * 경사 도로(slope.ts)도 **사각형을 늘리지 않는다.** 윗면 사각형 네 꼭짓점의
+ * y 만 지면 평면에 맞춰 밀어 올리면 비탈이 그려진다. 램프로 이어지는 변에는
+ * 절벽을 만들지 않으므로(SlopeSampler.wallSteps) 도로 한복판을 흙벽이
+ * 가로지르던 증상이 사라진다.
  */
 export class ChunkMesh {
   readonly mesh: Mesh;
@@ -59,8 +65,8 @@ export class ChunkMesh {
   constructor(
     chunk: Chunk,
     private atlas: TileAtlas,
-    sampleHeight: HeightSampler,
     private resolveTop: TopResolver,
+    private slope: SlopeSampler,
   ) {
     const baseX = chunk.cx * CHUNK_SIZE;
     const baseY = chunk.cy * CHUNK_SIZE;
@@ -77,8 +83,8 @@ export class ChunkMesh {
       for (let lx = 0; lx < CHUNK_SIZE; lx++) {
         const i = ly * CHUNK_SIZE + lx;
         const h = chunk.heights[i];
-        const right = Math.max(0, h - sampleHeight(baseX + lx + 1, baseY + ly));
-        const left = Math.max(0, h - sampleHeight(baseX + lx, baseY + ly + 1));
+        const right = this.slope.wall(baseX + lx, baseY + ly, 1, 0).steps;
+        const left = this.slope.wall(baseX + lx, baseY + ly, 0, 1).steps;
         this.quadStart[i] = quads;
         this.rightWalls[i] = right;
         this.wallCount[i] = right + left;
@@ -104,39 +110,50 @@ export class ChunkMesh {
         let q = this.quadStart[i];
         const right = this.rightWalls[i];
         const left = this.wallCount[i] - right;
+        // 꼭짓점 y 의 기준선. 고도 0 일 때 타일 중심의 화면 y 다.
+        const base = cy + h * HEIGHT_UNIT;
 
-        // 오른쪽 아래를 향한 면 (+tx 방향)
-        for (let k = 0; k < right; k++) {
-          const y0 = cy + k * HEIGHT_UNIT;
-          const y1 = y0 + HEIGHT_UNIT;
-          writeQuad(positions, q, [
-            cx, y0 + TILE_HH,
-            cx + TILE_HW, y0,
-            cx + TILE_HW, y1,
-            cx, y1 + TILE_HH,
-          ]);
-          q++;
+        /*
+         * 지면 평면(slope.ts). 평평한 타일은 dzx, dzy 가 0 이라 아래 식이
+         * 예전과 똑같은 사각형을 만든다 — 도로가 없는 청크의 정점은 한 픽셀도
+         * 안 바뀐다. 화면 y 는 위로 갈수록 작아지므로 높이 1단계 = -HEIGHT_UNIT 다.
+         */
+        const s = this.slope.surface(tx, ty);
+
+        // 오른쪽 아래를 향한 면 (+tx 방향). A = 아래 꼭짓점, B = 오른쪽 꼭짓점.
+        if (right > 0) {
+          const w = this.slope.wall(tx, ty, 1, 0);
+          for (let k = 0; k < right; k++) {
+            writeWallQuad(positions, q, w, k, right, base, cx, TILE_HH, cx + TILE_HW, 0);
+            q++;
+          }
         }
 
-        // 왼쪽 아래를 향한 면 (+ty 방향)
-        for (let k = 0; k < left; k++) {
-          const y0 = cy + k * HEIGHT_UNIT;
-          const y1 = y0 + HEIGHT_UNIT;
-          writeQuad(positions, q, [
-            cx - TILE_HW, y0,
-            cx, y0 + TILE_HH,
-            cx, y1 + TILE_HH,
-            cx - TILE_HW, y1,
-          ]);
-          q++;
+        // 왼쪽 아래를 향한 면 (+ty 방향). A = 왼쪽 꼭짓점, B = 아래 꼭짓점.
+        if (left > 0) {
+          const w = this.slope.wall(tx, ty, 0, 1);
+          for (let k = 0; k < left; k++) {
+            writeWallQuad(positions, q, w, k, left, base, cx - TILE_HW, 0, cx, TILE_HH);
+            q++;
+          }
         }
 
-        // 윗면, 그리고 그 위에 겹치는 고도 음영
+        /*
+         * 윗면(과 그 위에 겹치는 고도 음영).
+         *
+         * 사각형 네 모서리는 다이아몬드 밖의 투명 여백이지만, 지면 높이가
+         * (tx, ty) 의 1차식이라 모서리 값도 같은 식으로 나온다. 이렇게 두면
+         * 삼각형 두 장의 보간이 정확히 한 평면이 되어 대각선 이음매가 안 생긴다.
+         */
+        const cTL = -(s.zc - s.dzx - h) * HEIGHT_UNIT;
+        const cTR = -(s.zc - s.dzy - h) * HEIGHT_UNIT;
+        const cBR = -(s.zc + s.dzx - h) * HEIGHT_UNIT;
+        const cBL = -(s.zc + s.dzy - h) * HEIGHT_UNIT;
         const top = [
-          cx - TILE_HW, cy - TILE_HH,
-          cx + TILE_HW, cy - TILE_HH,
-          cx + TILE_HW, cy + TILE_HH,
-          cx - TILE_HW, cy + TILE_HH,
+          cx - TILE_HW, cy - TILE_HH + cTL,
+          cx + TILE_HW, cy - TILE_HH + cTR,
+          cx + TILE_HW, cy + TILE_HH + cBR,
+          cx - TILE_HW, cy + TILE_HH + cBL,
         ];
         writeQuad(positions, q, top);
         if (h > 0) writeQuad(positions, q + 1, top);
@@ -260,4 +277,42 @@ export class ChunkMesh {
 function writeQuad(target: Float32Array, quad: number, values: number[]): void {
   const p = quad * 8;
   for (let i = 0; i < 8; i++) target[p + i] = values[i];
+}
+
+/**
+ * 절벽 사각형 한 장.
+ *
+ * 위·아래 모서리를 꼭짓점마다 선형 보간한다. 양쪽이 평평하면 예전처럼
+ * HEIGHT_UNIT 씩 정확히 쌓이고, 한쪽이 경사면이면 그만큼 기운 벽이 된다.
+ *
+ *   ax, ay / bx, by  꼭짓점 A·B 의 화면 좌표(높이 0 기준). y 는 base 에서의 오프셋.
+ *
+ * 두 꼭짓점의 차례는 EdgeWall.topA/topB 와 반드시 같아야 한다.
+ *   +tx 면  A = 아래 꼭짓점(cx, +TILE_HH), B = 오른쪽 꼭짓점(cx + TILE_HW, 0)
+ *   +ty 면  A = 왼쪽 꼭짓점(cx - TILE_HW, 0), B = 아래 꼭짓점(cx, +TILE_HH)
+ */
+function writeWallQuad(
+  target: Float32Array,
+  quad: number,
+  wall: EdgeWall,
+  step: number,
+  steps: number,
+  base: number,
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+): void {
+  const t0 = step / steps;
+  const t1 = (step + 1) / steps;
+  const a0 = wall.topA + (wall.botA - wall.topA) * t0;
+  const a1 = wall.topA + (wall.botA - wall.topA) * t1;
+  const b0 = wall.topB + (wall.botB - wall.topB) * t0;
+  const b1 = wall.topB + (wall.botB - wall.topB) * t1;
+  writeQuad(target, quad, [
+    ax, base + ay - a0 * HEIGHT_UNIT,
+    bx, base + by - b0 * HEIGHT_UNIT,
+    bx, base + by - b1 * HEIGHT_UNIT,
+    ax, base + ay - a1 * HEIGHT_UNIT,
+  ]);
 }

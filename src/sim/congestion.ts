@@ -5,19 +5,38 @@ import type { World } from '../world/world';
 import type { AssignmentTable, DestLink } from './assignment';
 import {
   edgeNeighbors,
+  keyTx,
+  keyTy,
   roadDistancesFrom,
   roadTileCapacity,
+  tileKey,
   type JunctionLookup,
   type RoadField,
 } from './roadGraph';
 import {
   CONGESTION_ALPHA,
   CONGESTION_DECAY,
+  COMMUTE_RANGE_BY_TIER,
   CONGESTION_ESTIMATE_BIAS,
   ESTIMATE_CAPACITY,
-  ROAD_FIELD_MAX_DIST,
+  SHOP_RANGE_BY_TIER,
   VEHICLES_PER_TILE,
 } from './simConstants';
+
+/**
+ * 혼잡 추정에 쓰는 거리장의 상한.
+ *
+ * 예전에는 ROAD_FIELD_MAX_DIST(200) 로 도시 전체를 훑었다. 그런데 여기서 쓰는
+ * 링크는 배정표가 이미 통근·쇼핑 반경 안에서만 만든 것이라, 그보다 먼 거리는
+ * 계산해도 아무도 안 읽는다. 도시가 커질수록 이 낭비가 그대로 정지 시간이 된다.
+ */
+const ROUTE_MAX_DIST = Math.max(
+  ...COMMUTE_RANGE_BY_TIER,
+  ...SHOP_RANGE_BY_TIER,
+);
+
+/** 거리장 캐시 상한(개). 넘으면 가장 오래된 것부터 버린다. */
+const DISTANCE_CACHE_MAX = 256;
 
 interface CChunk {
   value: Uint8Array;
@@ -141,15 +160,15 @@ export class CongestionMap {
   rebuildEstimate(world: World, _field: RoadField, table: AssignmentTable): void {
     // 도로/직장이 바뀐 뒤 예전 추정치가 유령 혼잡으로 남지 않게 먼저 비운다.
     for (const chunk of this.chunks.values()) chunk.estimate.fill(0);
-    const flow = new Map<string, number>();
-    const distanceCache = new Map<string, Map<string, number>>();
+    const flow = new Map<number, number>();
+    const distanceCache = new Map<number, Map<number, number>>();
     const linkInfo: Array<{
       fromTx: number;
       fromTy: number;
       link: DestLink;
       start: [number, number];
       goal: [number, number];
-      distances: Map<string, number>;
+      distances: Map<number, number>;
     }> = [];
     this.routeCache.clear();
 
@@ -162,19 +181,27 @@ export class CongestionMap {
       );
       const goal = entry(world, link.tx, link.ty, link.level);
       if (!start || !goal) continue;
-      const goalKey = `${goal[0]},${goal[1]}`;
+      const goalKey = tileKey(goal[0], goal[1]);
       let distances = distanceCache.get(goalKey);
       if (!distances) {
-        distances = roadDistancesFrom(world, goal[0], goal[1], ROAD_FIELD_MAX_DIST);
+        distances = roadDistancesFrom(world, goal[0], goal[1], ROUTE_MAX_DIST);
+        // 도시 전체를 담아두면 거리장 수백 개가 메모리에 남는다. 링크는 집
+        // 순서로 들어오고 이웃한 집들은 같은 직장을 보므로, 최근 것 몇 개만
+        // 들고 있어도 재사용률이 높다.
+        if (distanceCache.size >= DISTANCE_CACHE_MAX) {
+          const oldest = distanceCache.keys().next();
+          if (!oldest.done) distanceCache.delete(oldest.value);
+        }
         distanceCache.set(goalKey, distances);
       }
-      if (!distances.has(`${start[0]},${start[1]}`)) continue;
+      if (!distances.has(tileKey(start[0], start[1]))) continue;
       accumulateSplitFlow(start, link.count, distances, flow);
       linkInfo.push({ fromTx, fromTy, link, start, goal, distances });
     }
 
     for (const [key, count] of flow) {
-      const [tx, ty] = key.split(',').map(Number);
+      const tx = keyTx(key);
+      const ty = keyTy(key);
       const cap = this.capacityAt(world, tx, ty);
       if (cap <= 0) continue;
       const c = this.ensure(tx, ty);
@@ -249,19 +276,19 @@ function entry(world: World, tx: number, ty: number, span: number): [number, num
 function pathFromField(
   start: [number, number],
   goal: [number, number],
-  distances: Map<string, number>,
+  distances: Map<number, number>,
 ): [number, number][] {
   let x = start[0];
   let y = start[1];
   const out: [number, number][] = [[x, y]];
-  let d = distances.get(`${x},${y}`);
+  let d = distances.get(tileKey(x, y));
   if (d === undefined) return [];
   while (d > 0) {
     let found = false;
     for (const [dx, dy] of DIRS) {
       const nx = x + dx;
       const ny = y + dy;
-      if (distances.get(`${nx},${ny}`) !== d - 1) continue;
+      if (distances.get(tileKey(nx, ny)) !== d - 1) continue;
       x = nx;
       y = ny;
       d--;
@@ -276,22 +303,23 @@ function pathFromField(
 function accumulateSplitFlow(
   start: [number, number],
   count: number,
-  distances: Map<string, number>,
-  flow: Map<string, number>,
+  distances: Map<number, number>,
+  flow: Map<number, number>,
 ): void {
-  const startKey = `${start[0]},${start[1]}`;
+  const startKey = tileKey(start[0], start[1]);
   if (!distances.has(startKey)) return;
-  let layer = new Map<string, number>([[startKey, count]]);
+  let layer = new Map<number, number>([[startKey, count]]);
   while (layer.size > 0) {
-    const next = new Map<string, number>();
+    const next = new Map<number, number>();
     for (const [key, amount] of layer) {
-      const [x, y] = key.split(',').map(Number);
+      const x = keyTx(key);
+      const y = keyTy(key);
       const d = distances.get(key)!;
       flow.set(key, (flow.get(key) ?? 0) + amount);
       if (d === 0) continue;
-      const down: string[] = [];
+      const down: number[] = [];
       for (const [dx, dy] of DIRS) {
-        const nextKey = `${x + dx},${y + dy}`;
+        const nextKey = tileKey(x + dx, y + dy);
         if (distances.get(nextKey) === d - 1) down.push(nextKey);
       }
       if (down.length === 0) continue;
