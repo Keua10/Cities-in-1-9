@@ -26,7 +26,7 @@ import { Minimap } from './ui/minimap';
 import { SaveBadge } from './ui/saveBadge';
 import { bindToolbar } from './ui/toolbar';
 import { bindToolButtons, Tools } from './ui/tools';
-import { seedCityIfEmpty, SEEDED_CITY_MONEY } from './world/cityGen';
+import { seedCityIfEmpty, SEEDED_CITY_MONEY } from './world/citySeed';
 import { findDryTileNearBase } from './world/spawn';
 import type { ChunkOverride } from './world/world';
 import { World } from './world/world';
@@ -61,6 +61,9 @@ async function boot(): Promise<void> {
   // 3) 월드 생성. 지형은 여기서 새로 만들어지고, 저장된 건 "달라진 칸"뿐이다.
   if (loading) loading.textContent = '지형을 그리는 중…';
   const world = new World(city?.cityIndex ?? 0);
+  // 2x2 base 자체 + 상하좌우/대각선 한 청크를 처음부터 보여 준다.
+  // 결과적으로 base를 가운데 둔 4x4만 열리고 그 바깥은 안개로 남는다.
+  revealBaseRing(world);
   if (city) {
     world.setExploredKeys(city.explored);
     world.setPersistedOverrides(overrides);
@@ -261,6 +264,18 @@ async function boot(): Promise<void> {
   });
 
   document.getElementById('loading')?.classList.add('done');
+}
+
+/**
+ * base 2x2의 한 청크 바깥 고리까지 개척 상태로 연다.
+ * BASE_CHUNK_SPAN=2이면 [baseCx-1 .. baseCx+2] x [baseCy-1 .. baseCy+2], 정확히 4x4다.
+ */
+function revealBaseRing(world: World): void {
+  for (let dy = -1; dy <= BASE_CHUNK_SPAN; dy++) {
+    for (let dx = -1; dx <= BASE_CHUNK_SPAN; dx++) {
+      world.explore(world.baseCx + dx, world.baseCy + dy);
+    }
+  }
 }
 
 function roamLimit(world: World): {

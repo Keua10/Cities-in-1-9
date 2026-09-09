@@ -1,5 +1,5 @@
 import { BASE_CHUNK_SPAN, BASE_SPACING_CHUNKS, CHUNK_SIZE } from '../core/constants';
-import { heightAt, Terrain } from './terrain';
+import { heightAt, terrainAt, Terrain } from './terrain';
 import type { World } from './world';
 
 /**
@@ -23,38 +23,56 @@ const MOUNTAIN_MIN_RUN_TILES = 24;
 const MOUNTAIN_LINE_START = 0.25;
 const MOUNTAIN_LINE_END = 0.75;
 
+/**
+ * base 후보의 지형 비율을 재는 간격.
+ * 2x2 base(128x128)를 8타일 간격으로 읽으면 후보당 256점이라 충분히 안정적이고,
+ * 모든 타일을 매번 노이즈 생성하는 것보다 훨씬 싸다.
+ */
+const BASE_TERRAIN_SAMPLE_STEP_TILES = 8;
+/** 평지 / (물 + 산) 비율은 반드시 1보다 커야 한다. */
+const BASE_MIN_FLAT_TO_OBSTACLE_RATIO = 1;
+
 interface BaseOrigin {
   cx: number;
   cy: number;
 }
 
 /**
+ * baseOriginChunk 는 한 부팅 중 여러 번 불릴 수 있으므로 이미 결정한 도시 위치와
+ * 후보 지형 판정을 캐시한다. 값은 전부 좌표 기반 결정론적 계산이라 캐시 유무로
+ * 결과가 달라지지 않는다.
+ */
+const placedBases: BaseOrigin[] = [];
+const terrainSuitabilityCache = new Map<string, boolean>();
+let nextCandidateIndex = 0;
+
+/**
  * 도시 index 를 결정론적인 육각 후보 격자 위의 base 청크 좌표로 바꾼다.
  *
- * 후보 격자 자체는 4청크 간격이다. 다만 후보를 순서대로 훑으면서 이미 배치된
- * 모든 도시와 비교해 아래 규칙을 만족하는 자리만 실제 base 로 채택한다.
+ * 후보 격자 자체는 4청크 간격이다. 후보를 순서대로 훑으면서 아래 조건을 모두
+ * 만족하는 자리만 실제 base 로 채택한다.
  *
- * - 기본: 중심 사이 8청크 이상
- * - 예외: 4~8청크 사이이고 두 중심을 잇는 직선의 가운데에 산맥이 있으면 허용
+ * - base 2x2 안의 평지 비율이 물+산 비율보다 높아야 한다 (평지/(물+산) > 1)
+ * - 기본: 기존 base 중심과 8청크 이상
+ * - 예외: 4~8청크 사이이고 두 중심 사이를 산맥이 가로막으면 허용
  * - 어떤 경우에도 4청크 미만은 금지
  *
- * 그래서 평지에서는 기존과 같은 8청크 이상의 간격이 유지되고, 산맥이 실제로
- * 도시 사이를 가르는 곳에서만 더 촘촘한 4청크 격자 자리가 열린다. Math.random
- * 없이 기존 지형의 heightAt 만 사용하므로 같은 WORLD_SEED 에서는 항상 같다.
+ * 그래서 해안·강을 낀 도시는 남지만 물이나 산이 base 대부분을 차지하는 위치는
+ * 건너뛴다. Math.random 없이 기존 지형 함수만 사용하므로 같은 WORLD_SEED 에서는
+ * 항상 같은 도시 번호가 같은 위치를 받는다.
  */
 export function baseOriginChunk(cityIndex: number): { cx: number; cy: number } {
   const target = cityIndex <= 0 ? 0 : Math.floor(cityIndex);
-  const placed: BaseOrigin[] = [{ cx: 0, cy: 0 }];
-  if (target === 0) return placed[0];
 
-  let candidateIndex = 1;
-  while (placed.length <= target) {
-    const { q, r } = hexSpiral(candidateIndex++);
+  while (placedBases.length <= target) {
+    const { q, r } = hexSpiral(nextCandidateIndex++);
     const candidate = candidateOrigin(q, r);
-    if (canPlaceBase(candidate, placed)) placed.push(candidate);
+    if (!baseTerrainSuitable(candidate)) continue;
+    if (!canPlaceBase(candidate, placedBases)) continue;
+    placedBases.push(candidate);
   }
 
-  return placed[target];
+  return placedBases[target];
 }
 
 /** 4청크 최소 격자의 axial 좌표를 실제 청크 좌표로 바꾼다. */
@@ -63,6 +81,41 @@ function candidateOrigin(q: number, r: number): BaseOrigin {
     cx: Math.round(MOUNTAIN_MIN_SPACING_CHUNKS * (q + r / 2)),
     cy: Math.round(MOUNTAIN_MIN_SPACING_CHUNKS * r),
   };
+}
+
+/**
+ * base 2x2 내부에서 평지가 물+산보다 많은가.
+ *
+ * 평지 = 물이 아니고 고도 5 미만인 샘플.
+ * 장애지형 = 깊은/얕은 물 또는 고도 5 이상인 샘플.
+ * 따라서 평지/(물+산) > 1, 즉 샘플의 절반을 넘는 곳만 base 후보가 된다.
+ */
+function baseTerrainSuitable(origin: BaseOrigin): boolean {
+  const key = `${origin.cx},${origin.cy}`;
+  const cached = terrainSuitabilityCache.get(key);
+  if (cached !== undefined) return cached;
+
+  const spanTiles = BASE_CHUNK_SPAN * CHUNK_SIZE;
+  const ox = origin.cx * CHUNK_SIZE;
+  const oy = origin.cy * CHUNK_SIZE;
+  let flat = 0;
+  let obstacle = 0;
+
+  for (let y = BASE_TERRAIN_SAMPLE_STEP_TILES / 2; y < spanTiles; y += BASE_TERRAIN_SAMPLE_STEP_TILES) {
+    for (let x = BASE_TERRAIN_SAMPLE_STEP_TILES / 2; x < spanTiles; x += BASE_TERRAIN_SAMPLE_STEP_TILES) {
+      const tx = ox + x;
+      const ty = oy + y;
+      const terrain = terrainAt(tx, ty);
+      const water = terrain === Terrain.WaterDeep || terrain === Terrain.WaterShallow;
+      const mountain = heightAt(tx, ty) >= MOUNTAIN_HEIGHT_MIN;
+      if (water || mountain) obstacle++;
+      else flat++;
+    }
+  }
+
+  const suitable = flat > obstacle * BASE_MIN_FLAT_TO_OBSTACLE_RATIO;
+  terrainSuitabilityCache.set(key, suitable);
+  return suitable;
 }
 
 /** 이미 채택된 모든 base 와 최소 거리 규칙을 만족하는가. */
@@ -85,9 +138,8 @@ function canPlaceBase(candidate: BaseOrigin, placed: readonly BaseOrigin[]): boo
 /**
  * 두 base 중심을 잇는 직선의 가운데 절반에 연속적인 고지대가 있는지 본다.
  *
- * 산 판정 기준은 인수인계 문서에 수치가 없어서, 기존 0~8 고도장에서 5 이상이
- * 24타일 이상 연속될 때만 "가로막는 산" 으로 취급한다. 이 정도면 작은 언덕이나
- * 한두 칸짜리 봉우리는 간격 완화 조건이 되지 않는다.
+ * 기존 0~8 고도장에서 5 이상이 24타일 이상 연속될 때만 "가로막는 산" 으로
+ * 취급한다. 작은 언덕이나 한두 칸짜리 봉우리는 간격 완화 조건이 되지 않는다.
  */
 function mountainBlocksBetween(a: BaseOrigin, b: BaseOrigin): boolean {
   const halfBaseTiles = (BASE_CHUNK_SPAN * CHUNK_SIZE) / 2;
