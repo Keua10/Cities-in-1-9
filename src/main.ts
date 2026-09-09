@@ -17,6 +17,7 @@ import { CongestionMap } from './sim/congestion';
 import { MacroSim } from './sim/macro';
 import { CATCHUP_TICKS_PER_FRAME, START_MONEY } from './sim/simConstants';
 import { TrafficSim } from './sim/traffic/trafficSim';
+import { installVehicleMotionPatch } from './sim/traffic/vehicleMotionPatch';
 import './style.css';
 import { CityPanel } from './ui/cityPanel';
 import { createHudUpdater } from './ui/gameHud';
@@ -141,6 +142,7 @@ async function boot(): Promise<void> {
   sim.attachTraffic(congestion, assignment);
   sim.primeCatchup(Date.now());
   const traffic = new TrafficSim(world, sim, congestion, assignment);
+  installVehicleMotionPatch(traffic);
   renderer.attachTraffic(traffic, vehicleAtlas);
   renderer.attachDisasters(sim.disasters);
 
