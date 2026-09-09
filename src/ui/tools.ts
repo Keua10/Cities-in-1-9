@@ -71,6 +71,10 @@ export class Tools {
     return this.tool !== 'select';
   }
 
+  get cityLevel(): number {
+    return this.sim.cityLevel;
+  }
+
   setTool(tool: ToolId): void {
     this.tool = tool;
     this.hasLast = false;
@@ -112,7 +116,7 @@ export class Tools {
   ): { tx: number; ty: number; kind: number; ok: boolean } | null {
     if (this.tool !== 'facility') return null;
     const kind = this.facilityKind;
-    return { tx, ty, kind, ok: canPlaceFacility(this.world, tx, ty, kind).ok };
+    return { tx, ty, kind, ok: canPlaceFacility(this.world, tx, ty, kind, this.cityLevel).ok };
   }
 
   private paintAtWorld(wx: number, wy: number): void {
@@ -245,7 +249,7 @@ export class Tools {
     const spec = FACILITY_SPECS[kind];
     if (!spec) return;
 
-    const result = canPlaceFacility(this.world, tx, ty, kind);
+    const result = canPlaceFacility(this.world, tx, ty, kind, this.cityLevel);
     if (!result.ok) {
       if (result.reason) this.note(result.reason);
       return;
@@ -382,8 +386,10 @@ function buildFacilitySheet(tools: Tools, onPick: () => void): FacilitySheet {
       btn.innerHTML =
         `<b>${spec.name}</b>` +
         `<i>${spec.span}x${spec.span}</i>` +
-        `<s>₩${spec.cost.toLocaleString('ko-KR')} · 하루 ₩${spec.upkeepPerDay.toLocaleString('ko-KR')}</s>`;
+        `<s>₩${spec.cost.toLocaleString('ko-KR')} · 하루 ₩${spec.upkeepPerDay.toLocaleString('ko-KR')}</s>` +
+        `<small>도시 레벨 ${spec.unlockLevel}부터</small>`;
       btn.addEventListener('click', () => {
+        if (tools.cityLevel < spec.unlockLevel) return;
         tools.facilityKind = kind;
         tools.setTool('facility');
         onPick();
@@ -397,8 +403,27 @@ function buildFacilitySheet(tools: Tools, onPick: () => void): FacilitySheet {
 
   document.body.appendChild(root);
 
+  const refreshLocks = (): void => {
+    for (const [btn, kind] of buttons) {
+      const required = FACILITY_SPECS[kind].unlockLevel;
+      btn.disabled = tools.cityLevel < required;
+      btn.title = btn.disabled
+        ? `도시 레벨 ${required}에서 잠금해제됩니다`
+        : FACILITY_SPECS[kind].name;
+    }
+  };
+  // 열린 메뉴에서도 레벨 상승 직후 선택 가능해진다. 상태가 바뀔 때만 갱신한다.
+  let shownLevel = tools.cityLevel;
+  window.setInterval(() => {
+    if (shownLevel === tools.cityLevel) return;
+    shownLevel = tools.cityLevel;
+    refreshLocks();
+  }, 1000);
+  refreshLocks();
+
   return {
     setOpen(open) {
+      refreshLocks();
       root.hidden = !open;
     },
     isOpen() {

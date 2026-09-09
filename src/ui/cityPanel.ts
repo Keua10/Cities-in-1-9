@@ -1,5 +1,6 @@
 import { LEVEL_COUNT, TIER_NAMES, ZONE_C, ZONE_I, ZONE_NAMES, ZONE_R } from '../sim/buildings';
 import type { MacroSim } from '../sim/macro';
+import { BUILDING_UNLOCK_LEVEL, CITY_LEVELS } from '../sim/progression';
 import { SERVICE_KIND_COUNT } from '../sim/services';
 import { FACILITY_NAMES, TICKS_PER_DAY } from '../sim/simConstants';
 
@@ -21,6 +22,9 @@ export class CityPanel {
   private incidentButton: HTMLButtonElement;
   private root: HTMLElement;
   private moneyEl: HTMLElement;
+  private levelEl: HTMLElement;
+  private prosperityEl: HTMLElement;
+  private unlockEl: HTMLElement;
   private popEl: HTMLElement;
   private dateEl: HTMLElement;
   private occupancyEl: HTMLElement;
@@ -47,6 +51,9 @@ export class CityPanel {
     this.incidentButton.addEventListener('click', () => this.onIncidentFocus?.());
 
     this.moneyEl = must(el, '.cp-money');
+    this.levelEl = must(el, '.cp-city-level');
+    this.prosperityEl = must(el, '.cp-prosperity');
+    this.unlockEl = must(el, '.cp-unlock');
     this.popEl = must(el, '.cp-pop');
     this.dateEl = must(el, '.cp-date');
     this.occupancyEl = must(el, '.cp-occupancy-value');
@@ -77,6 +84,16 @@ export class CityPanel {
     setText(this.moneyEl, formatMoney(sim.money));
     this.moneyEl.classList.toggle('broke', sim.money <= 0);
     setText(this.popEl, Math.round(sim.stats.population).toLocaleString('ko-KR'));
+    const milestone = CITY_LEVELS[sim.cityLevel - 1];
+    const next = CITY_LEVELS[sim.cityLevel];
+    setText(this.levelEl, `도시 Lv.${sim.cityLevel} · ${milestone.name}`);
+    setText(
+      this.prosperityEl,
+      next
+        ? `번영도 ${sim.prosperity.toLocaleString('ko-KR')} / ${next.points.toLocaleString('ko-KR')}`
+        : `번영도 ${sim.prosperity.toLocaleString('ko-KR')} · 최고 레벨`,
+    );
+    setText(this.unlockEl, next ? `다음: ${next.unlock}` : '현재 모든 건물·시설 잠금해제');
 
     const occupancy = Math.max(0, Math.min(1, sim.stats.occupancy));
     const vacancy = 1 - occupancy;
@@ -93,6 +110,11 @@ export class CityPanel {
       for (let t = 0; t < LEVEL_COUNT; t++) {
         const v = sim.demand[z][t];
         const bar = this.bars[z][t];
+        const locked = t >= sim.maxBuildingTier;
+        bar.parentElement!.classList.toggle('locked', locked);
+        bar.parentElement!.title = locked
+          ? `도시 레벨 ${BUILDING_UNLOCK_LEVEL[t]}에서 잠금해제`
+          : `${TIER_NAMES[t]} 수요`;
         // 왼쪽이 마이너스, 오른쪽이 플러스. 가운데가 0.
         const pct = Math.min(50, Math.abs(v) * 50);
         bar.style.width = `${pct}%`;
@@ -229,6 +251,12 @@ function template(): string {
         <span>인구 <b class="cp-pop">0</b>명</span>
         <span class="cp-date">0일차 00시</span>
       </div>
+    </div>
+    <div class="cp-progression">
+      <b class="cp-city-level" role="status">도시 Lv.1 · 마을</b>
+      <div class="cp-prosperity">번영도 0 / 100</div>
+      <div class="cp-unlock"></div>
+      <div class="cp-progression-help">인구·입주율·하루 수지에 따라 매일 누적</div>
     </div>
     <div class="cp-occupancy">
       <div class="cp-occupancy-head"><span>공실률</span><b class="cp-occupancy-value">100%</b></div>

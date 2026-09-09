@@ -40,6 +40,8 @@ import {
  */
 
 export interface GrowthContext {
+  /** 도시 레벨로 열린 최대 건물 계층. 미지정 시 시작 계층만 허용한다. */
+  maxBuildingTier?: number;
   /** [zone][level-1] 형태의 수요. -1 ~ +1. */
   demand: number[][];
   /** 도로망. 어느 칸이 개발 가능한지 여기서 본다. */
@@ -206,22 +208,26 @@ export function sectorNeighborhoodHasEmptyLot(world: World, tx: number, ty: numb
  * 1단계 건물은 새로 안 생기고, 중산층 수요가 압도적이면 2단계가 주로 뽑힌다.
  * 학생이 말한 "수요에 따라 지어지는 레벨의 비율이 달라진다" 가 이 부분이다.
  */
-export function pickLevel(demandForZone: readonly number[], roll: number): number {
+export function pickLevel(
+  demandForZone: readonly number[],
+  roll: number,
+  maxTier = LEVEL_COUNT,
+): number {
   let total = 0;
-  for (let i = 0; i < LEVEL_COUNT; i++) {
+  for (let i = 0; i < maxTier; i++) {
     if (demandForZone[i] > 0) total += demandForZone[i];
   }
   if (total <= 0) return 0;
 
   let acc = 0;
   const target = roll * total;
-  for (let i = 0; i < LEVEL_COUNT; i++) {
+  for (let i = 0; i < maxTier; i++) {
     const w = demandForZone[i];
     if (w <= 0) continue;
     acc += w;
     if (target <= acc) return i + 1;
   }
-  return LEVEL_COUNT;
+  return maxTier;
 }
 
 /* ---------------------------------------------------------------- *
@@ -289,7 +295,7 @@ function buildPass(world: World, p: Parcel, ctx: GrowthContext): GrowthResult {
     if (!plotFits(world, tx, ty, 1, zone)) continue;
 
     const roll = simRandom(WORLD_SEED, ctx.tick, tx, ty);
-    let level = pickLevel(ctx.demand[zone], roll);
+    let level = pickLevel(ctx.demand[zone], roll, ctx.maxBuildingTier ?? 1);
     if (level === 0) continue;
 
     // 원하는 레벨이 안 들어가면 한 단계씩 낮춘다.
@@ -356,7 +362,7 @@ function rebuildPass(world: World, p: Parcel, ctx: GrowthContext): GrowthResult 
     if (hasEmpty) continue;
 
     // 위 등급부터 시도한다. 3x3 이 되면 3단계로, 안 되면 2단계로.
-    for (let target = LEVEL_COUNT; target > level; target--) {
+    for (let target = ctx.maxBuildingTier ?? 1; target > level; target--) {
       if (ctx.demand[zone][target - 1] - ctx.demand[zone][level - 1] < REBUILD_DEMAND_GAP) {
         continue;
       }

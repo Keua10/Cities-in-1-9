@@ -770,6 +770,34 @@ canvas {
 .cp-safety-counts.active {
   color: #ffc16d;
 }
+.cp-progression {
+  padding: 10px 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #aed9c4;
+}
+.cp-unlock,
+.cp-progression-help {
+  font-size: 10px;
+  color: #a5b1bf;
+}
+.cp-bar.locked {
+  opacity: 0.5;
+}
+.cp-bar.locked::after {
+  content: '잠김';
+  position: absolute;
+  inset: 0;
+  text-align: center;
+  font-size: 9px;
+}
+.fs-item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.fs-item small {
+  font-size: 10px;
+}
 .cp-safety-note {
   margin-top: 5px;
   color: #a5b1bf;

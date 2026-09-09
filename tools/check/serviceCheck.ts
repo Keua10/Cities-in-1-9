@@ -165,7 +165,7 @@ function placeReserved(
 ): number {
   let placed = 0;
   for (const [rx, ry, kind] of reserved) {
-    if (!canPlaceFacility(world, ox + rx, oy + ry, kind).ok) continue;
+    if (!canPlaceFacility(world, ox + rx, oy + ry, kind, 5).ok) continue;
     world.placeFacility(ox + rx, oy + ry, kind, bornDay);
     placed++;
   }

@@ -29,6 +29,8 @@ import { START_MONEY } from '../sim/simConstants';
  * 사건 목록은 선택 필드이며 없는 저장본도 읽을 수 있어 SCHEMA_VERSION 은 그대로 둔다.
  */
 export interface MacroState {
+  /** STEP 4.1 누적 번영도. 없는 저장본은 기존 도시 규모와 건물 등급으로 1회 보정. */
+  prosperity?: number;
   /** 도시 자금. 3.1단계에서는 클라이언트가 계산한다. */
   money: number;
   /** 표시용 인구. 접속 직후 시뮬레이션이 돌기 전에도 보여주려고 넣어둔다. */

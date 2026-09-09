@@ -4,6 +4,7 @@ import { isWater } from '../world/terrain';
 import type { World } from '../world/world';
 import { BLD_NONE, FACILITY_COUNT, isWelfareKind } from './buildings';
 import { edgeNeighbors } from './roadGraph';
+import { FACILITY_UNLOCK_LEVEL } from './progression';
 import {
   FACILITY_CAPACITY,
   FACILITY_CAPACITY_IS_BUILDINGS,
@@ -42,6 +43,7 @@ export const FAC_PARK = 5;
 export const FAC_SPORTS = 6;
 
 export interface FacilitySpec {
+  unlockLevel: number;
   kind: number;
   name: string;
   span: number;
@@ -72,6 +74,7 @@ function buildSpecs(): readonly FacilitySpec[] {
   const out: FacilitySpec[] = [];
   for (let kind = 0; kind < FACILITY_COUNT; kind++) {
     out.push({
+      unlockLevel: FACILITY_UNLOCK_LEVEL[kind],
       kind,
       name: FACILITY_NAMES[kind],
       span: FACILITY_SPAN[kind],
@@ -111,9 +114,17 @@ const OK: PlaceResult = { ok: true, reason: '' };
  * 거부 사유는 **학생이 읽을 문장으로** 돌려준다. 순서대로 검사한다.
  * 돈 검사(7번)는 여기서 하지 않는다 — 호출부가 MacroSim.spend 로 처리한다.
  */
-export function canPlaceFacility(world: World, tx: number, ty: number, kind: number): PlaceResult {
+export function canPlaceFacility(
+  world: World,
+  tx: number,
+  ty: number,
+  kind: number,
+  cityLevel = 1,
+): PlaceResult {
   if (!isFacilityKind(kind)) return { ok: false, reason: '없는 시설입니다' };
   const spec = FACILITY_SPECS[kind];
+  if (cityLevel < spec.unlockLevel)
+    return { ok: false, reason: `도시 레벨 ${spec.unlockLevel}에서 잠금해제됩니다` };
   const span = spec.span;
 
   /*

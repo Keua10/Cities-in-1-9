@@ -24,6 +24,13 @@ import { CongestionMap } from './congestion';
 import { DisasterSim } from './disasters';
 import { growParcel, type GrowthContext } from './growth';
 import { RoadField } from './roadGraph';
+import {
+  CITY_LEVELS,
+  cityLevelFor,
+  dailyProsperity,
+  initializeProsperity,
+  normalizeProsperity,
+} from './progression';
 import { graceFactor, satisfaction } from './satisfaction';
 import { SERVICE_KIND_COUNT, ServiceField } from './services';
 import {
@@ -155,6 +162,18 @@ export class MacroSim {
     return this.macro.money;
   }
 
+  get prosperity(): number {
+    return normalizeProsperity(this.macro.prosperity);
+  }
+
+  get cityLevel(): number {
+    return cityLevelFor(this.prosperity);
+  }
+
+  get maxBuildingTier(): number {
+    return CITY_LEVELS[this.cityLevel - 1].maxBuildingTier;
+  }
+
   /**
    * 해당 타일을 덮는 건물의 현재 입주율. 물리 건물과 달리 저장하지 않는 파생값이다.
    * 건물이 없으면 null, 건물은 있지만 만족도 기준 미달이면 0을 돌려준다.
@@ -182,6 +201,9 @@ export class MacroSim {
    * "아무도 없으면 시간이 느려지다가 멈춘다" 는 설계가 이 두 줄이다.
    */
   primeCatchup(nowMs: number): void {
+    const previousProsperity = this.macro.prosperity;
+    initializeProsperity(this.macro, this.world);
+    if (previousProsperity !== this.macro.prosperity) this.onMacroChange?.();
     this.disasters.reconcile(this.world);
     this.macro.disasters = this.disasters.snapshot();
     const gap = Math.max(0, nowMs - (this.macro.tickedAt || nowMs));
@@ -278,6 +300,7 @@ export class MacroSim {
     if (this.macro.money <= 0) return;
 
     const ctx: GrowthContext = {
+      maxBuildingTier: this.maxBuildingTier,
       demand: this.demand,
       field: this.roadField,
       today: this.day,
@@ -529,6 +552,12 @@ export class MacroSim {
     const shareLive = [0.7 - 0.45 * p, 0.25 + 0.2 * p, 0.05 + 0.25 * p];
     const shareWork = [0.65 - 0.35 * p, 0.27 + 0.13 * p, 0.08 + 0.22 * p];
     const shareInd = [0.55 - 0.2 * p, 0.3, 0.15 + 0.2 * p];
+    // 잠긴 계층의 몫을 열린 계층으로 배분해 초기 도시의 수요가 사라지지 않게 한다.
+    for (const shares of [shareLive, shareWork, shareInd]) {
+      const total = shares.slice(0, this.maxBuildingTier).reduce((sum, v) => sum + v, 0);
+      for (let t = 0; t < LEVEL_COUNT; t++)
+        shares[t] = t < this.maxBuildingTier ? shares[t] / total : 0;
+    }
 
     let capC = 0;
     let capI = 0;
@@ -577,6 +606,10 @@ export class MacroSim {
 
   /** 수요는 한 번에 튀지 않고 목표로 서서히 간다. 재건축이 계속 뒤집히는 걸 막는다. */
   private approach(zone: number, tier: number, target: number): void {
+    if (tier >= this.maxBuildingTier) {
+      this.demand[zone][tier] = 0;
+      return;
+    }
     const clamped = Math.max(-1, Math.min(1, target));
     const cur = this.demand[zone][tier];
     this.demand[zone][tier] = cur + (clamped - cur) * DEMAND_SMOOTH;
@@ -599,6 +632,10 @@ export class MacroSim {
     this.stats.dailyUpkeep = upkeep;
     this.stats.facilityUpkeep = facilityUpkeep;
     this.macro.money = Math.round((this.macro.money + income - upkeep) * 100) / 100;
+    this.macro.prosperity = normalizeProsperity(
+      this.prosperity +
+        dailyProsperity(this.stats.population, this.stats.occupancy, income - upkeep),
+    );
     this.onMacroChange?.();
   }
 
@@ -615,6 +652,7 @@ export class MacroSim {
     this.macro.tick = 0;
     this.macro.tickedAt = nowMs;
     delete this.macro.disasters;
+    delete this.macro.prosperity;
     this.onMacroChange?.();
   }
 

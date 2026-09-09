@@ -59,6 +59,7 @@ redevelopmentField.rebuild(redevelopmentWorld);
 const redevelopmentParcel = redevelopmentWorld.peekParcel(0, 0);
 if (!redevelopmentParcel) throw new Error('재개발 검증 필지가 없습니다');
 const redevelopment = growParcel(redevelopmentWorld, redevelopmentParcel, {
+  maxBuildingTier: 3,
   demand: [
     [-1, -1, 1],
     [-1, -1, -1],
@@ -256,7 +257,7 @@ function tryBuildFacility(): void {
     const spec = FACILITY_SPECS[kind];
     // 물·경사지에 걸린 자리는 건너뛴다. 지형은 좌표에서 결정론적으로 나오므로
     // 어느 기기에서 돌려도 같은 자리가 빠진다.
-    if (!canPlaceFacility(world, bx + lx, by + ly, kind).ok) {
+    if (!canPlaceFacility(world, bx + lx, by + ly, kind, 5).ok) {
       nextFacility++;
       continue;
     }
