@@ -29,6 +29,8 @@ import { START_MONEY } from '../sim/simConstants';
  * 사건 목록은 선택 필드이며 없는 저장본도 읽을 수 있어 SCHEMA_VERSION 은 그대로 둔다.
  */
 export interface MacroState {
+  /** STEP 4.2 부족 감점 유예 시작 틱. 접속 때마다 갱신하지 않는다. */
+  waterStartTick?: number;
   /** STEP 4.1 누적 번영도. 없는 저장본은 기존 도시 규모와 건물 등급으로 1회 보정. */
   prosperity?: number;
   /** 도시 자금. 3.1단계에서는 클라이언트가 계산한다. */
@@ -71,6 +73,7 @@ export interface CityDoc {
 
 /** cities/{uid}/chunks/{cx}_{cy} 문서. 값은 RLE + base64 문자열이다. */
 export interface ChunkDoc {
+  pipes?: string | null;
   /** 선택 필드. 없는 옛 도시는 기존 인접 연결을 유지한다. */
   roadLinks?: string | null;
   /** 지형 오버레이. 바뀐 타일이 하나도 없으면 null. */
@@ -99,6 +102,7 @@ export interface ChunkDoc {
 
 /** 저장/불러오기가 주고받는 청크 단위 묶음. */
 export interface ChunkPayload {
+  pipes?: Uint8Array | null;
   roadLinks?: Uint8Array | null;
   cx: number;
   cy: number;

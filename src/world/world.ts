@@ -20,6 +20,8 @@ import { generateChunk, heightAt, type TerrainId } from './terrain';
 
 /** 생성값과 달라진 칸만 담는 배열. OVERRIDE_NONE 인 칸은 "생성값 그대로". */
 export interface ChunkOverride {
+  /** 255=없음, 1=상수도, 2=하수도, 3=동일 칸 교차 연결. */
+  pipes?: Uint8Array | null;
   roadLinks?: Uint8Array | null;
   tiles: Uint8Array | null;
   heights: Uint8Array | null;
@@ -44,6 +46,7 @@ export interface ChunkOverride {
  * 붙고(그 전에는 전부 null), 청크 하나가 꽉 차도 4KB x 5 = 20KB 다.
  */
 export interface Parcel {
+  pipes: Uint8Array | null;
   /** 0~15: 명시적 연결. 255/없음: 이전 저장본과 생성 도시의 인접 연결. */
   roadLinks: Uint8Array | null;
   cx: number;
@@ -129,6 +132,7 @@ export interface BuildingInfo {
  * Firestore 로 간다.
  */
 export class World {
+  utilityRevision = 0;
   /** 타일 수가 같아도 연결 편집을 감지한다. */
   roadRevision = 0;
   walkRevision = 0;
@@ -174,6 +178,7 @@ export class World {
     let p = this.parcels.get(key);
     if (!p) {
       p = {
+        pipes: null,
         roadLinks: null,
         cx,
         cy,
@@ -197,6 +202,34 @@ export class World {
 
   peekParcel(cx: number, cy: number): Parcel | undefined {
     return this.parcels.get(chunkKey(cx, cy));
+  }
+
+  pipeParcels(): Parcel[] {
+    return [...this.parcels.values()].filter((p) => p.pipes !== null);
+  }
+
+  getPipe(tx: number, ty: number): number {
+    const value = this.peekParcel(chunkIndexOf(tx), chunkIndexOf(ty))?.pipes?.[
+      localIndexOf(ty) * CHUNK_SIZE + localIndexOf(tx)
+    ];
+    return value === 1 || value === 2 || value === 3 ? value : 0;
+  }
+
+  setPipe(tx: number, ty: number, mask: number): boolean {
+    if (
+      !Number.isInteger(mask) ||
+      mask < 0 ||
+      mask > 3 ||
+      !this.isExplored(chunkIndexOf(tx), chunkIndexOf(ty))
+    )
+      return false;
+    if (this.getPipe(tx, ty) === mask) return false;
+    const p = this.getParcel(chunkIndexOf(tx), chunkIndexOf(ty));
+    p.pipes ??= new Uint8Array(CHUNK_TILES).fill(OVERRIDE_NONE);
+    p.pipes[localIndexOf(ty) * CHUNK_SIZE + localIndexOf(tx)] = mask || OVERRIDE_NONE;
+    if (mask === 0 && p.pipes.every((value) => value === OVERRIDE_NONE)) p.pipes = null;
+    this.markDirty(p.key, true);
+    return true;
   }
 
   /** 뭔가 지어진 필지만. 매크로 틱이 이걸 돈다. */
@@ -728,6 +761,7 @@ export class World {
       p &&
       !p.build &&
       !p.bld &&
+      !p.pipes &&
       !p.tileOverride &&
       !p.heightOverride &&
       !this.dirtyKeys.has(key)
@@ -757,6 +791,7 @@ export class World {
       p.heightOverride = ov.heights;
       p.build = ov.build;
       p.roadLinks = ov.roadLinks ?? null;
+      p.pipes = ov.pipes ?? null;
       p.bld = ov.bld;
       // bld 는 있는데 born 이 없으면(전부 255 라 압축이 null 을 돌려준 경우)
       // 255 로 채운 배열을 되살린다. 값이 정확히 복원된다.
@@ -772,6 +807,7 @@ export class World {
     this.roadDirty = true;
     this.roadRevision++;
     this.walkRevision++;
+    this.utilityRevision++;
   }
 
   /**
@@ -790,6 +826,7 @@ export class World {
       p.heightOverride = null;
       p.build = null;
       p.roadLinks = null;
+      p.pipes = null;
       p.bld = null;
       p.bornLo = null;
       p.bornHi = null;
@@ -844,6 +881,7 @@ export class World {
         heights: p.heightOverride ? new Uint8Array(p.heightOverride) : null,
         build: p.build ? new Uint8Array(p.build) : null,
         roadLinks: p.roadLinks ? new Uint8Array(p.roadLinks) : null,
+        pipes: p.pipes?.slice() ?? null,
         bld: p.bld ? new Uint8Array(p.bld) : null,
         bornLo: p.bornLo ? new Uint8Array(p.bornLo) : null,
         bornHi: p.bornHi ? new Uint8Array(p.bornHi) : null,
@@ -862,6 +900,7 @@ export class World {
   }
 
   private markDirty(key: string, byUser: boolean): void {
+    this.utilityRevision++;
     this.dirtyKeys.add(key);
     if (byUser) this.userEdited = true;
     this.onDirty?.();
@@ -869,6 +908,7 @@ export class World {
 }
 
 export interface ChunkSnapshot {
+  pipes?: Uint8Array | null;
   roadLinks?: Uint8Array | null;
   cx: number;
   cy: number;

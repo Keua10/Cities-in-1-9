@@ -57,7 +57,7 @@ export function createHudUpdater(deps: GameHudDeps): (now: number, fps: number) 
             ? describeFacility(sim, here.tx, here.ty, here.kind)
             : `${ZONE_NAMES[here.zone]} ${here.level}단계 (${TIER_NAMES[here.level - 1]}) · ` +
               `${occupancy === null || occupancy <= 0 ? '공실' : `입주 ${Math.round(occupancy * 100)}%`} · ` +
-              `${sim.day - here.born}일 됨`
+              `${sim.day - here.born}일 됨 · 급수 ${Math.round(sim.water.statusAt(here.tx, here.ty).supply * 100)}% · 하수 ${Math.round(sim.water.statusAt(here.tx, here.ty).drainage * 100)}%${sim.water.contaminationAt(here.tx, here.ty) > 0 ? ' · 수질 오염' : ''}`
           : null,
         service: cursor ? describeService(sim, cursor.tx, cursor.ty, here) : null,
         amenity: cursor ? describeAmenity(sim, cursor.tx, cursor.ty, here) : null,

@@ -107,6 +107,7 @@ async function loadOverrides(uid: string): Promise<Map<string, ChunkOverride>> {
       heights: string;
       build: string;
       roadLinks: string;
+      pipes: string;
       bld: string;
       bornLo: string;
       bornHi: string;
@@ -115,11 +116,12 @@ async function loadOverrides(uid: string): Promise<Map<string, ChunkOverride>> {
     const heights = decodeOverride(data.heights ?? null, CHUNK_TILES);
     const build = decodeOverride(data.build ?? null, CHUNK_TILES);
     const roadLinks = decodeOverride(data.roadLinks ?? null, CHUNK_TILES);
+    const pipes = decodeOverride(data.pipes ?? null, CHUNK_TILES);
     const bld = decodeOverride(data.bld ?? null, CHUNK_TILES);
     const bornLo = decodeOverride(data.bornLo ?? null, CHUNK_TILES);
     const bornHi = decodeOverride(data.bornHi ?? null, CHUNK_TILES);
-    if (!tiles && !heights && !build && !bld) continue;
-    out.set(chunkKey(cx, cy), { tiles, heights, build, roadLinks, bld, bornLo, bornHi });
+    if (!tiles && !heights && !build && !bld && !pipes && !roadLinks) continue;
+    out.set(chunkKey(cx, cy), { tiles, heights, build, roadLinks, pipes, bld, bornLo, bornHi });
   }
   return out;
 }
@@ -178,12 +180,13 @@ export async function saveCity(
       const heights = encodeOverride(chunk.heights);
       const build = encodeOverride(chunk.build);
       const roadLinks = encodeOverride(chunk.roadLinks);
+      const pipes = encodeOverride(chunk.pipes);
       const bld = encodeOverride(chunk.bld);
       // 건물이 하나도 없으면 born 배열도 통째로 비어 있다. 그때는 저장하지 않고,
       // 불러올 때 255 로 채운 배열을 되살린다(world.setPersistedOverrides).
       const bornLo = encodeOverride(chunk.bornLo);
       const bornHi = encodeOverride(chunk.bornHi);
-      if (!tiles && !heights && !build && !bld) {
+      if (!tiles && !heights && !build && !bld && !pipes && !roadLinks) {
         // 고쳤다가 원래대로 되돌린 청크. 문서를 남길 이유가 없다.
         emptyChunks.push(id);
         continue;
@@ -193,6 +196,7 @@ export async function saveCity(
         heights,
         build,
         roadLinks,
+        pipes,
         bld,
         bornLo,
         bornHi,

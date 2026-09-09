@@ -1,6 +1,7 @@
 import { TIER_NAMES } from '../sim/buildings';
 import { FACILITY_SPECS } from '../sim/facilities';
 import type { MacroSim } from '../sim/macro';
+import { WATER_SPECS } from '../sim/config/water';
 import { SERVICE_KIND_COUNT } from '../sim/services';
 import { AMENITY_NEED_BY_TIER, FACILITY_NAMES } from '../sim/simConstants';
 
@@ -15,6 +16,7 @@ import { AMENITY_NEED_BY_TIER, FACILITY_NAMES } from '../sim/simConstants';
 export function describeFacility(sim: MacroSim, tx: number, ty: number, kind: number): string {
   const spec = FACILITY_SPECS[kind];
   const upkeep = `하루 ₩${spec.upkeepPerDay.toLocaleString('ko-KR')}`;
+  if (WATER_SPECS[kind]) return `${spec.name} · ${sim.water.facilityStatus(tx, ty)} · ${upkeep}`;
 
   if (spec.welfare) {
     return `${spec.name} · 반경 ${spec.range}타일(직선) · 세기 ${spec.strength} · ${upkeep}`;

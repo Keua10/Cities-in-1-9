@@ -4,16 +4,21 @@ import { facilityKindOfCode, isAnchor, isFacilityAnchor, levelOfCode } from './b
 
 /** 도시 레벨과 건물 계층(L1~L3)은 별개다. 후속 인프라도 이 표의 레벨을 사용한다. */
 export const CITY_LEVELS = [
-  { points: 0, name: '마을', maxBuildingTier: 1, unlock: '저소득 건물 · 기본 서비스 · 소공원' },
-  { points: 100, name: '소도시', maxBuildingTier: 2, unlock: '중산층 건물 · 공원' },
-  { points: 500, name: '성장 도시', maxBuildingTier: 2, unlock: '체육시설' },
+  {
+    points: 0,
+    name: '마을',
+    maxBuildingTier: 1,
+    unlock: '저소득 · 기본 시설 · 지하수 펌프 · 직접 방류구',
+  },
+  { points: 100, name: '소도시', maxBuildingTier: 2, unlock: '중산층 건물 · 공원 · 하천 취수장' },
+  { points: 500, name: '성장 도시', maxBuildingTier: 2, unlock: '체육시설 · 하수처리장' },
   { points: 1500, name: '대도시', maxBuildingTier: 3, unlock: '고소득 건물' },
   { points: 4000, name: '중심 도시', maxBuildingTier: 3, unlock: '현재 최고 도시 레벨' },
 ] as const;
 
 export const BUILDING_UNLOCK_LEVEL = [1, 2, 4] as const;
 /** 기본 안전·교육 시설은 시작부터 제공해 성장에 필요한 서비스를 막지 않는다. */
-export const FACILITY_UNLOCK_LEVEL: readonly number[] = [1, 1, 1, 1, 1, 2, 3];
+export const FACILITY_UNLOCK_LEVEL: readonly number[] = [1, 1, 1, 1, 1, 2, 3, 1, 2, 1, 3];
 
 export function normalizeProsperity(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value)

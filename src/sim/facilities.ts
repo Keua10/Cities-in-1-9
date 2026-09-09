@@ -5,6 +5,7 @@ import type { World } from '../world/world';
 import { BLD_NONE, FACILITY_COUNT, isWelfareKind } from './buildings';
 import { edgeNeighbors } from './roadGraph';
 import { FACILITY_UNLOCK_LEVEL } from './progression';
+import { WATER_SPECS } from './config/water';
 import {
   FACILITY_CAPACITY,
   FACILITY_CAPACITY_IS_BUILDINGS,
@@ -83,7 +84,7 @@ function buildSpecs(): readonly FacilitySpec[] {
       welfare: isWelfareKind(kind),
       range: FACILITY_RANGE[kind],
       capacity: FACILITY_CAPACITY[kind],
-      capacityIsBuildings: FACILITY_CAPACITY_IS_BUILDINGS[kind],
+      capacityIsBuildings: FACILITY_CAPACITY_IS_BUILDINGS[kind] ?? false,
       strength: FACILITY_STRENGTH[kind],
       needsRoad: FACILITY_NEEDS_ROAD[kind],
     });
@@ -177,6 +178,10 @@ export function canPlaceFacility(
     return { ok: false, reason: '도로에 닿아야 합니다' };
   }
 
+  if (WATER_SPECS[kind]?.needsWater && !touchesWater(world, tx, ty, span)) {
+    return { ok: false, reason: '하천에 바로 닿은 평평한 육지에 지어야 합니다' };
+  }
+
   return OK;
 }
 
@@ -184,6 +189,13 @@ export function canPlaceFacility(
 export function touchesRoadTiles(world: World, tx: number, ty: number, span: number): boolean {
   for (const [rx, ry] of edgeNeighbors(tx, ty, span)) {
     if (world.getBuild(rx, ry) === Build.Road) return true;
+  }
+  return false;
+}
+
+export function touchesWater(world: World, tx: number, ty: number, span: number): boolean {
+  for (const [x, y] of edgeNeighbors(tx, ty, span)) {
+    if (isWater(world.getTile(x, y))) return true;
   }
   return false;
 }

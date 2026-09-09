@@ -38,6 +38,8 @@ import { PedestrianLayer } from './pedestrianLayer';
 import { SignalLayer } from './signalLayer';
 import type { VehicleAtlas } from './vehicleAtlas';
 import { VehicleMesh } from './vehicleMesh';
+import { WaterLayer } from './waterLayer';
+import type { WaterField } from '../sim/water';
 
 export interface RenderStats {
   visibleChunks: number;
@@ -77,6 +79,9 @@ function chunkDiamond(cx: number, cy: number): number[] {
 }
 
 export class WorldRenderer {
+  waterVisible = false;
+  waterField: WaterField | null = null;
+  private waterLayer = new WaterLayer();
   readonly root = new Container();
   private groundLayer = new Container();
   /** 회전 차량은 큰 지형 청크 사이에 끼지 않도록 지형 합성 뒤에 그린다. */
@@ -141,6 +146,7 @@ export class WorldRenderer {
       this.signalLayer.graphics,
       this.incidentLayer.graphics,
       this.gridLayer,
+      this.waterLayer.graphics,
       this.cursorLayer,
       this.previewLayer,
     );
@@ -265,6 +271,8 @@ export class WorldRenderer {
     // 화면 밖에 있는 산꼭대기가 잘리지 않는다.
     view.maxY += MAX_HEIGHT * HEIGHT_UNIT;
     const range = visibleChunkRange(view);
+    this.waterLayer.update(this.world, this.waterField, this.waterVisible, range);
+    this.groundLayer.alpha = this.waterVisible ? 0.4 : 1;
     const rangeKey = `${range.cx0},${range.cy0},${range.cx1},${range.cy1}`;
     const zoomChanged = Math.abs(camera.zoom - this.lastZoom) > 0.001;
 

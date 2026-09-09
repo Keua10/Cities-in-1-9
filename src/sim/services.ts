@@ -368,7 +368,7 @@ export class ServiceField {
     for (const f of this.facilities) kindUsed[f.kind] = true;
     let anyWelfare = false;
     for (let k = FAC_WELFARE_BASE; k < FACILITY_COUNT; k++) {
-      if (kindUsed[k]) anyWelfare = true;
+      if (kindUsed[k] && FACILITY_SPECS[k].welfare) anyWelfare = true;
     }
 
     this.chunks.clear();

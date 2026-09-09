@@ -804,3 +804,31 @@ canvas {
   font-size: 10px;
   line-height: 1.5;
 }
+
+.cp-water {
+  white-space: pre-line;
+  font-size: 10px;
+  line-height: 1.5;
+  color: #a9cddc;
+  margin: 5px 0 10px;
+}
+#tools,
+#toolbar {
+  max-width: calc(100vw - 20px);
+  overflow-x: auto;
+}
+#tools button,
+#toolbar button {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+#facility-sheet {
+  max-height: calc(100dvh - 160px);
+  overflow-y: auto;
+}
+#btn-tool-water {
+  color: #60d9ff;
+}
+#btn-tool-sewer {
+  color: #bd9568;
+}

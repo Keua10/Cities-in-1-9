@@ -24,6 +24,8 @@ import { CongestionMap } from './congestion';
 import { DisasterSim } from './disasters';
 import { growParcel, type GrowthContext } from './growth';
 import { RoadField } from './roadGraph';
+import { WaterField } from './water';
+import { WATER_GRACE_DAYS, WATER_RAMP_DAYS } from './config/water';
 import {
   CITY_LEVELS,
   cityLevelFor,
@@ -108,6 +110,7 @@ export class MacroSim {
    * 반드시 같이 바뀌기 때문이다. 별도 주기를 만들지 마라.
    */
   readonly services = new ServiceField();
+  readonly water = new WaterField();
   readonly disasters: DisasterSim;
   private assignment: AssignmentTable | null = null;
   private congestion: CongestionMap | null = null;
@@ -174,6 +177,19 @@ export class MacroSim {
     return CITY_LEVELS[this.cityLevel - 1].maxBuildingTier;
   }
 
+  get waterGraceDaysLeft(): number {
+    return Math.max(
+      0,
+      WATER_GRACE_DAYS -
+        Math.floor((this.tick - (this.macro.waterStartTick ?? this.tick)) / TICKS_PER_DAY),
+    );
+  }
+
+  private get waterPenaltyFactor(): number {
+    const days = (this.tick - (this.macro.waterStartTick ?? this.tick)) / TICKS_PER_DAY;
+    return Math.max(0, Math.min(1, (days - WATER_GRACE_DAYS) / WATER_RAMP_DAYS));
+  }
+
   /**
    * 해당 타일을 덮는 건물의 현재 입주율. 물리 건물과 달리 저장하지 않는 파생값이다.
    * 건물이 없으면 null, 건물은 있지만 만족도 기준 미달이면 0을 돌려준다.
@@ -201,6 +217,15 @@ export class MacroSim {
    * "아무도 없으면 시간이 느려지다가 멈춘다" 는 설계가 이 두 줄이다.
    */
   primeCatchup(nowMs: number): void {
+    if (
+      !Number.isFinite(this.macro.waterStartTick) ||
+      this.macro.waterStartTick! < 0 ||
+      this.macro.waterStartTick! > this.tick
+    ) {
+      this.macro.waterStartTick = this.tick;
+      this.onMacroChange?.();
+    }
+    this.water.ensure(this.world);
     const previousProsperity = this.macro.prosperity;
     initializeProsperity(this.macro, this.world);
     if (previousProsperity !== this.macro.prosperity) this.onMacroChange?.();
@@ -223,6 +248,7 @@ export class MacroSim {
 
   /** 실시간 프레임에서 부른다. 지나간 만큼 틱을 돌린다. */
   update(deltaMs: number, budget: number): void {
+    this.water.ensure(this.world);
     if (this.catchupLeft > 0) {
       const n = Math.min(this.catchupLeft, budget);
       for (let i = 0; i < n; i++) this.step();
@@ -246,9 +272,16 @@ export class MacroSim {
 
   private step(): void {
     this.macro.tick++;
+    this.water.ensure(this.world);
 
     if (
-      this.disasters.step(this.world, this.services, this.tick, graceFactor(this.stats.population))
+      this.disasters.step(
+        this.world,
+        this.services,
+        this.tick,
+        graceFactor(this.stats.population),
+        this.water,
+      )
     ) {
       this.macro.disasters = this.disasters.snapshot();
       this.onMacroChange?.();
@@ -435,7 +468,14 @@ export class MacroSim {
           // **감점 인자를 둘로 나누지 않는다.** 서비스와 복지는 각자 계산하지만
           // 만족도에는 합쳐서 한 번 들어간다. 총합 상한이 하강 나선을 막는
           // 유일한 바닥이기 때문이다.
-          const needsGap = Math.min(NEEDS_PENALTY_MAX, serviceGap + amenityGap);
+          const water = this.water.statusAt(tx, ty);
+          // 전기·수도 전반의 계층별 민감도 튜닝은 STEP 4.8에서 진행한다.
+          const waterGap =
+            (0.18 * (1 - water.supply) + 0.12 * (1 - water.drainage)) *
+              grace *
+              this.waterPenaltyFactor +
+            0.2 * water.contamination * water.supply;
+          const needsGap = Math.min(NEEDS_PENALTY_MAX, serviceGap + amenityGap + waterGap);
 
           const incidentPenalty = this.disasters.penaltyAt(tx, ty);
           const sat =
@@ -627,7 +667,7 @@ export class MacroSim {
     // 3.3단계: 시설 유지비가 붙는다. **도로가 끊겨 죽은 시설도 유지비를 낸다.**
     // 실제로 그렇고, 학생에게 도로 철거의 대가를 알려주는 신호이기도 하다.
     const facilityUpkeep = this.services.dailyUpkeep();
-    const upkeep = this.stats.roads * UPKEEP_ROAD_PER_DAY + facilityUpkeep;
+    const upkeep = this.stats.roads * UPKEEP_ROAD_PER_DAY + facilityUpkeep + this.water.upkeep;
     this.stats.dailyIncome = income;
     this.stats.dailyUpkeep = upkeep;
     this.stats.facilityUpkeep = facilityUpkeep;
@@ -653,6 +693,7 @@ export class MacroSim {
     this.macro.tickedAt = nowMs;
     delete this.macro.disasters;
     delete this.macro.prosperity;
+    delete this.macro.waterStartTick;
     this.onMacroChange?.();
   }
 

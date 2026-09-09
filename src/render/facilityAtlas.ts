@@ -15,7 +15,7 @@ import { FACILITY_SPECS } from '../sim/facilities';
  * ---------------------------------------------------------------
  *
  *   파일: public/sprites/facilities.png
- *   전체: 576 x 384        (buildings.png 와 높이가 같다)
+ *   원본: 576 x 384 (기존 7종). 런타임은 768 x 384로 확장해 상하수도 4종을 더한다.
  *
  *   밴드 span1  y   0 ~  63   셀  64x64    x: 0=소공원
  *   밴드 span2  y  64 ~ 191   셀 128x128   x: 0=소방서, 1=경찰서, 2=공원
@@ -57,6 +57,10 @@ export const FACILITY_ATLAS_COLUMN: readonly number[] = [
   0, // 4 소공원   span1 열0
   2, // 5 공원     span2 열2
   2, // 6 체육시설 span3 열2
+  3, // 7 지하수 펌프 span2 열3
+  4, // 8 하천 취수장 span2 열4
+  5, // 9 직접 방류구 span2 열5
+  3, // 10 하수처리장 span3 열3
 ];
 
 /** 각 밴드의 열 수. 가장 넓은 밴드가 아틀라스 폭을 정한다. */
@@ -98,6 +102,8 @@ export async function loadFacilityAtlas(): Promise<FacilityAtlas> {
 
   if (art) ctx.drawImage(art, 0, 0);
   else drawPlaceholders(ctx);
+  // 기존 7종 아트는 원본 위치를 보존하고, 새 시설은 빈 열에 코드로 그린다.
+  drawWaterFacilities(ctx);
 
   const texture = Texture.from(canvas);
   texture.source.scaleMode = 'nearest';
@@ -133,7 +139,8 @@ async function loadImage(url: string): Promise<HTMLImageElement | null> {
     const img = new Image();
     img.onload = () =>
       resolve(
-        img.naturalWidth === FACILITY_ATLAS_W && img.naturalHeight === FACILITY_ATLAS_H
+        (img.naturalWidth === FACILITY_ATLAS_W || img.naturalWidth === 576) &&
+          img.naturalHeight === FACILITY_ATLAS_H
           ? img
           : null,
       );
@@ -165,7 +172,7 @@ const BODY: readonly (readonly [string, string, string])[] = [
  * 필수 시설과 한눈에 구분되게 한다.
  */
 function drawPlaceholders(ctx: CanvasRenderingContext2D): void {
-  for (let kind = 0; kind < FACILITY_COUNT; kind++) {
+  for (let kind = 0; kind < 7; kind++) {
     const spec = FACILITY_SPECS[kind];
     const size = facilityCellSize(spec.span);
     const ox = FACILITY_ATLAS_COLUMN[kind] * size;
@@ -175,6 +182,39 @@ function drawPlaceholders(ctx: CanvasRenderingContext2D): void {
     // 복지는 낮고 넓게, 필수 서비스는 높게. 실루엣만으로 가족이 구분된다.
     const body = groundH * (spec.welfare ? 0.3 : 0.7);
     drawFacility(ctx, ox, oy, size, groundH, body, BODY[kind], spec.welfare);
+  }
+}
+
+/** 기존 아틀라스의 빈 열에 수조·취수관·방류구·처리조를 그린다. */
+export function drawWaterFacilities(ctx: CanvasRenderingContext2D): void {
+  const colors = ['#63c9ef', '#489cc7', '#9b755c', '#55b7a6'];
+  for (let kind = 7; kind < FACILITY_COUNT; kind++) {
+    const spec = FACILITY_SPECS[kind],
+      size = facilityCellSize(spec.span);
+    const ox = FACILITY_ATLAS_COLUMN[kind] * size,
+      oy = facilityBandY(spec.span);
+    const c = colors[kind - 7];
+    drawFacility(ctx, ox, oy, size, size / 2, size * 0.16, [c, '#536d7c', '#344d5c'], false);
+    ctx.fillStyle = '#263e4b';
+    const tanks = kind === 10 ? 3 : kind === 7 ? 1 : 2;
+    for (let i = 0; i < tanks; i++) {
+      const x = ox + size * (0.35 + i * 0.15),
+        y = oy + size * 0.55;
+      ctx.fillStyle = '#253c47';
+      ctx.beginPath();
+      ctx.ellipse(x, y, size * 0.085, size * 0.046, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = kind === 9 ? '#705642' : c;
+      ctx.beginPath();
+      ctx.ellipse(x, y - 3, size * 0.065, size * 0.032, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.strokeStyle = kind >= 9 ? '#b69068' : '#96e9ff';
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.moveTo(ox + size * 0.5, oy + size * 0.71);
+    ctx.lineTo(ox + size * 0.5, oy + size * 0.88);
+    ctx.stroke();
   }
 }
 

@@ -140,7 +140,13 @@ export class DisasterSim {
     return before !== this.active.length;
   }
 
-  step(world: World, services: QualitySource, tick: number, grace: number): boolean {
+  step(
+    world: World,
+    services: QualitySource,
+    tick: number,
+    grace: number,
+    water?: { contaminationAt(tx: number, ty: number): number },
+  ): boolean {
     let changed = this.reconcile(world);
     if (this.active.length === 0 && grace <= 0) return changed;
     const prior = [...this.active];
@@ -211,7 +217,10 @@ export class DisasterSim {
             const q = quality(services, tx, ty, kind);
             if (
               roll(kind, tick, tx, ty) <
-              DISASTER_RATE_PER_TICK[kind] * grace * (1 - q * DISASTER_PREVENTION[kind])
+              DISASTER_RATE_PER_TICK[kind] *
+                grace *
+                (1 - q * DISASTER_PREVENTION[kind]) *
+                (kind === 2 ? 1 + 4 * (water?.contaminationAt(tx, ty) ?? 0) : 1)
             ) {
               if (this.start(world, kind, tx, ty, tick)) changed = true;
               break;

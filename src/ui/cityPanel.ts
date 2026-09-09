@@ -25,6 +25,7 @@ export class CityPanel {
   private levelEl: HTMLElement;
   private prosperityEl: HTMLElement;
   private unlockEl: HTMLElement;
+  private waterEl: HTMLElement;
   private popEl: HTMLElement;
   private dateEl: HTMLElement;
   private occupancyEl: HTMLElement;
@@ -54,6 +55,7 @@ export class CityPanel {
     this.levelEl = must(el, '.cp-city-level');
     this.prosperityEl = must(el, '.cp-prosperity');
     this.unlockEl = must(el, '.cp-unlock');
+    this.waterEl = must(el, '.cp-water');
     this.popEl = must(el, '.cp-pop');
     this.dateEl = must(el, '.cp-date');
     this.occupancyEl = must(el, '.cp-occupancy-value');
@@ -138,6 +140,16 @@ export class CityPanel {
     setText(this.amenityValueEl, `${Math.round(amenity * 100)}%`);
 
     setText(this.facilityNoteEl, describeFacilities(sim));
+    const water = sim.water.summary;
+    setText(
+      this.waterEl,
+      `급수 ${Math.round(water.supply * 100)}% · 하수 ${Math.round(water.drainage * 100)}%\n` +
+        `연결 용량: 급수 ${water.waterCapacity.toLocaleString('ko-KR')} / 하수 ${water.sewerCapacity.toLocaleString('ko-KR')} · 도시 수요 ${Math.round(water.demand).toLocaleString('ko-KR')}\n` +
+        (water.contaminatedBuildings
+          ? `오염된 물을 받는 건물 ${water.contaminatedBuildings}채 · 빨간 배관을 분리하세요`
+          : '상·하수도관은 한 칸 이상 띄워 설치하세요') +
+        (sim.waterGraceDaysLeft > 0 ? `\n부족 감점 유예 ${sim.waterGraceDaysLeft}일 남음` : ''),
+    );
     this.updateSafety(sim);
     setText(this.noteEl, describe(sim));
   }
@@ -273,6 +285,8 @@ function template(): string {
       ${gauges}
     </div>
     <div class="cp-facility-note"></div>
+    <div class="cp-section-title">상하수도</div>
+    <div class="cp-water"></div>
     <div class="cp-safety">
       <div class="cp-section-title">도시 안전 <button class="cp-incident-focus" type="button" disabled>사건 위치 보기</button></div>
       <div class="cp-safety-counts" role="status" aria-live="polite">화재 0 · 범죄 0 · 질병 0</div>

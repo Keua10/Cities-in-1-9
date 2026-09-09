@@ -11,7 +11,10 @@ import { loadTileAtlas } from './render/atlas';
 import { loadBuildingAtlas } from './render/buildingAtlas';
 import { loadFacilityAtlas } from './render/facilityAtlas';
 import { loadVehicleAtlas } from './render/vehicleAtlas';
-import { installPedestrianRenderPatch, setPedestrianRenderZoom } from './render/pedestrianRenderPatch';
+import {
+  installPedestrianRenderPatch,
+  setPedestrianRenderZoom,
+} from './render/pedestrianRenderPatch';
 import { WorldRenderer } from './render/worldRenderer';
 import { AssignmentTable } from './sim/assignment';
 import { CongestionMap } from './sim/congestion';
@@ -139,6 +142,7 @@ async function boot(): Promise<void> {
   //    city.macro 객체를 그대로 넘긴다. 시뮬레이션이 그 자리에서 고치므로
   //    SaveManager 가 따로 옮겨 담을 필요 없이 저장에 그대로 실린다.
   const sim = new MacroSim(world, macro);
+  renderer.waterField = sim.water;
   sim.onMacroChange = () => saver.noteMacroChange();
   const congestion = new CongestionMap();
   const assignment = new AssignmentTable();
@@ -257,6 +261,7 @@ async function boot(): Promise<void> {
     camera.applyTo(renderer.root);
     // 시설 도구를 든 동안 커서 아래 footprint 를 미리 보여준다.
     renderer.setFacilityPreview(cursor ? tools.facilityPreviewAt(cursor.tx, cursor.ty) : null);
+    renderer.waterVisible = tools.pipeView;
     setPedestrianRenderZoom(camera.zoom);
     renderer.update(camera, now);
     renderer.flush();
