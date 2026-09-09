@@ -11,11 +11,13 @@ import { loadTileAtlas } from './render/atlas';
 import { loadBuildingAtlas } from './render/buildingAtlas';
 import { loadFacilityAtlas } from './render/facilityAtlas';
 import { loadVehicleAtlas } from './render/vehicleAtlas';
+import { installPedestrianRenderPatch, setPedestrianRenderZoom } from './render/pedestrianRenderPatch';
 import { WorldRenderer } from './render/worldRenderer';
 import { AssignmentTable } from './sim/assignment';
 import { CongestionMap } from './sim/congestion';
 import { MacroSim } from './sim/macro';
 import { CATCHUP_TICKS_PER_FRAME, START_MONEY } from './sim/simConstants';
+import { installPedestrianSystemPatch } from './sim/pedestrianSystemPatch';
 import { TrafficSim } from './sim/traffic/trafficSim';
 import { installVehicleMotionPatch } from './sim/traffic/vehicleMotionPatch';
 import './style.css';
@@ -100,6 +102,7 @@ async function boot(): Promise<void> {
     loadVehicleAtlas(),
     loadFacilityAtlas(),
   ]);
+  installPedestrianRenderPatch();
   const renderer = new WorldRenderer(world, atlas, buildingAtlas, facilityAtlas);
   app.stage.addChild(renderer.root);
 
@@ -143,6 +146,7 @@ async function boot(): Promise<void> {
   sim.primeCatchup(Date.now());
   const traffic = new TrafficSim(world, sim, congestion, assignment);
   installVehicleMotionPatch(traffic);
+  installPedestrianSystemPatch(traffic);
   renderer.attachTraffic(traffic, vehicleAtlas);
   renderer.attachDisasters(sim.disasters);
 
@@ -253,6 +257,7 @@ async function boot(): Promise<void> {
     camera.applyTo(renderer.root);
     // 시설 도구를 든 동안 커서 아래 footprint 를 미리 보여준다.
     renderer.setFacilityPreview(cursor ? tools.facilityPreviewAt(cursor.tx, cursor.ty) : null);
+    setPedestrianRenderZoom(camera.zoom);
     renderer.update(camera, now);
     renderer.flush();
     // 시설 도구를 든 동안에만 미니맵에 커버리지/복지 레이어를 얹는다.
