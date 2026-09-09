@@ -10,12 +10,11 @@ import type { World } from './world';
 export { SEEDED_CITY_MONEY };
 
 /**
- * 대도시 생성 도로를 학생 도로와 같은 "명시적 연결" 방식으로 바꾸는 래퍼.
+ * 대도시 자동 생성 도로만 명시적 연결 방식으로 바꾼다.
  *
- * cityGen 은 생성 도로를 setBuild(..., false) 로 놓는다. 그대로 두면 과거 생성도시
- * 호환 규칙 때문에 roadLinks=255가 되어, 붙어 있는 도로가 전부 연결된다.
- * 생성 중 도로만 roadLinks=0에서 시작시킨 뒤 도시 생성이 끝났을 때 도로 형상을
- * 읽어 필요한 연결만 만든다.
+ * 생성 도로를 roadLinks=0에서 시작시킨 뒤, 모든 도로가 놓인 다음 주변 도로의
+ * "주 진행축"을 계산해서 필요한 방향만 연결한다. 학생이 직접 만든 도로와
+ * 기존 저장 도로의 규칙은 건드리지 않는다.
  */
 export function seedCityIfEmpty(world: World, bornDay = 0): SeededCity | null {
   if (world.developedParcels().length > 0) return null;
@@ -23,6 +22,7 @@ export function seedCityIfEmpty(world: World, bornDay = 0): SeededCity | null {
   const originalSetBuild = world.setBuild.bind(world);
   world.setBuild = ((tx: number, ty: number, value: number, byUser = true): void => {
     const generatedRoad = value === Build.Road && byUser === false;
+    // 생성 도로만 0비트에서 시작시킨다. 이후 아래에서 필요한 연결만 연다.
     originalSetBuild(tx, ty, value, generatedRoad ? true : byUser);
   }) as World['setBuild'];
 
@@ -37,28 +37,42 @@ export function seedCityIfEmpty(world: World, bornDay = 0): SeededCity | null {
   return center;
 }
 
-/**
- * 2칸 폭 도로 판정에 쓰는 길이.
- *
- * 한 칸 위/아래만 보고 "평행 차선" 을 판단하면 교차로 근처나 구불구불한 도로에서
- * 오판이 많다. 두 칸짜리 띠가 최소 3행/3열 이상 이어질 때만 실제 2차선 도로로 본다.
- */
-const PARALLEL_SUPPORT_MIN = 2;
-const PARALLEL_SCAN = 4;
-/** 실제로 다른 도로가 진입한다고 보려면 바깥쪽으로 이만큼 연속돼야 한다. */
-const APPROACH_RUN_MIN = 2;
+const enum Axis {
+  None = 0,
+  Horizontal = 1,
+  Vertical = 2,
+  Junction = 3,
+}
+
+/** 한 방향의 연속 도로를 이 거리까지만 본다. */
+const ORIENTATION_SCAN = 7;
+/** 이 길이 이상 이어지면 그 축의 실제 도로 흐름으로 인정한다. */
+const AXIS_SUPPORT_MIN = 2;
+/** 한 축이 다른 축보다 이만큼 길면 주 진행축으로 확정한다. */
+const AXIS_DOMINANCE_MARGIN = 2;
+
+interface Flow {
+  left: number;
+  right: number;
+  up: number;
+  down: number;
+  horizontal: number;
+  vertical: number;
+  axis: Axis;
+}
 
 /**
- * 생성된 도로망에 명시적 연결을 만든다.
+ * 생성된 도로망을 실제 흐름 방향에 따라 연결한다.
  *
- * 핵심 규칙:
- * - 1칸 폭 도로: 맞닿은 진행 방향을 정상 연결.
- * - 2칸 폭 도로: 각 차선의 진행 방향은 연결하되 차선 사이 "사다리 연결" 은 막음.
- * - 교차/T자/넓은 도로 코너: 바깥에서 실제 도로가 2칸 이상 들어오는 지점만 횡연결.
- *
- * 즉 단순히 "옆에 도로가 있다" 가 아니라 주변 4칸까지의 연속성을 보고 판정한다.
+ * 핵심은 "인접했다 = 연결"이 아니다.
+ * - 긴 가로 도로는 좌우만 연결한다.
+ * - 긴 세로 도로는 상하만 연결한다.
+ * - 2칸 폭 큰길의 평행한 두 줄은 서로의 주 진행축과 직각이므로 연결되지 않는다.
+ * - 다른 축의 도로가 실제로 들어오는 교차/T자/코너에서만 두 축 연결을 허용한다.
  */
 function connectGeneratedRoadNetwork(world: World): void {
+  const flowCache = new Map<string, Flow>();
+
   for (const parcel of world.developedParcels()) {
     const build = parcel.build;
     if (!build) continue;
@@ -71,92 +85,106 @@ function connectGeneratedRoadNetwork(world: World): void {
         const tx = parcel.cx * CHUNK_SIZE + lx;
         const ty = parcel.cy * CHUNK_SIZE + ly;
 
-        tryConnect(world, tx, ty, tx + 1, ty);
-        tryConnect(world, tx, ty, tx, ty + 1);
+        // 각 쌍은 한 번만 본다.
+        tryConnect(world, flowCache, tx, ty, tx + 1, ty, Axis.Horizontal);
+        tryConnect(world, flowCache, tx, ty, tx, ty + 1, Axis.Vertical);
       }
     }
   }
 }
 
-function tryConnect(world: World, ax: number, ay: number, bx: number, by: number): void {
+function tryConnect(
+  world: World,
+  cache: Map<string, Flow>,
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+  edgeAxis: Axis.Horizontal | Axis.Vertical,
+): void {
   if (!isRoad(world, bx, by)) return;
-  if (!shouldConnect(world, ax, ay, bx, by)) return;
+
+  const a = flowAt(world, cache, ax, ay);
+  const b = flowAt(world, cache, bx, by);
+  if (!edgeBelongsToRoad(a, b, edgeAxis)) return;
   if (!canConnectRoads(world, ax, ay, bx, by).ok) return;
   world.connectRoads(ax, ay, bx, by);
 }
 
-/** 두 인접 도로 사이의 실제 연결이 필요한가. */
-function shouldConnect(world: World, ax: number, ay: number, bx: number, by: number): boolean {
-  if (ay === by) {
-    // 좌우로 맞닿은 두 칸이 세로 2차선 도로의 양 차선이면 보통 연결하지 않는다.
-    if (!isVerticalLanePair(world, Math.min(ax, bx), ay)) return true;
-    return hasHorizontalApproach(world, Math.min(ax, bx), ay);
-  }
-
-  // 위아래로 맞닿은 두 칸이 가로 2차선 도로의 양 차선이면 보통 연결하지 않는다.
-  if (!isHorizontalLanePair(world, ax, Math.min(ay, by))) return true;
-  return hasVerticalApproach(world, ax, Math.min(ay, by));
-}
-
-/** (x,y)-(x+1,y)가 세로 방향으로 함께 이어지는 2칸 폭 띠인가. */
-function isVerticalLanePair(world: World, x: number, y: number): boolean {
-  let support = 0;
-  for (let step = 1; step <= PARALLEL_SCAN; step++) {
-    if (isRoad(world, x, y - step) && isRoad(world, x + 1, y - step)) support++;
-    else break;
-  }
-  for (let step = 1; step <= PARALLEL_SCAN; step++) {
-    if (isRoad(world, x, y + step) && isRoad(world, x + 1, y + step)) support++;
-    else break;
-  }
-  return support >= PARALLEL_SUPPORT_MIN;
-}
-
-/** (x,y)-(x,y+1)가 가로 방향으로 함께 이어지는 2칸 폭 띠인가. */
-function isHorizontalLanePair(world: World, x: number, y: number): boolean {
-  let support = 0;
-  for (let step = 1; step <= PARALLEL_SCAN; step++) {
-    if (isRoad(world, x - step, y) && isRoad(world, x - step, y + 1)) support++;
-    else break;
-  }
-  for (let step = 1; step <= PARALLEL_SCAN; step++) {
-    if (isRoad(world, x + step, y) && isRoad(world, x + step, y + 1)) support++;
-    else break;
-  }
-  return support >= PARALLEL_SUPPORT_MIN;
-}
-
 /**
- * 세로 2차선 띠를 좌우로 가로지르는 실제 도로가 있는가.
- * 한 칸짜리 돌출이나 옆 차선의 우연한 접촉은 교차로로 취급하지 않는다.
+ * 이 인접쌍이 실제 도로 흐름에 속하는가.
+ *
+ * 평행 차선 사이 횡연결은 양 끝 타일이 모두 반대 축을 주 진행축으로 가지므로
+ * 여기서 확실히 막힌다. 반대로 교차로(Junction)는 양 축 모두 허용한다.
  */
-function hasHorizontalApproach(world: World, x: number, y: number): boolean {
-  return (
-    roadRun(world, x - 1, y, -1, 0, APPROACH_RUN_MIN) ||
-    roadRun(world, x + 2, y, 1, 0, APPROACH_RUN_MIN)
-  );
-}
+function edgeBelongsToRoad(a: Flow, b: Flow, edgeAxis: Axis.Horizontal | Axis.Vertical): boolean {
+  const otherAxis = edgeAxis === Axis.Horizontal ? Axis.Vertical : Axis.Horizontal;
 
-/** 가로 2차선 띠를 위아래로 가로지르는 실제 도로가 있는가. */
-function hasVerticalApproach(world: World, x: number, y: number): boolean {
-  return (
-    roadRun(world, x, y - 1, 0, -1, APPROACH_RUN_MIN) ||
-    roadRun(world, x, y + 2, 0, 1, APPROACH_RUN_MIN)
-  );
-}
+  // 두 칸 모두 명백히 반대 방향 도로면 평행 차선끼리 맞닿은 것이다.
+  if (a.axis === otherAxis && b.axis === otherAxis) return false;
 
-function roadRun(
-  world: World,
-  sx: number,
-  sy: number,
-  dx: number,
-  dy: number,
-  length: number,
-): boolean {
-  for (let step = 0; step < length; step++) {
-    if (!isRoad(world, sx + dx * step, sy + dy * step)) return false;
+  // 양쪽 중 하나라도 이 방향을 주 진행축으로 가지면 정상 진행 연결이다.
+  if (a.axis === edgeAxis || b.axis === edgeAxis) return true;
+
+  // 실제 교차/분기 중심은 두 축을 모두 연결한다.
+  if (a.axis === Axis.Junction || b.axis === Axis.Junction) {
+    return axisSupported(a, edgeAxis) && axisSupported(b, edgeAxis);
   }
-  return true;
+
+  // 짧은 막다른 길·코너처럼 지배축을 정할 수 없는 경우. 인접쌍의 양쪽에서
+  // 해당 축의 연속성이 보일 때만 연결해서 한 칸짜리 우연한 접촉은 막는다.
+  return axisSupported(a, edgeAxis) && axisSupported(b, edgeAxis);
+}
+
+function axisSupported(flow: Flow, axis: Axis.Horizontal | Axis.Vertical): boolean {
+  if (axis === Axis.Horizontal) {
+    return flow.horizontal >= AXIS_SUPPORT_MIN || flow.left >= 1 || flow.right >= 1;
+  }
+  return flow.vertical >= AXIS_SUPPORT_MIN || flow.up >= 1 || flow.down >= 1;
+}
+
+function flowAt(world: World, cache: Map<string, Flow>, tx: number, ty: number): Flow {
+  const key = `${tx},${ty}`;
+  const cached = cache.get(key);
+  if (cached) return cached;
+
+  const left = run(world, tx, ty, -1, 0);
+  const right = run(world, tx, ty, 1, 0);
+  const up = run(world, tx, ty, 0, -1);
+  const down = run(world, tx, ty, 0, 1);
+  const horizontal = left + right;
+  const vertical = up + down;
+
+  let axis = Axis.None;
+  const hStrong = horizontal >= AXIS_SUPPORT_MIN;
+  const vStrong = vertical >= AXIS_SUPPORT_MIN;
+
+  if (hStrong && vStrong) {
+    if (horizontal >= vertical + AXIS_DOMINANCE_MARGIN) axis = Axis.Horizontal;
+    else if (vertical >= horizontal + AXIS_DOMINANCE_MARGIN) axis = Axis.Vertical;
+    else axis = Axis.Junction;
+  } else if (hStrong) {
+    axis = Axis.Horizontal;
+  } else if (vStrong) {
+    axis = Axis.Vertical;
+  } else if (horizontal > vertical) {
+    axis = Axis.Horizontal;
+  } else if (vertical > horizontal) {
+    axis = Axis.Vertical;
+  }
+
+  const flow = { left, right, up, down, horizontal, vertical, axis };
+  cache.set(key, flow);
+  return flow;
+}
+
+function run(world: World, tx: number, ty: number, dx: number, dy: number): number {
+  let n = 0;
+  for (let step = 1; step <= ORIENTATION_SCAN; step++) {
+    if (!isRoad(world, tx + dx * step, ty + dy * step)) break;
+    n++;
+  }
+  return n;
 }
 
 function isRoad(world: World, tx: number, ty: number): boolean {
