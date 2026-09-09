@@ -69,6 +69,8 @@ export interface CityDoc {
 
 /** cities/{uid}/chunks/{cx}_{cy} 문서. 값은 RLE + base64 문자열이다. */
 export interface ChunkDoc {
+  /** 선택 필드. 없는 옛 도시는 기존 인접 연결을 유지한다. */
+  roadLinks?: string | null;
   /** 지형 오버레이. 바뀐 타일이 하나도 없으면 null. */
   tiles: string | null;
   /** 고도 오버레이(터레이닝). 지금은 항상 null 이지만 자리는 잡아둔다. */
@@ -95,6 +97,7 @@ export interface ChunkDoc {
 
 /** 저장/불러오기가 주고받는 청크 단위 묶음. */
 export interface ChunkPayload {
+  roadLinks?: Uint8Array | null;
   cx: number;
   cy: number;
   tiles: Uint8Array | null;

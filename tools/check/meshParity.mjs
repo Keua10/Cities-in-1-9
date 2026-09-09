@@ -34,7 +34,7 @@ for (const cx of [-2,0,3]) for (const populated of [false,true]) {
   const p={cx,cy:1,bld,bldRevision:4};
   capture(new BuildingMesh(p,atlas,height)); capture(new FacilityMesh(p,atlas,height));
 }
-const vehicles = new VehicleMesh({sampleHeight:height, sampleBuild:()=>0},atlas);
+const vehicles = new VehicleMesh({sampleHeight:height, sampleBuild:()=>0, roadsConnected:()=>true},atlas);
 const route={tiles:new Int32Array([0,0,1,0,2,0,2,1,2,2])};
 for(const count of [0,1,8,3,0]) {
   vehicles.update(Array.from({length:count},(_,i)=>({route,routeIdx:i%4,tileT:(i%5)/5,destTx:i,destTy:2,tier:i%3,kind:i%2})));

@@ -37,6 +37,7 @@ import {
   WORKPLACE_PRESENCE_MINUTES,
 } from './simConstants';
 import type { DaytimeSnapshot } from './time';
+import { PedestrianPool } from './pedestrians';
 
 export const enum TripPurpose {
   Commute = 0,
@@ -103,6 +104,7 @@ interface TripOwner {
 const SLOTS_PER_DAY = 1440 / LIFE_SLOT_MINUTES;
 
 export class CitizenPool {
+  readonly pedestrians: PedestrianPool;
   private homes = new Map<string, HomeState>();
   /** 출근 완료 뒤 퇴근/상업지대 방문을 예약한다. 저장 데이터는 아니다. */
   private schedules = new Map<string, ScheduledTrip>();
@@ -123,7 +125,9 @@ export class CitizenPool {
   constructor(
     private world: World,
     private assignment: AssignmentTable,
-  ) {}
+  ) {
+    this.pedestrians = new PedestrianPool(world);
+  }
 
   setActiveRegion(cx: number, cy: number, radius: number): void {
     if (cx === this.cx && cy === this.cy && radius === this.radius && this.homes.size > 0) return;

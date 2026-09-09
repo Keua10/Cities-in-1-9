@@ -45,6 +45,7 @@ export class Router {
   /** 신호 대기 비용을 교차로 단위로 매기기 위한 색인. 없으면 비용을 매기지 않는다. */
   private junctions: JunctionIndex | null = null;
   private cache = new Map<string, Route>();
+  private roadRevision = -1;
   /** Route 인터페이스를 늘리지 않고 재탐색용 계획 당시 타일별 혼잡을 보관한다. */
   private planSamples = new WeakMap<Route, Float32Array>();
 
@@ -82,6 +83,10 @@ export class Router {
     tier: number,
     onDone: (route: Route | null) => void,
   ): void {
+    if (this.roadRevision !== this.world.roadRevision) {
+      this.invalidateCache();
+      this.roadRevision = this.world.roadRevision;
+    }
     const key = this.key(fromTx, fromTy, toTx, toTy, tier);
     const cached = this.cache.get(key);
     if (cached) {
@@ -169,7 +174,7 @@ export class Router {
         const [dx, dy] = DIRS[nextDir];
         const nx = cur.x + dx;
         const ny = cur.y + dy;
-        if (this.world.getBuild(nx, ny) !== Build.Road) continue;
+        if (!this.world.roadsConnected(cur.x, cur.y, nx, ny)) continue;
 
         let step =
           BASE_TILE_COST * (1 + (CONGESTION_WEIGHT[tier - 1] ?? 1) * this.congestion.at(nx, ny));

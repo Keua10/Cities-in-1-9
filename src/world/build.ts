@@ -8,9 +8,8 @@ import type { Chunk, World } from './world';
  * 2단계: 지형과 별개인 "지은 것" 레이어.
  *
  * 왜 Terrain 에 도로를 추가하지 않는가:
- *   1. 도로는 연결 모양이 16가지다. 지형 ID 로 넣으면 이웃이 바뀔 때마다 저장
- *      데이터를 다시 써야 한다. 연결 모양은 이웃에서 매번 계산할 수 있으므로
- *      저장 대상이 아니다.
+ *   1. 도로 종류와 연결 상태는 지형에서 분리한다. 연결 상태는 별도 roadLinks
+ *      배열에 저장하고, 렌더링용 16가지 모양은 양쪽 연결 비트에서 계산한다.
  *   2. 지구를 철거했을 때 원래 지형으로 돌아가야 한다. 칸당 값이 하나뿐이면
  *      "풀밭 위의 주거지구" 를 표현할 수 없다.
  *   3. 3단계의 건물·차량이 같은 칸에 얹힌다. 지형과 시설을 한 배열에 섞으면
@@ -77,20 +76,20 @@ export function isZone(v: number): boolean {
 }
 
 /* ---------------------------------------------------------------- *
- * 연결 계산 — 저장하지 않고 매번 이웃에서 만든다
+ * 연결 계산 — 저장된 양쪽 연결 비트와 도로 존재 여부를 함께 본다
  * ---------------------------------------------------------------- */
 
 /**
  * 도로 연결 마스크(0~15).
  *
- * sampleBuild 를 쓰므로 옆 청크가 아직 메모리에 없어도 청크를 새로 만들지 않는다
+ * 필지만 조회하므로 옆 청크 지형이 아직 메모리에 없어도 청크를 새로 만들지 않는다
  * (generateChunk 는 4096칸 노이즈 계산이라 가볍게 부를 함수가 아니다).
  */
 export function roadMask(world: World, tx: number, ty: number): number {
   let mask = 0;
   for (let d = 0; d < 4; d++) {
     const dir = DIRS[d];
-    if (world.sampleBuild(tx + dir[0], ty + dir[1]) === Build.Road) {
+    if (world.roadsConnected(tx, ty, tx + dir[0], ty + dir[1])) {
       mask |= 1 << d;
     }
   }
@@ -103,73 +102,6 @@ export function hasRoadAccess(world: World, tx: number, ty: number): boolean {
     if (world.sampleBuild(tx + dir[0], ty + dir[1]) === Build.Road) return true;
   }
   return false;
-}
-
-/* ---------------------------------------------------------------- *
- * 경사 규칙
- * ---------------------------------------------------------------- */
-
-/**
- * (vx, vy) 칸에 vval 을 놓았다고 가정하고 (tx, ty) 의 build 값을 본다.
- * 실제로 쓰기 전에 규칙을 검사하기 위한 장치다.
- */
-function virtualBuild(
-  world: World,
-  tx: number,
-  ty: number,
-  vx: number,
-  vy: number,
-  vval: number,
-): number {
-  if (tx === vx && ty === vy) return vval;
-  return world.sampleBuild(tx, ty);
-}
-
-/**
- * 경사 판정.
- *
- * 지형 생성이 이웃 타일 간 고도차를 항상 0 또는 1 로 보장한다(README 6장).
- * 그래서 "너무 가팔라서 못 놓는" 경우는 아예 없다. 막아야 하는 건 한 칸이
- * 여러 방향으로 동시에 비탈지는 경우다. 그런 칸은 어떤 모양으로도 그릴 수 없다.
- *
- *   경사 연결 = 맞닿은 두 도로 타일의 고도가 다른 연결
- *
- *   0개  자유
- *   1개  허용. 비탈의 시작/끝이고, 이 칸 자체는 평평하다.
- *        비탈 아래에 T자 교차로를 만드는 건 문제가 없으므로 막지 않는다.
- *   2개  서로 반대 방향일 때만 허용 (곧은 비탈길)
- *   3개+ 거부
- */
-function slopeOkAt(
-  world: World,
-  tx: number,
-  ty: number,
-  vx: number,
-  vy: number,
-  vval: number,
-): boolean {
-  if (virtualBuild(world, tx, ty, vx, vy, vval) !== Build.Road) return true;
-
-  const h = world.sampleHeight(tx, ty);
-  let count = 0;
-  let first = -1;
-  let second = -1;
-
-  for (let d = 0; d < 4; d++) {
-    const dir = DIRS[d];
-    const nx = tx + dir[0];
-    const ny = ty + dir[1];
-    if (virtualBuild(world, nx, ny, vx, vy, vval) !== Build.Road) continue;
-    if (world.sampleHeight(nx, ny) === h) continue;
-    count++;
-    if (first < 0) first = d;
-    else if (second < 0) second = d;
-  }
-
-  if (count <= 1) return true;
-  if (count > 2) return false;
-  // 서로 반대 방향이면 곧은 비탈길이다.
-  return (first + 2) % 4 === second;
 }
 
 /* ---------------------------------------------------------------- *
@@ -203,15 +135,41 @@ export function canPlaceRoad(world: World, tx: number, ty: number): PlaceResult 
   }
   if (world.getBuild(tx, ty) === Build.Road) return SILENT;
 
-  // 나 자신뿐 아니라 이웃 4칸도 검사한다.
-  // 내 칸만 보면 이웃이 T자 교차로로 바뀌는 걸 놓친다.
-  if (!slopeOkAt(world, tx, ty, tx, ty, Build.Road)) {
-    return { ok: false, reason: '한 칸이 여러 방향으로 비탈질 수 없습니다' };
-  }
-  for (const dir of DIRS) {
-    if (!slopeOkAt(world, tx + dir[0], ty + dir[1], tx, ty, Build.Road)) {
-      return { ok: false, reason: '옆 도로가 여러 방향으로 비탈지게 됩니다' };
+  // 클릭 배치는 독립된 평면이다. 경사는 실제 연결을 추가할 때 검사한다.
+  return OK;
+}
+
+/** 아직 빈 도착 칸도 가상 도로로 검사해 배치/과금 전에 거부한다. */
+export function canConnectRoads(
+  world: World,
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+): PlaceResult {
+  if (Math.abs(ax - bx) + Math.abs(ay - by) !== 1 || world.getBuild(ax, ay) !== Build.Road)
+    return SILENT;
+  if (!exploredOk(world, ax, ay) || !exploredOk(world, bx, by))
+    return { ok: false, reason: '아직 개척하지 않은 땅입니다' };
+  if (Math.abs(world.sampleHeight(ax, ay) - world.sampleHeight(bx, by)) > 1)
+    return { ok: false, reason: '고도 차가 너무 커서 연결할 수 없습니다' };
+  for (const [x, y, nx, ny] of [
+    [ax, ay, bx, by],
+    [bx, by, ax, ay],
+  ]) {
+    const h = world.sampleHeight(x, y);
+    let slopes = 0;
+    for (let d = 0; d < 4; d++) {
+      const dx = x + DIRS[d][0],
+        dy = y + DIRS[d][1];
+      if (
+        ((dx === nx && dy === ny) || world.roadsConnected(x, y, dx, dy)) &&
+        world.sampleHeight(dx, dy) !== h
+      )
+        slopes |= 1 << d;
     }
+    if (slopes && slopes & (slopes - 1) && slopes !== 5 && slopes !== 10)
+      return { ok: false, reason: '한 칸이 여러 방향으로 비탈질 수 없습니다' };
   }
   return OK;
 }

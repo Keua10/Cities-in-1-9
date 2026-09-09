@@ -430,7 +430,7 @@ export class ServiceField {
           for (const dir of DIRS) {
             const nx = tx + dir[0];
             const ny = ty + dir[1];
-            if (world.getBuild(nx, ny) !== Build.Road) continue;
+            if (!world.roadsConnected(tx, ty, nx, ny)) continue;
             if (this.write(nx, ny, kind, dist, owner)) next.push(nx, ny);
           }
         }

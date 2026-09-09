@@ -237,7 +237,12 @@ async function boot(): Promise<void> {
     const now = performance.now();
     sim.update(ticker.deltaMS, CATCHUP_TICKS_PER_FRAME);
     const camTile = worldToTile(camera.x, camera.y);
-    traffic.setActiveChunk(chunkIndexOf(camTile.tx), chunkIndexOf(camTile.ty));
+    traffic.setActiveChunk(
+      chunkIndexOf(camTile.tx),
+      chunkIndexOf(camTile.ty),
+      camTile.tx,
+      camTile.ty,
+    );
     traffic.update(ticker.deltaMS);
     camera.update(ticker.deltaMS);
     camera.applyTo(renderer.root);

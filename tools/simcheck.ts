@@ -195,7 +195,7 @@ for (let ly = 0; ly < CHUNK_SIZE; ly++) {
     const ty = by + ly;
     if (isWater(world.getTile(tx, ty))) continue;
     if (lx % 6 === 0 || ly % 6 === 0) {
-      world.setBuild(tx, ty, Build.Road);
+      world.setBuild(tx, ty, Build.Road, false);
       roads++;
     } else if (!facilityCells.has(`${lx},${ly}`)) {
       // 왼쪽 절반은 주거, 오른쪽 위는 상업, 오른쪽 아래는 공업

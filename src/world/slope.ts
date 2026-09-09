@@ -59,6 +59,7 @@ export function flatSurface(h: number): TileSurface {
 
 /** 두 타일이 램프로 이어지는가 = 둘 다 도로이고 고도차가 정확히 한 단계. */
 export function rampJoins(world: World, ax: number, ay: number, bx: number, by: number): boolean {
+  if (!world.roadsConnected(ax, ay, bx, by)) return false;
   if (world.sampleBuild(ax, ay) !== Build.Road) return false;
   if (world.sampleBuild(bx, by) !== Build.Road) return false;
   return Math.abs(world.sampleHeight(ax, ay) - world.sampleHeight(bx, by)) === RAMP_STEP;

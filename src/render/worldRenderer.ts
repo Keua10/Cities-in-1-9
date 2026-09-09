@@ -34,6 +34,7 @@ import type { FacilityAtlas } from './facilityAtlas';
 import { FacilityMesh } from './facilityMesh';
 import { IncidentLayer } from './incidentLayer';
 import { ParcelMeshLayer } from './parcelMeshLayer';
+import { PedestrianLayer } from './pedestrianLayer';
 import { SignalLayer } from './signalLayer';
 import type { VehicleAtlas } from './vehicleAtlas';
 import { VehicleMesh } from './vehicleMesh';
@@ -87,6 +88,7 @@ export class WorldRenderer {
   private previewLayer = new Graphics();
   private signalLayer = new SignalLayer();
   private incidentLayer = new IncidentLayer();
+  private pedestrianLayer: PedestrianLayer;
   private disasters: DisasterSim | null = null;
   private lastSignalDrawMs = -1;
 
@@ -130,9 +132,11 @@ export class WorldRenderer {
     private buildingAtlas: BuildingAtlas,
     private facilityAtlas: FacilityAtlas,
   ) {
+    this.pedestrianLayer = new PedestrianLayer(buildingAtlas, facilityAtlas);
     this.root.addChild(
       this.groundLayer,
       this.turningVehicleLayer,
+      this.pedestrianLayer.graphics,
       this.fogLayer,
       this.signalLayer.graphics,
       this.incidentLayer.graphics,
@@ -317,6 +321,7 @@ export class WorldRenderer {
     for (const key of [...this.vehicleMeshes.keys()])
       if (!usedVehicleMeshes.has(key)) this.dropVehicles(key);
     this.updateTurningVehicles(turningVehicles);
+    this.pedestrianLayer.draw(this.world, this.traffic?.pedestrians ?? [], this.showFog, view);
 
     if (this.lastSignalDrawMs < 0 || now - this.lastSignalDrawMs >= 120) {
       this.lastSignalDrawMs = now;

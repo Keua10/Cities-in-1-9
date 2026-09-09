@@ -177,7 +177,7 @@ export class RoadField {
         for (const dir of DIRS) {
           const nx = tx + dir[0];
           const ny = ty + dir[1];
-          if (world.getBuild(nx, ny) !== Build.Road) continue;
+          if (!world.roadsConnected(tx, ty, nx, ny)) continue;
           const f = this.fields.get(chunkKey(chunkIndexOf(nx), chunkIndexOf(ny)));
           if (!f) continue; // 개발되지 않은 청크의 도로는 볼 일이 없다
           const idx = localIndexOf(ny) * CHUNK_SIZE + localIndexOf(nx);
@@ -295,7 +295,7 @@ export function roadDistancesFrom(
       const nx = x + dx;
       const ny = y + dy;
       const key = tileKey(nx, ny);
-      if (out.has(key) || world.getBuild(nx, ny) !== Build.Road) continue;
+      if (out.has(key) || !world.roadsConnected(x, y, nx, ny)) continue;
       out.set(key, d + 1);
       qx.push(nx);
       qy.push(ny);
@@ -340,7 +340,7 @@ export function roadTileCapacity(
   let count = 0;
   for (let d = 0; d < DIRS.length; d++) {
     const [dx, dy] = DIRS[d];
-    if (world.getBuild(tx + dx, ty + dy) === Build.Road) {
+    if (world.roadsConnected(tx, ty, tx + dx, ty + dy)) {
       mask |= 1 << d;
       count++;
     }

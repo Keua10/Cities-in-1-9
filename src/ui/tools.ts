@@ -4,7 +4,14 @@ import { FACILITY_COUNT, isWelfareKind } from '../sim/buildings';
 import { canPlaceFacility, FACILITY_SPECS } from '../sim/facilities';
 import type { MacroSim } from '../sim/macro';
 import { COST_ROAD, COST_ZONE } from '../sim/simConstants';
-import { Build, canPlaceRoad, canPlaceZone, DIRS, type PlaceResult } from '../world/build';
+import {
+  Build,
+  canConnectRoads,
+  canPlaceRoad,
+  canPlaceZone,
+  DIRS,
+  type PlaceResult,
+} from '../world/build';
 import type { World } from '../world/world';
 
 export type ToolId = 'select' | 'road' | 'zoneR' | 'zoneC' | 'zoneI' | 'facility' | 'bulldoze';
@@ -72,8 +79,8 @@ export class Tools {
 
   /** 지금 표시해야 할 안내 문구. 없으면 빈 문자열. */
   activeMessage(now: number): string {
-    if (!this.message) return '';
-    if (now - this.messageAt > MESSAGE_MS) return '';
+    if (!this.message || now - this.messageAt > MESSAGE_MS)
+      return this.tool === 'road' ? '클릭: 독립 도로 · 드래그: 지나간 방향으로 설치·연결' : '';
     return this.message;
   }
 
@@ -154,6 +161,8 @@ export class Tools {
 
     for (let guard = 0; guard < MAX_INTERPOLATE * 2; guard++) {
       if (x === t.tx && y === t.ty) break;
+      const px = x,
+        py = y;
       const e2 = err * 2;
       if (e2 > -dy) {
         err -= dy;
@@ -162,7 +171,18 @@ export class Tools {
         err += dx;
         y += sy;
       }
-      this.apply(x, y);
+      if (this.tool === 'road' && this.world.getBuild(px, py) === Build.Road) {
+        const result = canConnectRoads(this.world, px, py, x, y);
+        if (!result.ok) {
+          if (result.reason) this.note(result.reason);
+          continue;
+        }
+        this.apply(x, y);
+        if (this.world.connectRoads(px, py, x, y)) {
+          this.refresh(px, py);
+          this.refresh(x, y);
+        }
+      } else this.apply(x, y);
     }
 
     this.lastTx = t.tx;

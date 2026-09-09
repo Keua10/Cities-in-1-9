@@ -150,7 +150,12 @@ export class JunctionIndex {
           continue;
         }
         let end = lx;
-        while (end + 1 < w && road[ly * w + end + 1]) end++;
+        while (
+          end + 1 < w &&
+          road[ly * w + end + 1] &&
+          world.roadsConnected(x0 + end, y0 + ly, x0 + end + 1, y0 + ly)
+        )
+          end++;
         const len = end - lx + 1;
         for (let i = lx; i <= end; i++) {
           hLen[ly * w + i] = len;
@@ -168,7 +173,12 @@ export class JunctionIndex {
           continue;
         }
         let end = ly;
-        while (end + 1 < h && road[(end + 1) * w + lx]) end++;
+        while (
+          end + 1 < h &&
+          road[(end + 1) * w + lx] &&
+          world.roadsConnected(x0 + lx, y0 + end, x0 + lx, y0 + end + 1)
+        )
+          end++;
         const len = end - ly + 1;
         for (let i = ly; i <= end; i++) {
           vLen[i * w + lx] = len;
@@ -229,7 +239,8 @@ export class JunctionIndex {
           const ny = ly + DIRS[d][1];
           if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
           const ni = ny * w + nx;
-          if (!isCell[ni] || this.ids[ni] >= 0) continue;
+          if (!isCell[ni] || this.ids[ni] >= 0 || !world.roadsConnected(tx, ty, x0 + nx, y0 + ny))
+            continue;
           this.ids[ni] = id;
           stack.push(ni);
         }
@@ -270,7 +281,7 @@ export class JunctionIndex {
       for (let d = 0; d < 4; d++) {
         const nx = tx + DIRS[d][0];
         const ny = ty + DIRS[d][1];
-        if (world.getBuild(nx, ny) !== Build.Road) continue;
+        if (!world.roadsConnected(tx, ty, nx, ny)) continue;
         if (this.idAt(nx, ny) === junction.id) continue;
         // n -> (tx,ty) 로 들어오려면 DIRS[d] 의 반대 방향으로 진행한다.
         const enterDir = (d + 2) & 3;
@@ -280,7 +291,7 @@ export class JunctionIndex {
         let py = ny;
         while (
           len < JUNCTION_LEG_SCAN_MAX &&
-          world.getBuild(px, py) === Build.Road &&
+          world.roadsConnected(px - DIRS[d][0], py - DIRS[d][1], px, py) &&
           this.idAt(px, py) !== junction.id
         ) {
           len++;

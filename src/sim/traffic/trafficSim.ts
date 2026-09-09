@@ -102,6 +102,8 @@ export class TrafficSim {
   private byChunk = new Map<string, Vehicle[]>();
   private activeCx = 0;
   private activeCy = 0;
+  private walkFocusX = 0;
+  private walkFocusY = 0;
   private initialized = false;
   private timeMs = 0;
   private sampleMs = 0;
@@ -175,7 +177,14 @@ export class TrafficSim {
     );
   }
 
-  setActiveChunk(cx: number, cy: number): void {
+  setActiveChunk(
+    cx: number,
+    cy: number,
+    focusX = (cx + 0.5) * CHUNK_SIZE,
+    focusY = (cy + 0.5) * CHUNK_SIZE,
+  ): void {
+    this.walkFocusX = focusX;
+    this.walkFocusY = focusY;
     if (this.initialized && cx === this.activeCx && cy === this.activeCy) {
       this.refreshJunctions();
       return;
@@ -203,11 +212,11 @@ export class TrafficSim {
    * 교차로 색인을 최신으로 유지한다.
    *
    * 도로를 놓거나 지울 때마다 다시 만들면 드래그 건설 한 번에 수백 번 돈다.
-   * 그래서 활성 영역이 바뀌거나 영역 안 도로 타일 수가 바뀌었을 때만 다시 만든다.
+   * 활성 영역, 도로 타일 수, 도로 연결 revision이 바뀌었을 때 다시 만든다.
    */
   private refreshJunctions(force = false): void {
     const key = `${this.activeCx},${this.activeCy}`;
-    let stamp = 0;
+    let stamp = this.world.roadRevision;
     for (let dy = -SIM_RADIUS_CHUNKS; dy <= SIM_RADIUS_CHUNKS; dy++) {
       for (let dx = -SIM_RADIUS_CHUNKS; dx <= SIM_RADIUS_CHUNKS; dx++) {
         const parcel = this.world.peekParcel(this.activeCx + dx, this.activeCy + dy);
@@ -233,6 +242,16 @@ export class TrafficSim {
     // 예약을 영원히 쥔 차가 생긴다.
     this.control.reset();
     this.router.invalidateCache();
+    this.readySpawns = this.readySpawns.filter((p) => {
+      if (this.routeValid(p.route)) return true;
+      this.citizens.onTripFailed(p.trip);
+      return false;
+    });
+    this.vehicles = this.vehicles.filter((v) => {
+      if (this.routeValid(v.route, v.routeIdx)) return true;
+      this.dropVehicle(v);
+      return false;
+    });
     for (const vehicle of this.vehicles) {
       vehicle.jPath = null;
       vehicle.jPathRoute = null;
@@ -242,6 +261,15 @@ export class TrafficSim {
 
   update(dtMs: number): void {
     if (!this.initialized) return;
+    this.citizens.pedestrians.update(
+      dtMs,
+      this.activeCx,
+      this.activeCy,
+      SIM_RADIUS_CHUNKS,
+      this.walkFocusX,
+      this.walkFocusY,
+    );
+    this.refreshJunctions();
     this.timeMs += dtMs;
     this.sampleMs += dtMs;
     // 토큰 버킷. 상한이 작아야 "조용하다가 한꺼번에" 가 구조적으로 불가능하다.
@@ -298,6 +326,9 @@ export class TrafficSim {
 
   get activeCount(): number {
     return this.vehicles.length;
+  }
+  get pedestrians() {
+    return this.citizens.pedestrians.walkers;
   }
   get daytimeState(): DaytimeSnapshot {
     return this.daytime;
@@ -373,7 +404,20 @@ export class TrafficSim {
     }
   }
 
+  private routeValid(route: Route, start = 0): boolean {
+    const t = route.tiles;
+    if (this.world.getBuild(t[start * 2], t[start * 2 + 1]) !== Build.Road) return false;
+    for (let i = start * 2; i + 3 < t.length; i += 2) {
+      if (!this.world.roadsConnected(t[i], t[i + 1], t[i + 2], t[i + 3])) return false;
+    }
+    return true;
+  }
+
   private spawnRoute(trip: Trip, route: Route): SpawnResult {
+    if (!this.routeValid(route)) {
+      this.citizens.onTripFailed(trip);
+      return SpawnResult.Handled;
+    }
     if (this.vehicles.length >= MAX_ACTIVE_VEHICLES) return SpawnResult.Blocked;
     let startIndex = 0;
     if (!this.tileInside(route.tiles[0], route.tiles[1])) {

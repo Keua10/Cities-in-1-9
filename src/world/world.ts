@@ -14,12 +14,13 @@ import {
   zoneOfCode,
 } from '../sim/buildings';
 import { facilitySpan } from '../sim/facilities';
-import { Build } from './build';
+import { Build, DIRS } from './build';
 import { baseOriginChunk } from './spawn';
 import { generateChunk, heightAt, type TerrainId } from './terrain';
 
 /** 생성값과 달라진 칸만 담는 배열. OVERRIDE_NONE 인 칸은 "생성값 그대로". */
 export interface ChunkOverride {
+  roadLinks?: Uint8Array | null;
   tiles: Uint8Array | null;
   heights: Uint8Array | null;
   build: Uint8Array | null;
@@ -43,6 +44,8 @@ export interface ChunkOverride {
  * 붙고(그 전에는 전부 null), 청크 하나가 꽉 차도 4KB x 5 = 20KB 다.
  */
 export interface Parcel {
+  /** 0~15: 명시적 연결. 255/없음: 이전 저장본과 생성 도시의 인접 연결. */
+  roadLinks: Uint8Array | null;
   cx: number;
   cy: number;
   key: string;
@@ -126,6 +129,9 @@ export interface BuildingInfo {
  * Firestore 로 간다.
  */
 export class World {
+  /** 타일 수가 같아도 연결 편집을 감지한다. */
+  roadRevision = 0;
+  walkRevision = 0;
   private chunks = new Map<string, Chunk>();
   private parcels = new Map<string, Parcel>();
   private explored = new Set<string>();
@@ -168,6 +174,7 @@ export class World {
     let p = this.parcels.get(key);
     if (!p) {
       p = {
+        roadLinks: null,
         cx,
         cy,
         key,
@@ -240,6 +247,7 @@ export class World {
     const i = localIndexOf(ty) * CHUNK_SIZE + localIndexOf(tx);
     if (chunk.tiles[i] === id) return;
     chunk.tiles[i] = id;
+    this.walkRevision++;
     const p = chunk.parcel;
     if (!p.tileOverride) {
       p.tileOverride = new Uint8Array(CHUNK_TILES).fill(OVERRIDE_NONE);
@@ -279,6 +287,7 @@ export class World {
     const i = localIndexOf(ty) * CHUNK_SIZE + localIndexOf(tx);
     if (chunk.heights[i] === h) return;
     chunk.heights[i] = h;
+    this.walkRevision++;
     const p = chunk.parcel;
     if (!p.heightOverride) {
       p.heightOverride = new Uint8Array(CHUNK_TILES).fill(OVERRIDE_NONE);
@@ -304,6 +313,61 @@ export class World {
     return this.getBuild(tx, ty);
   }
 
+  private roadBits(tx: number, ty: number): number {
+    const p = this.peekParcel(chunkIndexOf(tx), chunkIndexOf(ty));
+    return (p?.roadLinks?.[localIndexOf(ty) * CHUNK_SIZE + localIndexOf(tx)] ?? 255) & 15;
+  }
+
+  roadsConnected(ax: number, ay: number, bx: number, by: number): boolean {
+    const dx = bx - ax,
+      dy = by - ay;
+    const d =
+      dy === 0
+        ? dx === 1
+          ? 0
+          : dx === -1
+            ? 2
+            : -1
+        : dx === 0
+          ? dy === 1
+            ? 1
+            : dy === -1
+              ? 3
+              : -1
+          : -1;
+    return (
+      d >= 0 &&
+      this.getBuild(ax, ay) === Build.Road &&
+      this.getBuild(bx, by) === Build.Road &&
+      !!(this.roadBits(ax, ay) & (1 << d)) &&
+      !!(this.roadBits(bx, by) & (1 << ((d + 2) & 3)))
+    );
+  }
+
+  private writeRoadBits(tx: number, ty: number, bits: number, byUser: boolean): void {
+    const p = this.getParcel(chunkIndexOf(tx), chunkIndexOf(ty));
+    p.roadLinks ??= new Uint8Array(CHUNK_TILES).fill(OVERRIDE_NONE);
+    p.roadLinks[localIndexOf(ty) * CHUNK_SIZE + localIndexOf(tx)] = bits;
+    this.roadDirty = true;
+    this.roadRevision++;
+    this.markDirty(p.key, byUser);
+  }
+
+  /** 검증을 통과한 드래그의 연속 두 칸을 양방향으로 연결한다. */
+  connectRoads(ax: number, ay: number, bx: number, by: number): boolean {
+    const d = DIRS.findIndex(([dx, dy]) => bx - ax === dx && by - ay === dy);
+    if (
+      d < 0 ||
+      this.getBuild(ax, ay) !== Build.Road ||
+      this.getBuild(bx, by) !== Build.Road ||
+      this.roadsConnected(ax, ay, bx, by)
+    )
+      return false;
+    this.writeRoadBits(ax, ay, this.roadBits(ax, ay) | (1 << d), true);
+    this.writeRoadBits(bx, by, this.roadBits(bx, by) | (1 << ((d + 2) & 3)), true);
+    return true;
+  }
+
   /**
    * 도로·지구를 놓거나 지운다.
    *
@@ -321,6 +385,19 @@ export class World {
     const i = localIndexOf(ty) * CHUNK_SIZE + localIndexOf(tx);
     const cur = p.build ? p.build[i] : OVERRIDE_NONE;
     if (cur === value) return;
+    this.walkRevision++;
+    if (cur === Build.Road) {
+      for (let d = 0; d < 4; d++) {
+        const nx = tx + DIRS[d][0],
+          ny = ty + DIRS[d][1];
+        if (this.getBuild(nx, ny) === Build.Road) {
+          this.writeRoadBits(nx, ny, this.roadBits(nx, ny) & ~(1 << ((d + 2) & 3)), byUser);
+        }
+      }
+    }
+    if (value === Build.Road || cur === Build.Road) {
+      this.writeRoadBits(tx, ty, value === Build.Road && byUser ? 0 : OVERRIDE_NONE, byUser);
+    }
 
     // 이 칸을 덮고 있던 건물은 지구가 바뀌는 순간 존재 근거를 잃는다.
     const removed = p.bld && p.bld[i] !== BLD_NONE ? this.demolishAt(tx, ty) : null;
@@ -421,6 +498,7 @@ export class World {
    * 부지 검사는 growth.ts 가 이미 끝낸 상태로 부른다.
    */
   placeBuilding(tx: number, ty: number, zone: number, level: number, bornDay: number): void {
+    this.walkRevision++;
     const p = this.getParcel(chunkIndexOf(tx), chunkIndexOf(ty));
     if (!p.bld) {
       p.bld = new Uint8Array(CHUNK_TILES).fill(BLD_NONE);
@@ -578,6 +656,7 @@ export class World {
   demolishAt(tx: number, ty: number): BuildingInfo | null {
     const info = this.buildingCovering(tx, ty);
     if (!info) return null;
+    this.walkRevision++;
 
     const touched = new Set<Parcel>();
     for (let dy = 0; dy < info.span; dy++) {
@@ -677,6 +756,7 @@ export class World {
       p.tileOverride = ov.tiles;
       p.heightOverride = ov.heights;
       p.build = ov.build;
+      p.roadLinks = ov.roadLinks ?? null;
       p.bld = ov.bld;
       // bld 는 있는데 born 이 없으면(전부 255 라 압축이 null 을 돌려준 경우)
       // 255 로 채운 배열을 되살린다. 값이 정확히 복원된다.
@@ -689,6 +769,9 @@ export class World {
       const chunk = this.chunks.get(key);
       if (chunk) applyTerrainOverride(chunk, p);
     }
+    this.roadDirty = true;
+    this.roadRevision++;
+    this.walkRevision++;
   }
 
   /**
@@ -706,6 +789,7 @@ export class World {
       p.tileOverride = null;
       p.heightOverride = null;
       p.build = null;
+      p.roadLinks = null;
       p.bld = null;
       p.bornLo = null;
       p.bornHi = null;
@@ -718,6 +802,8 @@ export class World {
     }
     // 지형 배열은 좌표에서 다시 만들어진다. 메모리에 있던 청크만 버리면 된다.
     this.chunks.clear();
+    this.roadRevision++;
+    this.walkRevision++;
     this.roadDirty = true;
   }
 
@@ -757,6 +843,7 @@ export class World {
         tiles: p.tileOverride ? new Uint8Array(p.tileOverride) : null,
         heights: p.heightOverride ? new Uint8Array(p.heightOverride) : null,
         build: p.build ? new Uint8Array(p.build) : null,
+        roadLinks: p.roadLinks ? new Uint8Array(p.roadLinks) : null,
         bld: p.bld ? new Uint8Array(p.bld) : null,
         bornLo: p.bornLo ? new Uint8Array(p.bornLo) : null,
         bornHi: p.bornHi ? new Uint8Array(p.bornHi) : null,
@@ -782,6 +869,7 @@ export class World {
 }
 
 export interface ChunkSnapshot {
+  roadLinks?: Uint8Array | null;
   cx: number;
   cy: number;
   tiles: Uint8Array | null;

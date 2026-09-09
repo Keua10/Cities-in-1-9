@@ -4,6 +4,7 @@ import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const checks = {
+  placement: 'tools/check/placementCheck.ts',
   service: 'tools/check/serviceCheck.ts',
   traffic: 'tools/check/trafficCheck.ts',
   lane: 'tools/check/laneCheck.ts',

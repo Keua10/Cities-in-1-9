@@ -106,6 +106,7 @@ async function loadOverrides(uid: string): Promise<Map<string, ChunkOverride>> {
       tiles: string;
       heights: string;
       build: string;
+      roadLinks: string;
       bld: string;
       bornLo: string;
       bornHi: string;
@@ -113,11 +114,12 @@ async function loadOverrides(uid: string): Promise<Map<string, ChunkOverride>> {
     const tiles = decodeOverride(data.tiles ?? null, CHUNK_TILES);
     const heights = decodeOverride(data.heights ?? null, CHUNK_TILES);
     const build = decodeOverride(data.build ?? null, CHUNK_TILES);
+    const roadLinks = decodeOverride(data.roadLinks ?? null, CHUNK_TILES);
     const bld = decodeOverride(data.bld ?? null, CHUNK_TILES);
     const bornLo = decodeOverride(data.bornLo ?? null, CHUNK_TILES);
     const bornHi = decodeOverride(data.bornHi ?? null, CHUNK_TILES);
     if (!tiles && !heights && !build && !bld) continue;
-    out.set(chunkKey(cx, cy), { tiles, heights, build, bld, bornLo, bornHi });
+    out.set(chunkKey(cx, cy), { tiles, heights, build, roadLinks, bld, bornLo, bornHi });
   }
   return out;
 }
@@ -175,6 +177,7 @@ export async function saveCity(
       const tiles = encodeOverride(chunk.tiles);
       const heights = encodeOverride(chunk.heights);
       const build = encodeOverride(chunk.build);
+      const roadLinks = encodeOverride(chunk.roadLinks);
       const bld = encodeOverride(chunk.bld);
       // 건물이 하나도 없으면 born 배열도 통째로 비어 있다. 그때는 저장하지 않고,
       // 불러올 때 255 로 채운 배열을 되살린다(world.setPersistedOverrides).
@@ -189,6 +192,7 @@ export async function saveCity(
         tiles,
         heights,
         build,
+        roadLinks,
         bld,
         bornLo,
         bornHi,

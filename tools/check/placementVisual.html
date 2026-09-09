@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>1단계 도로·보행 확인</title>
+    <style>
+      body {
+        margin: 0;
+        background: #203026;
+        color: #eef5ef;
+        font: 14px system-ui;
+      }
+      aside {
+        position: fixed;
+        top: 16px;
+        left: 16px;
+        z-index: 5;
+        background: #11261eef;
+        padding: 16px;
+        border-radius: 12px;
+        max-width: 360px;
+      }
+      button {
+        padding: 10px;
+        margin: 4px;
+        border: 0;
+        border-radius: 6px;
+        cursor: pointer;
+      }
+      p {
+        margin: 8px 0;
+      }
+      #status {
+        color: #bce0a0;
+      }
+    </style>
+  </head>
+  <body>
+    <aside>
+      <b>1단계 · 도로 연결과 보행</b>
+      <p>
+        위쪽 두 도로는 붙어 있어도 경계선으로 분리됩니다.<br />아래쪽 주택 사이와 도로 가장자리로
+        사람이 걷습니다.
+      </p>
+      <p>도로 도구: 클릭으로 독립 배치, 드래그로 연결</p>
+      <button id="connect">두 평행 도로 연결</button><button id="restore">초기 상태</button>
+      <p id="status">준비 중</p>
+    </aside>
+    <script type="module" src="./placementVisual.ts"></script>
+  </body>
+</html>

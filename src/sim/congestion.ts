@@ -67,7 +67,7 @@ export class CongestionMap {
     const h = world.sampleHeight(tx, ty);
     for (const [dx, dy] of DIRS) {
       if (
-        world.getBuild(tx + dx, ty + dy) === Build.Road &&
+        world.roadsConnected(tx, ty, tx + dx, ty + dy) &&
         world.sampleHeight(tx + dx, ty + dy) !== h
       ) {
         cap *= 0.8;
@@ -183,7 +183,7 @@ export class CongestionMap {
         distanceCache.set(goalKey, distances);
       }
       if (!distances.has(tileKey(start[0], start[1]))) continue;
-      accumulateSplitFlow(start, link.count, distances, flow);
+      accumulateSplitFlow(world, start, link.count, distances, flow);
       linkInfo.push({ fromTx, fromTy, link, start, goal, distances });
     }
 
@@ -201,7 +201,7 @@ export class CongestionMap {
 
     const weights = new Map<string, number>();
     for (const info of linkInfo) {
-      const path = pathFromField(info.start, info.goal, info.distances);
+      const path = pathFromField(world, info.start, info.goal, info.distances);
       if (path.length === 0) continue;
       let sum = 0;
       for (const [x, y] of path) sum += this.at(x, y);
@@ -261,6 +261,7 @@ function entry(world: World, tx: number, ty: number, span: number): [number, num
   return null;
 }
 function pathFromField(
+  world: World,
   start: [number, number],
   goal: [number, number],
   distances: Map<number, number>,
@@ -275,7 +276,7 @@ function pathFromField(
     for (const [dx, dy] of DIRS) {
       const nx = x + dx;
       const ny = y + dy;
-      if (distances.get(tileKey(nx, ny)) !== d - 1) continue;
+      if (!world.roadsConnected(x, y, nx, ny) || distances.get(tileKey(nx, ny)) !== d - 1) continue;
       x = nx;
       y = ny;
       d--;
@@ -288,6 +289,7 @@ function pathFromField(
   return x === goal[0] && y === goal[1] ? out : [];
 }
 function accumulateSplitFlow(
+  world: World,
   start: [number, number],
   count: number,
   distances: Map<number, number>,
@@ -307,7 +309,8 @@ function accumulateSplitFlow(
       const down: number[] = [];
       for (const [dx, dy] of DIRS) {
         const nextKey = tileKey(x + dx, y + dy);
-        if (distances.get(nextKey) === d - 1) down.push(nextKey);
+        if (world.roadsConnected(x, y, x + dx, y + dy) && distances.get(nextKey) === d - 1)
+          down.push(nextKey);
       }
       if (down.length === 0) continue;
       const share = amount / down.length;
