@@ -83,8 +83,8 @@ export class Tools {
     private sim: MacroSim,
   ) {}
 
-  isPainting(): boolean {
-    return this.tool !== 'select';
+  isPainting(): boolean | 'tap' {
+    return this.tool === 'facility' ? 'tap' : this.tool !== 'select';
   }
 
   get cityLevel(): number {

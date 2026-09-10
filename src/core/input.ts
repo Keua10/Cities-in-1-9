@@ -12,10 +12,12 @@ export interface InputHandlers {
   /* ---------- 2단계: 칠하기 도구 ---------- */
 
   /**
-   * 지금 칠하기 도구(도로·지구·철거)가 켜져 있는가.
-   * true 면 한 손가락 드래그가 지도를 움직이지 않고 칠하기가 된다.
+   * 지금 칠하기 도구가 켜져 있는가.
+   * - true: 기존처럼 한 손가락 드래그가 칠하기가 된다.
+   * - 'tap': 터치에서는 짧은 탭만 설치하고, 드래그는 지도 이동으로 쓴다.
+   *   마우스 입력은 기존 즉시 설치 동작을 유지한다.
    */
-  isPainting?: () => boolean;
+  isPainting?: () => boolean | 'tap';
   onPaintStart?: (wx: number, wy: number) => void;
   onPaintMove?: (wx: number, wy: number) => void;
   onPaintEnd?: () => void;
@@ -40,11 +42,12 @@ interface P {
  * - 두 손가락: 핀치 확대/축소 + 이동.
  * - 마우스: 기존 hover / 드래그 / 휠 동작 유지.
  *
- * 2단계에서 칠하기 도구가 붙으면서 한 손가락 드래그의 의미가 갈린다.
+ * 칠하기 도구의 한 손가락 동작은 두 종류다.
  *
- *   선택 도구      한 손가락 드래그 = 지도 이동   (기존 그대로)
- *   칠하기 도구    한 손가락 드래그 = 칠하기      (지도가 안 움직인다)
- *   어느 쪽이든    두 손가락       = 이동 + 확대/축소
+ *   선택 도구        한 손가락 드래그 = 지도 이동
+ *   일반 칠하기 도구 한 손가락 드래그 = 칠하기
+ *   탭 설치 도구     짧은 탭 = 설치 / 드래그 = 지도 이동
+ *   어느 쪽이든      두 손가락 = 이동 + 확대/축소
  *
  * 두 손가락으로 늘어나면 진행 중이던 칠하기를 즉시 끊는다. 핀치하면서 도로가
  * 그어지면 학생이 지도를 못 움직인다.
@@ -62,6 +65,7 @@ export function attachInput(
   let pinchDist = 0;
   let multiTouchGesture = false;
   let painting = false;
+  let tapPainting = false;
 
   const midpoint = (): { x: number; y: number } => {
     let x = 0;
@@ -115,6 +119,7 @@ export function attachInput(
     if (pointers.size >= 2) {
       multiTouchGesture = true;
       pinchDist = distance();
+      tapPainting = false;
 
       if (painting) {
         painting = false;
@@ -124,7 +129,15 @@ export function attachInput(
       return;
     }
 
-    if (handlers.isPainting?.()) {
+    const paintMode = handlers.isPainting?.();
+    if (paintMode) {
+      // 시설처럼 한 번만 놓는 도구는 터치에서 즉시 설치하지 않는다.
+      // 손가락이 실제 드래그인지 탭인지 판정한 뒤 탭일 때만 설치한다.
+      if (paintMode === 'tap' && e.pointerType !== 'mouse') {
+        tapPainting = true;
+        return;
+      }
+
       painting = true;
 
       const w = camera.screenToWorld(e.clientX, e.clientY);
@@ -159,6 +172,7 @@ export function attachInput(
 
     if (pointers.size >= 2) {
       multiTouchGesture = true;
+      tapPainting = false;
 
       const d = distance();
 
@@ -174,7 +188,7 @@ export function attachInput(
     }
 
     /*
-     * 칠하기 중에는 지도를 움직이지 않는다.
+     * 일반 칠하기 중에는 지도를 움직이지 않는다.
      * 관성도 걸지 않는다(velX/velY 를 건드리지 않고 빠져나간다).
      */
     if (painting) {
@@ -186,13 +200,14 @@ export function attachInput(
     }
 
     /*
-     * 터치가 18px 안에서 흔들리는 동안에는
-     * 카메라를 움직이지 않는다.
-     *
-     * 이 구간은 끝까지 탭 후보로 유지한다.
+     * 탭 설치 도구도 18px 안쪽에서는 탭 후보로 유지한다.
+     * 18px를 넘은 순간부터 설치 후보를 버리고 카메라 드래그로 전환한다.
      */
     if (e.pointerType !== 'mouse' && p.moved <= TAP_MOVE_LIMIT) {
       return;
+    }
+    if (tapPainting) {
+      tapPainting = false;
     }
 
     const dx = e.pointerType === 'mouse' ? mid.x - prevMid.x : dxPointer;
@@ -245,6 +260,7 @@ export function attachInput(
       pinchDist = 0;
       velX = 0;
       velY = 0;
+      tapPainting = false;
 
       if (pointers.size === 0) {
         multiTouchGesture = false;
@@ -261,6 +277,7 @@ export function attachInput(
       pinchDist = 0;
       velX = 0;
       velY = 0;
+      tapPainting = false;
       lastMoveT = performance.now();
       return;
     }
@@ -271,20 +288,33 @@ export function attachInput(
 
     const held = performance.now() - p.startT;
 
+    const tapPainted = tapPainting && !multiTouchGesture && p.moved <= TAP_MOVE_LIMIT;
     const tapped = !multiTouchGesture && p.moved <= TAP_MOVE_LIMIT && held <= TAP_TIME_LIMIT;
 
-    if (tapped) {
+    if (tapPainted || tapped) {
       /*
        * 탭 허용 범위 안에서 손가락이 조금 움직였더라도
-       * 선택 위치는 처음 손가락을 댄 곳을 기준으로 한다.
+       * 선택/설치 위치는 처음 손가락을 댄 곳을 기준으로 한다.
+       * 시설 설치는 기존 동작을 보존하기 위해 누르고 있는 시간과 무관하게
+       * 드래그만 아니면 1회 실행한다.
        */
       const w = camera.screenToWorld(p.startX, p.startY);
 
-      handlers.onTap?.(w.wx, w.wy);
+      if (tapPainted) {
+        handlers.onPaintStart?.(w.wx, w.wy);
+        handlers.onPaintEnd?.();
+        tapPainting = false;
+      }
+
+      if (tapped) {
+        handlers.onTap?.(w.wx, w.wy);
+      }
 
       multiTouchGesture = false;
       return;
     }
+
+    tapPainting = false;
 
     if (performance.now() - lastMoveT < 80) {
       camera.fling(velX, velY);
