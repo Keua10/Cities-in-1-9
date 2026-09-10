@@ -14,8 +14,7 @@ export interface InputHandlers {
   /**
    * 지금 칠하기 도구가 켜져 있는가.
    * - true: 기존처럼 한 손가락 드래그가 칠하기가 된다.
-   * - 'tap': 터치에서는 짧은 탭만 설치하고, 드래그는 지도 이동으로 쓴다.
-   *   마우스 입력은 기존 즉시 설치 동작을 유지한다.
+   * - 'tap': 터치/마우스 모두 짧은 탭(클릭)만 설치하고, 드래그는 지도 이동으로 쓴다.
    */
   isPainting?: () => boolean | 'tap';
   onPaintStart?: (wx: number, wy: number) => void;
@@ -46,7 +45,7 @@ interface P {
  *
  *   선택 도구        한 손가락 드래그 = 지도 이동
  *   일반 칠하기 도구 한 손가락 드래그 = 칠하기
- *   탭 설치 도구     짧은 탭 = 설치 / 드래그 = 지도 이동
+ *   탭 설치 도구     터치 탭/마우스 클릭 = 설치 / 드래그 = 지도 이동
  *   어느 쪽이든      두 손가락 = 이동 + 확대/축소
  *
  * 두 손가락으로 늘어나면 진행 중이던 칠하기를 즉시 끊는다. 핀치하면서 도로가
@@ -131,9 +130,10 @@ export function attachInput(
 
     const paintMode = handlers.isPainting?.();
     if (paintMode) {
-      // 시설처럼 한 번만 놓는 도구는 터치에서 즉시 설치하지 않는다.
-      // 손가락이 실제 드래그인지 탭인지 판정한 뒤 탭일 때만 설치한다.
-      if (paintMode === 'tap' && e.pointerType !== 'mouse') {
+      // 시설처럼 한 번만 놓는 도구는 터치/마우스 모두 즉시 설치하지 않는다.
+      // 포인터가 실제 드래그인지 탭/클릭인지 판정한 뒤 짧게 끝났을 때만 설치한다.
+      // 그래야 시설을 든 상태에서도 한 손가락/왼쪽 버튼 드래그로 지도를 움직일 수 있다.
+      if (paintMode === 'tap') {
         tapPainting = true;
         return;
       }
@@ -200,9 +200,15 @@ export function attachInput(
     }
 
     /*
-     * 탭 설치 도구도 18px 안쪽에서는 탭 후보로 유지한다.
+     * 탭 설치 도구는 터치/마우스 모두 18px 안쪽에서 설치 후보로 유지한다.
      * 18px를 넘은 순간부터 설치 후보를 버리고 카메라 드래그로 전환한다.
+     *
+     * 선택 도구의 기존 마우스 드래그는 즉시 이동해야 하므로, 공통 탭 설치
+     * 후보가 아닐 때의 마우스 입력에는 이 데드존을 적용하지 않는다.
      */
+    if (tapPainting && p.moved <= TAP_MOVE_LIMIT) {
+      return;
+    }
     if (e.pointerType !== 'mouse' && p.moved <= TAP_MOVE_LIMIT) {
       return;
     }
