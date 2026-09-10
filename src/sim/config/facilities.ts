@@ -1,11 +1,10 @@
-/* ---------------- 3.3단계: 시설 ---------------- */
-/* 종류 수(FACILITY_COUNT = 17)와 복지 경계(FAC_WELFARE_BASE = 4)는 저장 코드 범위라서
-   buildings.ts 에 있다. 여기 있는 것은 전부 밸런스 값이고, 순서는
-   [소방, 경찰, 병원, 학교, 소공원, 공원, 체육시설] 로 고정이다.
-   0~3 = 필수 서비스, 4~6 = 복지, 7~10 = 상하수도, 11~13 = 발전소, 14~16 = 위생·장의.
-   인프라 용량은 config/water.ts, config/power.ts에 있다. */
+/* Facility balance table. Existing STEP 4.5 values (0~16) are preserved verbatim. */
 
-export const FACILITY_SPAN: readonly number[] = [2, 2, 3, 3, 1, 2, 3, 2, 2, 2, 3, 2, 3, 3, 3, 2, 3];
+export const FACILITY_SPAN: readonly number[] = [
+  2, 2, 3, 3, 1, 2, 3, 2, 2, 2, 3, 2, 3, 3, 3, 2, 3,
+  1, 3, 3, 3,
+];
+
 export const FACILITY_NAMES: readonly string[] = [
   '소방서',
   '경찰서',
@@ -24,185 +23,73 @@ export const FACILITY_NAMES: readonly string[] = [
   '쓰레기 소각시설',
   '화장시설',
   '공동묘지',
+  '통신탑',
+  '공항',
+  '항구',
+  '교도소',
 ];
 
-/**
- * 건설비. BUILD_COST(L3 = 6,200)·START_MONEY(60,000)와 같은 눈금이다.
- *
- * 복지 3종의 값은 "같은 돈이면 비슷하게 좋아야 한다"(11장, 검증기 22번)를
- * 만족하도록 세기·반경과 함께 잡았다. 초안 값에서는 공원이 체육시설보다
- * 예산 대비 5.2배 좋아서 학생의 선택이 사라졌다.
- */
 export const FACILITY_COST: readonly number[] = [
-  4_500, 4_000, 14_000, 10_000, 600, 4_600, 6_000, 3000, 8000, 2000, 12000, 5000, 18000, 22000,
-  10000, 6500, 3000,
+  4_500, 4_000, 14_000, 10_000, 600, 4_600, 6_000, 3_000, 8_000, 2_000, 12_000,
+  5_000, 18_000, 22_000, 10_000, 6_500, 3_000,
+  2_000, 60_000, 35_000, 25_000,
 ];
 
-/**
- * 하루 유지비. 도로(0.6/칸)와 달리 이쪽이 재정 압력의 주역이다.
- *
- * **11장이 목표로 잡은 "시설 유지비 총액 = 하루 수입의 15~25%" 에 맞춘 값이다.**
- * 초안 값(520/480/1,100/900/40/260/700)은 도시를 다 덮을 만큼 지으면 유지비가
- * 하루 수입의 70%에 닿아서, 커버가 모자라 수입이 낮고 수입이 낮아 시설을 더
- * 못 짓는 함정이 생겼다. 지금 값으로 220일 주행에서 26~30채를 짓고도 비율이
- * 목표 구간에 들어온다(검증기 25번이 그 비율을 필수/복지로 나눠 출력한다).
- *
- * 건설비는 거의 그대로 두었다 — 시설을 놓는 순간의 결정(지금 이 돈을 여기에
- * 쓸 것인가)은 그대로 남기고, 도시를 목 조르던 고정비만 낮춘 것이다.
- */
 export const FACILITY_UPKEEP_PER_DAY: readonly number[] = [
   170, 160, 360, 300, 15, 110, 135, 90, 180, 50, 240, 100, 650, 180, 280, 140, 70,
+  0, 950, 600, 420,
 ];
 
-/**
- * 반경. **앞 4개와 뒤 3개의 단위가 다르다.**
- *   0~3 필수 서비스 — 도로 BFS 거리 상한(칸). 병원은 구급차라 길고, 학교는 걸어서 간다.
- *   4~6 복지       — 유클리드 거리(타일). 공원이 가장 넓다.
- */
+/** Road-BFS range for road-service facilities; 0 means no service field. */
 export const FACILITY_RANGE: readonly number[] = [
   40, 34, 55, 30, 8, 16, 14, 0, 0, 0, 0, 0, 0, 0, 64, 64, 64,
+  0, 0, 0, 34,
 ];
 
-/** 도로에 닿아야 놓을 수 있는가. 소공원만 false — 자투리땅용이다. */
+/** Tower is intentionally placeable without a road; the other new facilities require one. */
 export const FACILITY_NEEDS_ROAD: readonly boolean[] = [
+  true, true, true, true, false, true, true, true, true, true, true, true, true, true, true, true,
   true,
-  true,
-  true,
-  true,
-  false,
-  true,
-  true,
-  true,
-  true,
-  true,
-  true,
-  true,
-  true,
-  true,
-  true,
-  true,
-  true,
+  false, true, true, true,
 ];
 
-/* --- 도로 서비스(0~3, 14~16)의 담당 용량. --- */
-
-/** 담당 한계. 소방서만 건물 수, 나머지는 인구. */
+/** Service capacities. Prison is deliberately smaller than a police station and shares its channel. */
 export const FACILITY_CAPACITY: readonly number[] = [
-  220, 3_000, 5_000, 2_500, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 10000, 6000, 5000,
-];
-export const FACILITY_CAPACITY_IS_BUILDINGS: readonly boolean[] = [
-  true,
-  false,
-  false,
-  false,
-  false,
-  false,
-  false,
-  false,
-  false,
-  false,
-  false,
-  false,
-  false,
-  false,
-  false,
-  false,
-  false,
+  220, 3_000, 5_000, 2_500, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 10_000, 6_000, 5_000,
+  0, 0, 0, 1_200,
 ];
 
-/** 정원을 넘었을 때 품질이 떨어지는 기울기. 1.0 이면 정원 2배에서 품질 0. */
+export const FACILITY_CAPACITY_IS_BUILDINGS: readonly boolean[] = [
+  true, false, false, false, false, false, false, false, false, false, false, false, false, false,
+  false, false, false,
+  false, false, false, false,
+];
+
 export const OVERLOAD_SLOPE = 0.8;
 
-/* --- 복지(4~6)만 쓰는 값. 필수 서비스 자리는 0 이다. --- */
-
-/**
- * 복지 점수 세기. 거리 감쇠(1 - d/range)를 곱해서 격자에 쌓인다.
- *
- * **세기는 "그 시설 바로 위의 점수" 다. 요구량과 직접 비교하면 안 된다.**
- * 선형 감쇠라 실제로 요구를 채우는 것은 중심에서 얼마간 떨어진 원 안이고,
- * 설계 의도는 그 원의 크기에 있다. 명세 초안의 [0.35, 1.0, 0.9] 는 세기를
- * 요구량과 같은 눈금으로 읽어서 나온 값이라, 중산층 요구(0.90)를 채우는 원이
- * 공원 반경 1.6칸까지밖에 안 됐다 — 동네가 아니라 공원 앞마당이다.
- * 아래 값은 2장의 문장(계층별 요구)을 거리로 되돌려 잡은 것이다.
- *
- *   소공원 0.65 · 반경  8  ->  저소득(0.35) 을 3.7칸 안에서 채운다
- *                             중산층(0.90) 은 세기 자체가 모자라 못 채운다
- *   공원   1.50 · 반경 16  ->  중산층(0.90) 을 6.4칸 안에서 채운다 (동네 하나)
- *                             고소득(1.80) 은 혼자서는 못 채운다
- *   체육   1.60 · 반경 14  ->  중산층(0.90) 을 6.1칸 안에서 채운다
- *                             고소득(1.80) 은 혼자서는 못 채운다
- *   공원 + 체육이 겹치는 6.2칸 안에서만 고소득(1.80) 이 채워진다.
- *
- * 즉 "저소득은 소공원 하나, 중산층은 제대로 된 공원, 고소득은 공원 + 체육시설"
- * 이라는 2장의 세 줄이 그대로 거리로 나온다.
- */
 export const FACILITY_STRENGTH: readonly number[] = [
   0, 0, 0, 0, 0.65, 1.5, 1.6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0,
 ];
 
-/** [kind][zone] 만족도 가중치. 합이 SERVICE_PENALTY_MAX 를 넘어도 된다(상한에서 잘린다). */
 export const SERVICE_WEIGHT: readonly (readonly number[])[] = [
-  [0.1, 0.12, 0.16], // 소방
-  [0.14, 0.16, 0.06], // 경찰
-  [0.16, 0.06, 0.04], // 병원
-  [0.18, 0.02, 0.0], // 학교
+  [0.1, 0.12, 0.16],
+  [0.14, 0.16, 0.06],
+  [0.16, 0.06, 0.04],
+  [0.18, 0.02, 0.0],
 ];
 
-/** 계층별 민감도. 고소득이 더 까다롭다. */
 export const TIER_SERVICE_MUL: readonly number[] = [0.7, 1.0, 1.35];
-
-/** 서비스 감점 상한. 통근·혼잡을 압도하지 못하게 막는 선. */
 export const SERVICE_PENALTY_MAX = 0.45;
-
-/** 유예 구간. 이 밑에서는 감점이 0 이고, 위 값에서 100% 가 된다. */
 export const SERVICE_GRACE_POP = 400;
 export const SERVICE_FULL_POP = 2_000;
-
-/** BFS 상한. FACILITY_RANGE[0..3] 최대값 이상이어야 하고, dist 를 Uint8 에 담으므로 254 이하. */
 export const SERVICE_FIELD_MAX_DIST = 64;
 
-/* ---------------- 3.3단계: 복지 요구 ---------------- */
-
-/**
- * 계층별로 요구하는 복지 점수. **이 배열이 복지 설계의 중심이다.**
- * FACILITY_STRENGTH 와 나란히 읽어라.
- *   0.35 = 소공원 바로 옆 한 채   (저소득이 요구하는 최소선)
- *   0.90 = 제대로 된 공원이 가까이  (중산층)
- *   1.80 = 공원 + 체육시설         (고소득)
- * 저소득 값을 0 으로 만들지 마라 — 그건 사람이 아무것도 기대하지 않는다는 뜻이다.
- */
 export const AMENITY_NEED_BY_TIER: readonly number[] = [0.35, 0.9, 1.8];
-
-/** 복지가 전혀 없을 때(fulfil = 0)의 감점. 주거 기준값이고 아래 배율이 곱해진다. */
 export const AMENITY_GAP_MAX = 0.24;
-
-/** 요구를 넘긴 초과분에 붙는 보너스 상한. 감점보다 작아야 한다 — 요구가 주인공이다. */
 export const AMENITY_SURPLUS_MAX = 0.12;
-
-/** 초과분 포화 곡선의 반값점. 초과가 이 값일 때 보너스가 상한의 절반. */
 export const AMENITY_HALF = 1.2;
-
-/** 용도별 배율. 감점과 보너스에 **똑같이** 곱한다. 공업도 0 은 아니다 — 거기서도 일한다. */
 export const ZONE_AMENITY_MUL: readonly number[] = [1.0, 0.42, 0.12];
-
-/**
- * 복지 점수를 Uint8 에 담을 때 곱하는 값.
- * 표현 가능한 최대 점수는 255/40 = 6.375 다. 고소득 요구(1.8)의 3.5배라 충분하고,
- * 그 위는 포화 곡선 때문에 거의 안 움직이므로 잘려도 무방하다.
- */
 export const AMENITY_SCORE_SCALE = 40;
-
-/** 스탬프 범위 상한. FACILITY_RANGE[4..6] 최대값 이상이어야 한다. */
 export const AMENITY_FIELD_MAX_RANGE = 16;
-
-/* ---------------- 3.3단계: 총 감점 상한 ---------------- */
-
-/**
- * serviceGap + amenityGap 의 합에 걸리는 상한. **하강 나선의 바닥이다.**
- *
- * 6장 밸런스 표를 계산해보고 정한 값이다. 0.50 에서 "시설이 하나도 없어도 통근이
- * 보통이면 저소득 주거는 살아남는다"(만족도 0.305 > 기준선 0.25)가 성립한다.
- * 0.60 으로 올리면 0.205 가 되어 도시가 통째로 비기 시작한다.
- * **이 값만 따로 올리지 마라.** 올리려면 6장 표를 다시 계산해라.
- */
 export const NEEDS_PENALTY_MAX = 0.5;

@@ -11,6 +11,7 @@ import {
 } from './buildings';
 import { FACILITY_SPECS, touchesRoadTiles } from './facilities';
 import { facilityPowerDemand, POWER_REACH, POWER_SPECS, WIRE_UPKEEP } from './config/power';
+import { FAC_COMM_TOWER } from './config/special';
 import { rangeOffsets, utilityKey as key } from './utilityRange';
 
 interface Entity {
@@ -85,7 +86,9 @@ export class PowerField {
           add({ x, y, span, wire: false, demand: capacityOf(zoneOfCode(code), span), capacity: 0 });
         } else if (isFacilityAnchor(code)) {
           const kind = facilityKindOfCode(code);
-          if (kind === 4 || kind === 5) continue;
+          // Parks are intentionally outside the power graph. STEP 4.6 communication towers are
+          // also excluded completely so a functionless reserved facility cannot relay electricity.
+          if (kind === 4 || kind === 5 || kind === FAC_COMM_TOWER) continue;
           const span = FACILITY_SPECS[kind].span;
           add({
             x,

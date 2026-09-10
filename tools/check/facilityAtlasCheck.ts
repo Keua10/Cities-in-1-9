@@ -10,6 +10,7 @@ import {
   drawWaterFacilities,
   drawPowerFacilities,
   drawSanitationFacilities,
+  drawSpecialFacilities,
 } from '../../src/render/facilityAtlas';
 
 const image = await loadImage('public/sprites/facilities.png');
@@ -48,18 +49,16 @@ for (const spec of FACILITY_SPECS.slice(0, 7)) {
   assert.ok(count > size * size * 0.15, `facility ${k} contains artwork`);
   assert.ok(bottomY >= size - 2, `facility ${k} bottom aligned`);
   assert.ok(Math.abs(bottomX - size / 2) <= 3, `facility ${k} centered anchor (${bottomX})`);
-  console.log(
-    `  OK   ${spec.name}: ${size}x${size}, bottom=${bottomX},${bottomY}, visible=${count}`,
-  );
 }
 assert.ok(empty > 50000);
-console.log('시설 아틀라스: 576x384, 7종, 투명 빈 셀·바닥 정렬 통과');
+
 const extended = createCanvas(FACILITY_ATLAS_W, FACILITY_ATLAS_H);
 const extendedCtx = extended.getContext('2d');
 extendedCtx.drawImage(image, 0, 0);
 drawWaterFacilities(extendedCtx as unknown as CanvasRenderingContext2D);
 drawPowerFacilities(extendedCtx as unknown as CanvasRenderingContext2D);
 drawSanitationFacilities(extendedCtx as unknown as CanvasRenderingContext2D);
+drawSpecialFacilities(extendedCtx as unknown as CanvasRenderingContext2D);
 for (const spec of FACILITY_SPECS.slice(7)) {
   const size = facilityCellSize(spec.span);
   const data = extendedCtx.getImageData(
@@ -72,4 +71,4 @@ for (const spec of FACILITY_SPECS.slice(7)) {
   for (let i = 3; i < data.length; i += 4) if (data[i]) pixels++;
   assert.ok(pixels > size * size * 0.15, `${spec.name} runtime artwork is visible`);
 }
-console.log('상하수도 4종·발전소 3종·위생장의 3종 런타임 아트 및 확장 아틀라스 통과');
+console.log(`시설 아틀라스: ${FACILITY_SPECS.length}종, 기존 7종 원본 + 기반/특수 시설 런타임 아트 통과`);
