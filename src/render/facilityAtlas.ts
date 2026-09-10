@@ -2,7 +2,17 @@ import { Texture } from 'pixi.js';
 import { TILE_W } from '../core/constants';
 import { FACILITY_COUNT } from '../sim/buildings';
 import { FACILITY_SPECS } from '../sim/facilities';
-import { FAC_AIRPORT, FAC_COMM_TOWER, FAC_HARBOR, FAC_PRISON } from '../sim/config/special';
+import {
+  FAC_AIRPORT,
+  FAC_AIRPORT_L2,
+  FAC_AIRPORT_L3,
+  FAC_COMM_TOWER,
+  FAC_HARBOR,
+  FAC_HARBOR_CARGO,
+  FAC_HARBOR_HYBRID_L2,
+  FAC_HARBOR_HYBRID_L3,
+  FAC_PRISON,
+} from '../sim/config/special';
 
 export const FACILITY_ATLAS_URL = 'sprites/facilities.png';
 
@@ -10,37 +20,42 @@ export function facilityCellSize(span: number): number {
   return span * TILE_W;
 }
 
+export const FACILITY_SPANS = [1, 2, 3, 5, 7] as const;
+
 export function facilityBandY(span: number): number {
   let y = 0;
-  for (let s = 1; s < span; s++) y += facilityCellSize(s);
+  for (const s of FACILITY_SPANS) {
+    if (s >= span) break;
+    y += facilityCellSize(s);
+  }
   return y;
 }
 
-/**
- * kind -> fixed column inside its span band. Existing 0~16 positions are unchanged.
- * New STEP 4.6 cells are appended to unused columns only.
- */
+/** Existing 0~20 cells are untouched; new transport cells are appended in their span bands. */
 export const FACILITY_ATLAS_COLUMN: readonly number[] = [
   0, 1, 0, 1, 0, 2, 2, 3, 4, 5, 3, 6, 4, 5, 6, 7, 7,
   1, 8, 9, 10,
+  11, 0, 0, 1, 1,
 ];
 
 function bandColumns(span: number): number {
-  let n = 0;
+  let max = -1;
   for (let kind = 0; kind < FACILITY_COUNT; kind++) {
-    if (FACILITY_SPECS[kind].span === span) n++;
+    if (FACILITY_SPECS[kind].span === span) max = Math.max(max, FACILITY_ATLAS_COLUMN[kind] ?? -1);
   }
-  return n;
+  return max + 1;
 }
 
 export const FACILITY_ATLAS_W = (() => {
   let w = 0;
-  for (let span = 1; span <= 3; span++) {
+  for (const span of FACILITY_SPANS) {
     w = Math.max(w, bandColumns(span) * facilityCellSize(span));
   }
   return w;
 })();
-export const FACILITY_ATLAS_H = facilityBandY(3) + facilityCellSize(3);
+export const FACILITY_ATLAS_H = FACILITY_SPANS.reduce((sum, span) => sum + facilityCellSize(span), 0);
+const LEGACY_ATLAS_W = 2112;
+const LEGACY_ATLAS_H = 384;
 
 export interface FacilityAtlas {
   texture: Texture;
@@ -96,8 +111,9 @@ async function loadImage(url: string): Promise<HTMLImageElement | null> {
     const img = new Image();
     img.onload = () =>
       resolve(
-        (img.naturalWidth === FACILITY_ATLAS_W || img.naturalWidth === 576) &&
-          img.naturalHeight === FACILITY_ATLAS_H
+        ((img.naturalWidth === LEGACY_ATLAS_W && img.naturalHeight === LEGACY_ATLAS_H) ||
+          (img.naturalWidth === FACILITY_ATLAS_W && img.naturalHeight === FACILITY_ATLAS_H) ||
+          (img.naturalWidth === 576 && img.naturalHeight === LEGACY_ATLAS_H))
           ? img
           : null,
       );
@@ -258,12 +274,17 @@ export function drawSanitationFacilities(ctx: CanvasRenderingContext2D): void {
   }
 }
 
-/** STEP 4.6 runtime art. Existing facilities.png does not need to be replaced. */
+/** Runtime art for STEP 4.6+ transport facilities. Existing facilities.png remains valid. */
 export function drawSpecialFacilities(ctx: CanvasRenderingContext2D): void {
   drawCommunicationTower(ctx);
-  drawAirport(ctx);
-  drawHarbor(ctx);
+  drawAirport(ctx, FAC_AIRPORT, 1);
+  drawHarbor(ctx, FAC_HARBOR, 'passenger');
   drawPrison(ctx);
+  drawHarbor(ctx, FAC_HARBOR_CARGO, 'cargo');
+  drawHarbor(ctx, FAC_HARBOR_HYBRID_L2, 'hybrid');
+  drawHarbor(ctx, FAC_HARBOR_HYBRID_L3, 'hybrid');
+  drawAirport(ctx, FAC_AIRPORT_L2, 2);
+  drawAirport(ctx, FAC_AIRPORT_L3, 3);
 }
 
 function cell(kind: number): { size: number; ox: number; oy: number } {
@@ -297,38 +318,107 @@ function drawCommunicationTower(ctx: CanvasRenderingContext2D): void {
   ctx.fillRect(cx - 2, top - 4, 4, 4);
 }
 
-function drawAirport(ctx: CanvasRenderingContext2D): void {
-  const { size, ox, oy } = cell(FAC_AIRPORT);
-  drawFacility(ctx, ox, oy, size, size / 2, size * 0.08, ['#c9d1d5', '#8e9ba2', '#65747b'], false);
-  ctx.fillStyle = '#333b40';
-  ctx.fillRect(ox + size * 0.19, oy + size * 0.58, size * 0.62, size * 0.09);
-  ctx.fillStyle = '#eef2e5';
-  for (let i = 0; i < 7; i++)
-    ctx.fillRect(ox + size * (0.23 + i * 0.075), oy + size * 0.62, size * 0.04, size * 0.012);
-  ctx.fillStyle = '#9eb4c4';
-  ctx.fillRect(ox + size * 0.37, oy + size * 0.43, size * 0.26, size * 0.09);
-  ctx.fillStyle = '#e4e8ea';
-  ctx.fillRect(ox + size * 0.53, oy + size * 0.27, size * 0.035, size * 0.2);
-  ctx.fillRect(ox + size * 0.47, oy + size * 0.32, size * 0.15, size * 0.025);
+function drawAirport(ctx: CanvasRenderingContext2D, kind: number, level: number): void {
+  const { size, ox, oy } = cell(kind);
+  drawFacility(ctx, ox, oy, size, size / 2, size * (level === 1 ? 0.07 : 0.095), ['#c9d1d5', '#8e9ba2', '#65747b'], false);
+
+  // Apron and terminal. Runways/taxiways are separate build tools, so the terminal sprite stays compact.
+  ctx.fillStyle = '#596268';
+  ctx.beginPath();
+  ctx.moveTo(ox + size * 0.22, oy + size * 0.64);
+  ctx.lineTo(ox + size * 0.78, oy + size * 0.64);
+  ctx.lineTo(ox + size * 0.68, oy + size * 0.76);
+  ctx.lineTo(ox + size * 0.32, oy + size * 0.76);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = '#a8bcc8';
+  ctx.fillRect(ox + size * 0.31, oy + size * 0.47, size * 0.38, size * (0.075 + level * 0.01));
+  ctx.fillStyle = '#dbe5e9';
+  ctx.fillRect(ox + size * 0.34, oy + size * 0.455, size * 0.32, size * 0.025);
+
+  const gates = level === 1 ? 2 : level === 2 ? 4 : 7;
+  ctx.strokeStyle = '#e6c968';
+  ctx.lineWidth = Math.max(2, Math.floor(size / 100));
+  for (let i = 0; i < gates; i++) {
+    const x = ox + size * (0.30 + (0.4 * i) / Math.max(1, gates - 1));
+    ctx.beginPath();
+    ctx.moveTo(x, oy + size * 0.58);
+    ctx.lineTo(x, oy + size * 0.69);
+    ctx.stroke();
+  }
+
+  // Control tower grows with airport level.
+  ctx.fillStyle = '#d7e0e4';
+  ctx.fillRect(ox + size * 0.62, oy + size * (0.28 - level * 0.015), size * 0.035, size * (0.22 + level * 0.025));
+  ctx.fillStyle = '#466779';
+  ctx.fillRect(ox + size * 0.595, oy + size * (0.26 - level * 0.015), size * 0.085, size * 0.045);
+
+  drawTinyPlane(ctx, ox + size * 0.43, oy + size * 0.68, size * 0.07);
+  if (level >= 2) drawTinyPlane(ctx, ox + size * 0.57, oy + size * 0.70, size * 0.065);
+  if (level >= 3) drawTinyPlane(ctx, ox + size * 0.50, oy + size * 0.61, size * 0.06);
 }
 
-function drawHarbor(ctx: CanvasRenderingContext2D): void {
-  const { size, ox, oy } = cell(FAC_HARBOR);
-  drawFacility(ctx, ox, oy, size, size / 2, size * 0.06, ['#ab9678', '#7e705b', '#5e5547'], false);
+function drawTinyPlane(ctx: CanvasRenderingContext2D, x: number, y: number, scale: number): void {
+  ctx.fillStyle = '#edf2f4';
+  ctx.fillRect(x - scale * 0.08, y - scale * 0.5, scale * 0.16, scale);
+  ctx.fillRect(x - scale * 0.46, y - scale * 0.04, scale * 0.92, scale * 0.18);
+  ctx.fillRect(x - scale * 0.24, y + scale * 0.29, scale * 0.48, scale * 0.12);
+}
+
+function drawHarbor(ctx: CanvasRenderingContext2D, kind: number, mode: 'passenger' | 'cargo' | 'hybrid'): void {
+  const { size, ox, oy } = cell(kind);
+  drawFacility(ctx, ox, oy, size, size / 2, size * 0.045, ['#ab9678', '#7e705b', '#5e5547'], false);
+
+  // Water-facing basin and piers.
   ctx.fillStyle = '#315f7c';
-  ctx.fillRect(ox + size * 0.56, oy + size * 0.62, size * 0.2, size * 0.08);
-  const containers = ['#b9604a', '#5c7893', '#c59847'];
-  for (let i = 0; i < 5; i++) {
-    ctx.fillStyle = containers[i % containers.length];
-    ctx.fillRect(ox + size * (0.25 + (i % 3) * 0.11), oy + size * (0.57 + Math.floor(i / 3) * 0.06), size * 0.09, size * 0.045);
-  }
-  ctx.strokeStyle = '#d5c06a';
-  ctx.lineWidth = 4;
   ctx.beginPath();
-  ctx.moveTo(ox + size * 0.63, oy + size * 0.35);
-  ctx.lineTo(ox + size * 0.63, oy + size * 0.6);
-  ctx.lineTo(ox + size * 0.79, oy + size * 0.46);
-  ctx.stroke();
+  ctx.moveTo(ox + size * 0.52, oy + size * 0.61);
+  ctx.lineTo(ox + size * 0.81, oy + size * 0.67);
+  ctx.lineTo(ox + size * 0.63, oy + size * 0.82);
+  ctx.lineTo(ox + size * 0.40, oy + size * 0.73);
+  ctx.closePath();
+  ctx.fill();
+
+  const piers = size >= 400 ? 5 : size >= 300 ? 3 : 2;
+  ctx.strokeStyle = '#d3c2a0';
+  ctx.lineWidth = Math.max(3, Math.floor(size / 90));
+  for (let i = 0; i < piers; i++) {
+    const t = (i + 1) / (piers + 1);
+    ctx.beginPath();
+    ctx.moveTo(ox + size * (0.43 + t * 0.22), oy + size * (0.65 + t * 0.035));
+    ctx.lineTo(ox + size * (0.50 + t * 0.21), oy + size * (0.76 + t * 0.015));
+    ctx.stroke();
+  }
+
+  if (mode !== 'passenger') {
+    const containers = ['#b9604a', '#5c7893', '#c59847', '#5f8b68'];
+    const count = size >= 400 ? 14 : size >= 300 ? 9 : 5;
+    for (let i = 0; i < count; i++) {
+      ctx.fillStyle = containers[i % containers.length];
+      ctx.fillRect(
+        ox + size * (0.21 + (i % 5) * 0.065),
+        oy + size * (0.57 + Math.floor(i / 5) * 0.038),
+        size * 0.052,
+        size * 0.028,
+      );
+    }
+    ctx.strokeStyle = '#d5c06a';
+    ctx.lineWidth = Math.max(3, Math.floor(size / 90));
+    ctx.beginPath();
+    ctx.moveTo(ox + size * 0.32, oy + size * 0.37);
+    ctx.lineTo(ox + size * 0.32, oy + size * 0.58);
+    ctx.lineTo(ox + size * 0.47, oy + size * 0.45);
+    ctx.stroke();
+  }
+
+  if (mode !== 'cargo') {
+    ctx.fillStyle = '#d6e2e8';
+    ctx.fillRect(ox + size * 0.22, oy + size * 0.49, size * 0.23, size * 0.075);
+    ctx.fillStyle = '#557b91';
+    for (let i = 0; i < 4; i++)
+      ctx.fillRect(ox + size * (0.245 + i * 0.045), oy + size * 0.512, size * 0.026, size * 0.018);
+  }
 }
 
 function drawPrison(ctx: CanvasRenderingContext2D): void {

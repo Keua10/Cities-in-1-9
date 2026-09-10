@@ -16,6 +16,7 @@ const checks = {
   disaster: 'tools/check/disasterCheck.ts',
   atlas: 'tools/check/facilityAtlasCheck.ts',
   special: 'tools/check/specialFacilityCheck.ts',
+  transport: 'tools/check/transportHubCheck.ts',
   structure: 'tools/check/structureCheck.ts',
 };
 mkdirSync('.check', { recursive: true });

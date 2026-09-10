@@ -15,7 +15,7 @@ export const MAX_FOOTPRINT = LEVEL_COUNT;
 /**
  * bld 저장 코드:
  *   0~8   일반 지구 건물 앵커
- *   9~29  시설 앵커 (STEP 4.6까지 21종)
+ *   9~34  시설 앵커 (STEP 4.6+ 교통 확장까지 26종)
  *   254   다른 앵커가 덮는 칸
  *   255   빈 칸
  * 기존 번호는 저장 호환성 때문에 절대 재배치하지 않는다.
@@ -40,9 +40,9 @@ export function zoneOfCode(v: number): number {
 export const FAC_BASE = 9;
 /**
  * 시설 종류 수. 0~16은 STEP 4.5까지의 기존 값이며,
- * STEP 4.6은 17 통신탑 / 18 공항 / 19 항구 / 20 교도소를 뒤에만 추가한다.
+ * STEP 4.6의 17~20을 유지하고 교통 확장 시설은 21~25에만 추가한다.
  */
-export const FACILITY_COUNT = 21;
+export const FACILITY_COUNT = 26;
 /** kind 4~6만 기존 복지 시설이다. */
 export const FAC_WELFARE_BASE = 4;
 

@@ -2,13 +2,14 @@ import { TIER_NAMES } from '../sim/buildings';
 import { FACILITY_SPECS } from '../sim/facilities';
 import type { MacroSim } from '../sim/macro';
 import { WATER_SPECS } from '../sim/config/water';
+import { AIRPORT_SPECS, HARBOR_SPECS } from '../sim/config/transport';
 import { POWER_SPECS, facilityPowerDemand } from '../sim/config/power';
 import {
-  FAC_AIRPORT,
   FAC_COMM_TOWER,
-  FAC_HARBOR,
   FAC_PRISON,
   SPECIAL_SPECS,
+  isAirportFacility,
+  isHarborFacility,
   isSpecialFacility,
 } from '../sim/config/special';
 import { SERVICE_KIND_COUNT } from '../sim/services';
@@ -46,8 +47,16 @@ export function describeFacility(sim: MacroSim, tx: number, ty: number, kind: nu
       );
     }
 
-    const locationRule = kind === FAC_HARBOR ? ' · 수역 인접' : kind === FAC_AIRPORT ? ' · 3×3 평지' : '';
-    return `${spec.name} · ${role}${locationRule} · ${powered ? '전력 공급' : '전력 미공급'} (수요 ${power}) · ${upkeep}${road}`;
+    if (isHarborFacility(kind)) {
+      const harbor = HARBOR_SPECS[kind];
+      const mode = harbor.mode === 'passenger' ? '여객 전용' : harbor.mode === 'cargo' ? '화물 전용' : '여객+화물 배분';
+      return `${spec.name} · ${role} · ${mode} · 최대 ${harbor.maxShips}척 · 수역 인접 · ${powered ? '전력 공급' : '전력 미공급'} (수요 ${power}) · ${upkeep}${road}`;
+    }
+    if (isAirportFacility(kind)) {
+      const airport = AIRPORT_SPECS[kind];
+      return `${spec.name} · ${role} · 최대 항공기 ${airport.maxPlanes}대 · 활주로 ${airport.minRunwayTiles}칸 이상 · 유도로 필요 · ${powered ? '전력 공급' : '전력 미공급'} (수요 ${power}) · ${upkeep}${road}`;
+    }
+    return `${spec.name} · ${role} · ${powered ? '전력 공급' : '전력 미공급'} (수요 ${power}) · ${upkeep}${road}`;
   }
 
   if (spec.welfare) {

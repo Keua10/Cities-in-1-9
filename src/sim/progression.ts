@@ -19,16 +19,28 @@ export const CITY_LEVELS = [
     points: 500,
     name: '성장 도시',
     maxBuildingTier: 2,
-    unlock: '체육시설 · 하수처리장 · 태양광 발전 · 항구 · 교도소',
+    unlock: '체육시설 · 하수처리장 · 태양광 발전 · 소형 공항 · 소형 여객항/화물항 · 교도소',
   },
-  { points: 1500, name: '대도시', maxBuildingTier: 3, unlock: '고소득 건물' },
-  { points: 4000, name: '중심 도시', maxBuildingTier: 3, unlock: '공항 · 현재 최고 도시 레벨' },
+  {
+    points: 1500,
+    name: '대도시',
+    maxBuildingTier: 3,
+    unlock: '고소득 건물 · 중형 공항 · 중형 복합항',
+  },
+  {
+    points: 4000,
+    name: '중심 도시',
+    maxBuildingTier: 3,
+    unlock: '대형 공항 · 대형 복합항 · 현재 최고 도시 레벨',
+  },
 ] as const;
 
 export const BUILDING_UNLOCK_LEVEL = [1, 2, 4] as const;
+/** Existing 0~20 order stays fixed. New transport kinds 21~25 append only. */
 export const FACILITY_UNLOCK_LEVEL: readonly number[] = [
   1, 1, 1, 1, 1, 2, 3, 1, 2, 1, 3, 1, 2, 3, 1, 2, 1,
-  2, 5, 3, 3,
+  2, 3, 3, 3,
+  3, 4, 5, 4, 5,
 ];
 
 export function normalizeProsperity(value: unknown): number {

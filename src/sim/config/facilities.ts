@@ -1,8 +1,9 @@
-/* Facility balance table. Existing STEP 4.5 values (0~16) are preserved verbatim. */
+/* Facility balance table. Existing IDs 0~20 stay in place; transport upgrades append at 21~25. */
 
 export const FACILITY_SPAN: readonly number[] = [
   2, 2, 3, 3, 1, 2, 3, 2, 2, 2, 3, 2, 3, 3, 3, 2, 3,
   1, 3, 3, 3,
+  3, 5, 7, 5, 7,
 ];
 
 export const FACILITY_NAMES: readonly string[] = [
@@ -24,45 +25,55 @@ export const FACILITY_NAMES: readonly string[] = [
   '화장시설',
   '공동묘지',
   '통신탑',
-  '공항',
-  '항구',
+  '소형 공항',
+  '소형 여객항',
   '교도소',
+  '소형 화물항',
+  '중형 복합항',
+  '대형 복합항',
+  '중형 공항',
+  '대형 공항',
 ];
 
 export const FACILITY_COST: readonly number[] = [
   4_500, 4_000, 14_000, 10_000, 600, 4_600, 6_000, 3_000, 8_000, 2_000, 12_000,
   5_000, 18_000, 22_000, 10_000, 6_500, 3_000,
   2_000, 60_000, 35_000, 25_000,
+  35_000, 90_000, 210_000, 150_000, 360_000,
 ];
 
 export const FACILITY_UPKEEP_PER_DAY: readonly number[] = [
   170, 160, 360, 300, 15, 110, 135, 90, 180, 50, 240, 100, 650, 180, 280, 140, 70,
   0, 950, 600, 420,
+  600, 1_600, 4_200, 2_400, 6_200,
 ];
 
-/** Road-BFS range for road-service facilities; 0 means no service field. */
+/** Road-BFS range for service facilities; transport hubs have no service field. */
 export const FACILITY_RANGE: readonly number[] = [
   40, 34, 55, 30, 8, 16, 14, 0, 0, 0, 0, 0, 0, 0, 64, 64, 64,
   0, 0, 0, 34,
+  0, 0, 0, 0, 0,
 ];
 
-/** Tower is intentionally placeable without a road; the other new facilities require one. */
 export const FACILITY_NEEDS_ROAD: readonly boolean[] = [
   true, true, true, true, false, true, true, true, true, true, true, true, true, true, true, true,
   true,
   false, true, true, true,
+  true, true, true, true, true,
 ];
 
-/** Service capacities. Prison is deliberately smaller than a police station and shares its channel. */
+/** Service capacities. Transport hubs deliberately use zero: their effects live in TransportSystem. */
 export const FACILITY_CAPACITY: readonly number[] = [
   220, 3_000, 5_000, 2_500, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 10_000, 6_000, 5_000,
   0, 0, 0, 1_200,
+  0, 0, 0, 0, 0,
 ];
 
 export const FACILITY_CAPACITY_IS_BUILDINGS: readonly boolean[] = [
   true, false, false, false, false, false, false, false, false, false, false, false, false, false,
   false, false, false,
   false, false, false, false,
+  false, false, false, false, false,
 ];
 
 export const OVERLOAD_SLOPE = 0.8;
@@ -70,6 +81,7 @@ export const OVERLOAD_SLOPE = 0.8;
 export const FACILITY_STRENGTH: readonly number[] = [
   0, 0, 0, 0, 0.65, 1.5, 1.6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
   0, 0, 0, 0,
+  0, 0, 0, 0, 0,
 ];
 
 export const SERVICE_WEIGHT: readonly (readonly number[])[] = [

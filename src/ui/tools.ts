@@ -6,12 +6,13 @@ import type { MacroSim } from '../sim/macro';
 import { PIPE_COST, PIPE_SEWER, PIPE_WATER, WATER_SPECS } from '../sim/config/water';
 import { POWER_SPECS, WIRE_COST, facilityPowerDemand } from '../sim/config/power';
 import { FAC_CEMETERY, FAC_INCINERATOR } from '../sim/config/sanitation';
+import { AIRPORT_SPECS, HARBOR_SPECS, RUNWAY_COST, TAXIWAY_COST } from '../sim/config/transport';
 import {
-  FAC_AIRPORT,
   FAC_COMM_TOWER,
-  FAC_HARBOR,
   FAC_PRISON,
   SPECIAL_SPECS,
+  isAirportFacility,
+  isHarborFacility,
   isSpecialFacility,
 } from '../sim/config/special';
 import type { UtilityMode } from '../render/utilityLayer';
@@ -20,6 +21,7 @@ import { COST_ROAD, COST_ZONE } from '../sim/simConstants';
 import {
   Build,
   canConnectRoads,
+  canPlaceAirfieldSurface,
   canPlaceRoad,
   canPlaceZone,
   DIRS,
@@ -34,6 +36,8 @@ export type ToolId =
   | 'zoneC'
   | 'zoneI'
   | 'facility'
+  | 'runway'
+  | 'taxiway'
   | 'bulldoze'
   | 'waterPipe'
   | 'sewerPipe'
@@ -46,6 +50,8 @@ const TOOL_VALUE: Partial<Record<ToolId, number>> = {
   zoneR: Build.ZoneR,
   zoneC: Build.ZoneC,
   zoneI: Build.ZoneI,
+  runway: Build.Runway,
+  taxiway: Build.Taxiway,
 };
 
 export const TOOL_LABELS: Record<ToolId, string> = {
@@ -55,6 +61,8 @@ export const TOOL_LABELS: Record<ToolId, string> = {
   zoneC: '상업',
   zoneI: '공업',
   facility: '시설',
+  runway: '공항 활주로',
+  taxiway: '공항 유도로',
   bulldoze: '철거',
   waterPipe: '상수도관',
   sewerPipe: '하수도관',
@@ -117,8 +125,12 @@ export class Tools {
         ? '노랑=전력 공급 범위 · 주황=용량 부족 · 회색 전선=단절 · 건물 가장자리 3칸 이내 자동 공유. 빈 땅은 전달하지 않습니다.'
         : '파랑=급수 범위 · 갈색=하수 범위 · 빨강=오염 · 주황=용량 부족 · 배관 반경 4칸. 상·하수도관은 빈 칸 1개 이상 띄우세요.';
     }
-    if (!this.message || now - this.messageAt > MESSAGE_MS)
-      return this.tool === 'road' ? '클릭: 독립 도로 · 드래그: 지나간 방향으로 설치·연결' : '';
+    if (!this.message || now - this.messageAt > MESSAGE_MS) {
+      if (this.tool === 'road') return '클릭: 독립 도로 · 드래그: 지나간 방향으로 설치·연결';
+      if (this.tool === 'runway') return '공항 활주로 · 일직선으로 길게 설치하세요';
+      if (this.tool === 'taxiway') return '공항 유도로 · 터미널과 활주로를 이어야 공항이 가동됩니다';
+      return '';
+    }
     return this.message;
   }
 
@@ -268,9 +280,11 @@ export class Tools {
     const value = TOOL_VALUE[this.tool];
     if (value === undefined) return;
 
-    const result: PlaceResult =
-      value === Build.Road
-        ? canPlaceRoad(this.world, tx, ty)
+    const airfield = value === Build.Runway || value === Build.Taxiway;
+    const result: PlaceResult = value === Build.Road
+      ? canPlaceRoad(this.world, tx, ty)
+      : airfield
+        ? canPlaceAirfieldSurface(this.world, tx, ty, value)
         : canPlaceZone(this.world, tx, ty, value);
 
     if (!result.ok) {
@@ -278,7 +292,14 @@ export class Tools {
       return;
     }
 
-    const cost = value === Build.Road ? COST_ROAD : COST_ZONE;
+    const cost =
+      value === Build.Road
+        ? COST_ROAD
+        : value === Build.Runway
+          ? RUNWAY_COST
+          : value === Build.Taxiway
+            ? TAXIWAY_COST
+            : COST_ZONE;
     if (!this.sim.spend(cost)) {
       this.note('돈이 모자랍니다');
       return;
@@ -461,12 +482,15 @@ function buildFacilitySheet(tools: Tools, onPick: () => void): FacilitySheet {
         btn.innerHTML += `<small>${role}</small>`;
         if (kind === FAC_COMM_TOWER) {
           btn.innerHTML += '<small>도로·전력 불필요 · 만족도/서비스/수요 영향 없음</small>';
-        } else if (kind === FAC_HARBOR) {
-          btn.innerHTML += `<small>도로·수역 인접 필수 · 전력 수요 ${power}</small>`;
+        } else if (isHarborFacility(kind)) {
+          const hs = HARBOR_SPECS[kind];
+          const mode = hs.mode === 'passenger' ? '여객 전용' : hs.mode === 'cargo' ? '화물 전용' : '여객+화물 배분 가능';
+          btn.innerHTML += `<small>${mode} · 최대 ${hs.maxShips}척 · 도로·수역 인접 필수 · 전력 수요 ${power}</small>`;
         } else if (kind === FAC_PRISON) {
           btn.innerHTML += `<small>경찰 서비스 반경 ${spec.range}칸 · 담당 정원 ${spec.capacity.toLocaleString('ko-KR')} · 전력 수요 ${power}</small>`;
-        } else if (kind === FAC_AIRPORT) {
-          btn.innerHTML += `<small>도로 필수 · 전력 수요 ${power}</small>`;
+        } else if (isAirportFacility(kind)) {
+          const as = AIRPORT_SPECS[kind];
+          btn.innerHTML += `<small>최대 항공기 ${as.maxPlanes}대 · 활주로 ${as.minRunwayTiles}칸 이상 + 유도로 연결 · 전력 수요 ${power}</small>`;
         }
       }
 
@@ -482,6 +506,34 @@ function buildFacilitySheet(tools: Tools, onPick: () => void): FacilitySheet {
     row.appendChild(list);
     root.appendChild(row);
   }
+
+  const airRow = document.createElement('div');
+  airRow.className = 'fs-row';
+  const airLabel = document.createElement('span');
+  airLabel.className = 'fs-label';
+  airLabel.textContent = '공항 부품';
+  airRow.appendChild(airLabel);
+  const airList = document.createElement('div');
+  airList.className = 'fs-list';
+  const surfaceButtons: Array<[HTMLButtonElement, ToolId]> = [];
+  for (const [tool, title, cost, detail] of [
+    ['runway', '활주로', RUNWAY_COST, '일직선으로 설치 · 공항 등급별 최소 길이 필요'],
+    ['taxiway', '유도로', TAXIWAY_COST, '공항 터미널과 활주로를 연결'],
+  ] as const) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'fs-item';
+    btn.innerHTML = `<b>${title}</b><i>1x1</i><s>타일당 ₩${cost.toLocaleString('ko-KR')}</s><small>${detail}</small>`;
+    btn.addEventListener('click', () => {
+      tools.setTool(tool);
+      root.hidden = true;
+      onPick();
+    });
+    airList.appendChild(btn);
+    surfaceButtons.push([btn, tool]);
+  }
+  airRow.appendChild(airList);
+  root.appendChild(airRow);
 
   document.body.appendChild(root);
 
@@ -518,6 +570,9 @@ function buildFacilitySheet(tools: Tools, onPick: () => void): FacilitySheet {
           'aria-pressed',
           String(tools.tool === 'facility' && tools.facilityKind === kind),
         );
+      }
+      for (const [btn, tool] of surfaceButtons) {
+        btn.setAttribute('aria-pressed', String(tools.tool === tool));
       }
     },
   };

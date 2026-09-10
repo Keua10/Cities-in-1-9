@@ -1,4 +1,14 @@
-import { FAC_AIRPORT, FAC_COMM_TOWER, FAC_HARBOR, FAC_PRISON } from './special';
+import {
+  FAC_AIRPORT,
+  FAC_AIRPORT_L2,
+  FAC_AIRPORT_L3,
+  FAC_COMM_TOWER,
+  FAC_HARBOR,
+  FAC_HARBOR_CARGO,
+  FAC_HARBOR_HYBRID_L2,
+  FAC_HARBOR_HYBRID_L3,
+  FAC_PRISON,
+} from './special';
 
 export const POWER_REACH = 3;
 export const WIRE_COST = 18;
@@ -21,7 +31,11 @@ export function facilityPowerDemand(kind: number): number {
   ][kind];
   if (demand !== undefined) return demand;
   if (kind === FAC_AIRPORT) return 750;
-  if (kind === FAC_HARBOR) return 450;
+  if (kind === FAC_AIRPORT_L2) return 1_500;
+  if (kind === FAC_AIRPORT_L3) return 3_200;
+  if (kind === FAC_HARBOR || kind === FAC_HARBOR_CARGO) return 450;
+  if (kind === FAC_HARBOR_HYBRID_L2) return 900;
+  if (kind === FAC_HARBOR_HYBRID_L3) return 1_800;
   if (kind === FAC_PRISON) return 260;
   return 100;
 }
