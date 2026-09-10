@@ -16,7 +16,7 @@ import { AMENITY_NEED_BY_TIER, FACILITY_NAMES } from '../sim/simConstants';
  */
 export function describeFacility(sim: MacroSim, tx: number, ty: number, kind: number): string {
   const spec = FACILITY_SPECS[kind];
-  const upkeep = `하루 ₩${spec.upkeepPerDay.toLocaleString('ko-KR')}`;
+  const upkeep = `하루 ₩${Math.round(sim.services.upkeepOfKind(kind)).toLocaleString('ko-KR')}`;
   if (POWER_SPECS[kind])
     return `${spec.name} · 발전 용량 ${POWER_SPECS[kind].capacity.toLocaleString('ko-KR')} · ${sim.power.supplyAt(tx, ty) > 0 ? '가동' : '가동 중지: 도로 확인'} · ${upkeep}`;
   if (WATER_SPECS[kind])
@@ -33,11 +33,12 @@ export function describeFacility(sim: MacroSim, tx: number, ty: number, kind: nu
 
   const load = Math.round(sim.services.loadOf(record.index));
   const unit = spec.capacityIsBuildings ? '건물' : '인구';
-  const over = load > spec.capacity ? ' — 과부하' : '';
+  const capacity = sim.services.capacityOfKind(kind);
+  const over = load > capacity ? ' — 과부하' : '';
   const dead = spec.needsRoad && !record.hasRoad ? ' · 도로 미연결(담당 없음)' : '';
   return (
     `${spec.name} · 반경 ${spec.range}칸(도로) · ` +
-    `담당 ${unit} ${load.toLocaleString('ko-KR')}/${spec.capacity.toLocaleString('ko-KR')}${over} · ` +
+    `담당 ${unit} ${load.toLocaleString('ko-KR')}/${Math.round(capacity).toLocaleString('ko-KR')}${over} · 품질 ${Math.round(sim.services.qualityOf(record.index) * 100)}% · ` +
     `${upkeep}${dead}`
   );
 }
@@ -55,6 +56,9 @@ export function describeService(
   const span = here && here.kind === null ? here.span : 1;
 
   const parts: string[] = [];
+  parts.push(
+    `쓰레기 ${Math.round(sim.services.qualityAt(bx, by, span, 14) * 100)}% · 장의 ${Math.round(sim.services.qualityAt(bx, by, span, 15) * 100)}% (주거)`,
+  );
   for (let kind = 0; kind < SERVICE_KIND_COUNT; kind++) {
     const owner = sim.services.ownerFor(bx, by, span, kind);
     if (owner < 0) {

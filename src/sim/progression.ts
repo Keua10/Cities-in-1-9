@@ -8,13 +8,13 @@ export const CITY_LEVELS = [
     points: 0,
     name: '마을',
     maxBuildingTier: 1,
-    unlock: '저소득 · 기본 시설 · 지하수 펌프 · 직접 방류구 · 풍력',
+    unlock: '저소득 · 기본 시설 · 지하수 펌프 · 직접 방류구 · 풍력 · 소각시설 · 공동묘지',
   },
   {
     points: 100,
     name: '소도시',
     maxBuildingTier: 2,
-    unlock: '중산층 건물 · 공원 · 하천 취수장 · 가스 발전',
+    unlock: '중산층 건물 · 공원 · 하천 취수장 · 가스 발전 · 화장시설',
   },
   {
     points: 500,
@@ -28,7 +28,9 @@ export const CITY_LEVELS = [
 
 export const BUILDING_UNLOCK_LEVEL = [1, 2, 4] as const;
 /** 기본 안전·교육 시설은 시작부터 제공해 성장에 필요한 서비스를 막지 않는다. */
-export const FACILITY_UNLOCK_LEVEL: readonly number[] = [1, 1, 1, 1, 1, 2, 3, 1, 2, 1, 3, 1, 2, 3];
+export const FACILITY_UNLOCK_LEVEL: readonly number[] = [
+  1, 1, 1, 1, 1, 2, 3, 1, 2, 1, 3, 1, 2, 3, 1, 2, 1,
+];
 
 export function normalizeProsperity(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value)

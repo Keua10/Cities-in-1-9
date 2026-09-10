@@ -26,6 +26,8 @@ import { growParcel, type GrowthContext } from './growth';
 import { RoadField } from './roadGraph';
 import { WaterField } from './water';
 import { PowerField } from './power';
+import { normalizePolicies, taxRate, taxSatisfactionPenalty, type CityPolicies } from './policies';
+import { FAC_INCINERATOR, FAC_CREMATORIUM } from './config/sanitation';
 import { WATER_GRACE_DAYS, WATER_RAMP_DAYS } from './config/water';
 import {
   CITY_LEVELS,
@@ -90,6 +92,7 @@ export { graceFactor } from './satisfaction';
  */
 
 export class MacroSim {
+  sanitation = { waste: 1, funeral: 1 };
   /** [zone][tier] 수요. -1 ~ +1. */
   demand: number[][] = zeroDemand();
   stats: CityStats = {
@@ -149,6 +152,8 @@ export class MacroSim {
     this.disasters = new DisasterSim(macro.disasters, macro.tick);
     this.water.power = this.power;
     this.services.power = this.power;
+    this.macro.policies = normalizePolicies(macro.policies);
+    this.services.budget = this.macro.policies.serviceBudget / 100;
   }
 
   /** STEP 3.2 파생 레이어를 연결한다. 저장 상태에는 포함하지 않는다. */
@@ -167,6 +172,44 @@ export class MacroSim {
 
   get money(): number {
     return this.macro.money;
+  }
+
+  get policies(): CityPolicies {
+    return normalizePolicies(this.macro.policies);
+  }
+
+  setPolicies(patch: Partial<CityPolicies>): void {
+    this.macro.policies = normalizePolicies({ ...this.policies, ...patch });
+    this.services.budget = this.macro.policies.serviceBudget / 100;
+    this.onMacroChange?.();
+  }
+
+  get sanitationGraceDaysLeft(): number {
+    return Math.max(
+      0,
+      30 - Math.floor((this.tick - (this.macro.sanitationStartTick ?? this.tick)) / TICKS_PER_DAY),
+    );
+  }
+
+  financeEstimate(): { income: number; upkeep: number } {
+    let income = 0;
+    const policies = this.policies;
+    for (let t = 0; t < LEVEL_COUNT; t++) {
+      income +=
+        this.stats.tiers[ZONE_R][t].filled * TAX_PER_RESIDENT[t] * (taxRate(policies, ZONE_R) / 9);
+      income +=
+        this.stats.tiers[ZONE_C][t].filled * TAX_PER_JOB[t] * (taxRate(policies, ZONE_C) / 9);
+      income +=
+        this.stats.tiers[ZONE_I][t].filled * TAX_PER_JOB[t] * (taxRate(policies, ZONE_I) / 9);
+    }
+    return {
+      income,
+      upkeep:
+        this.stats.roads * UPKEEP_ROAD_PER_DAY +
+        this.services.dailyUpkeep() +
+        this.water.upkeep +
+        this.power.upkeep,
+    };
   }
 
   get prosperity(): number {
@@ -221,6 +264,14 @@ export class MacroSim {
    * "아무도 없으면 시간이 느려지다가 멈춘다" 는 설계가 이 두 줄이다.
    */
   primeCatchup(nowMs: number): void {
+    if (
+      !Number.isFinite(this.macro.sanitationStartTick) ||
+      this.macro.sanitationStartTick! < 0 ||
+      this.macro.sanitationStartTick! > this.tick
+    ) {
+      this.macro.sanitationStartTick = this.tick;
+      this.onMacroChange?.();
+    }
     if (
       !Number.isFinite(this.macro.powerStartTick) ||
       this.macro.powerStartTick! < 0 ||
@@ -393,6 +444,14 @@ export class MacroSim {
     let stranded = 0;
     let capacityTotal = 0;
     let filledTotal = 0;
+    let wasteServed = 0,
+      wasteDemand = 0,
+      funeralServed = 0,
+      funeralDemand = 0;
+    const policies = this.policies;
+    const sanitationAge =
+      (this.tick - (this.macro.sanitationStartTick ?? this.tick)) / TICKS_PER_DAY;
+    const sanitationRamp = Math.max(0, Math.min(1, (sanitationAge - 30) / 30));
 
     /*
      * 3.3단계 유예.
@@ -498,7 +557,16 @@ export class MacroSim {
             Math.max(0, Math.min(1, (powerAge - 30) / 30));
           const needsGap = Math.min(
             NEEDS_PENALTY_MAX,
-            serviceGap + amenityGap + waterGap + powerGap,
+            serviceGap +
+              amenityGap +
+              waterGap +
+              powerGap +
+              (0.15 * (1 - this.services.qualityAt(tx, ty, level, FAC_INCINERATOR)) +
+                (zone === ZONE_R
+                  ? 0.1 * (1 - this.services.qualityAt(tx, ty, level, FAC_CREMATORIUM))
+                  : 0)) *
+                grace *
+                sanitationRamp,
           );
 
           const incidentPenalty = this.disasters.penaltyAt(tx, ty);
@@ -507,8 +575,12 @@ export class MacroSim {
               ? 0
               : Math.max(
                   0,
-                  satisfaction(zone, dist, nui, congestion, needsGap, amenityBonus) -
-                    incidentPenalty,
+                  Math.min(
+                    1,
+                    satisfaction(zone, dist, nui, congestion, needsGap, amenityBonus) -
+                      incidentPenalty -
+                      taxSatisfactionPenalty(policies, zone),
+                  ),
                 );
           const floor = SATISFACTION_FLOOR[level - 1];
           const target = sat <= floor ? 0 : Math.min(1, (sat - floor) / Math.max(0.05, 1 - floor));
@@ -518,6 +590,13 @@ export class MacroSim {
           occArr[i] = Math.round(Math.max(0, Math.min(1, target)) * 255);
 
           const cap = capacityOf(zone, level);
+          wasteDemand += cap;
+          wasteServed += cap * this.services.qualityAt(tx, ty, level, FAC_INCINERATOR);
+          if (zone === ZONE_R) {
+            funeralDemand += cap;
+            funeralServed += cap * this.services.qualityAt(tx, ty, level, FAC_CREMATORIUM);
+          }
+          this.services.accrueSanitation(tx, ty, level, cap, zone === ZONE_R);
           const filled = cap * (occArr[i] / 255);
           // 입주율이 확정된 뒤 이번 부하를 적립한다. **다음 평가가 쓸 값** 이다.
           this.services.accrueLoad(tx, ty, level, filled);
@@ -532,6 +611,10 @@ export class MacroSim {
     // 적립된 부하로 품질을 확정하고 카운터를 비운다. 도시를 두 바퀴 도는 것보다
     // 싸고, 결정론은 깨지지 않는다 — 부하 초기값은 항상 0 이고 저장하지 않는다.
     this.services.settleLoads();
+    this.sanitation = {
+      waste: wasteDemand ? wasteServed / wasteDemand : 1,
+      funeral: funeralDemand ? funeralServed / funeralDemand : 1,
+    };
 
     let population = 0;
     let jobs = 0;
@@ -682,20 +765,10 @@ export class MacroSim {
   /* ---------------- 돈 ---------------- */
 
   private settleFinance(): void {
-    let income = 0;
-    for (let t = 0; t < LEVEL_COUNT; t++) {
-      income += this.stats.tiers[ZONE_R][t].filled * TAX_PER_RESIDENT[t];
-      income +=
-        (this.stats.tiers[ZONE_C][t].filled + this.stats.tiers[ZONE_I][t].filled) * TAX_PER_JOB[t];
-    }
+    const { income, upkeep } = this.financeEstimate();
     // 3.3단계: 시설 유지비가 붙는다. **도로가 끊겨 죽은 시설도 유지비를 낸다.**
     // 실제로 그렇고, 학생에게 도로 철거의 대가를 알려주는 신호이기도 하다.
     const facilityUpkeep = this.services.dailyUpkeep();
-    const upkeep =
-      this.stats.roads * UPKEEP_ROAD_PER_DAY +
-      facilityUpkeep +
-      this.water.upkeep +
-      this.power.upkeep;
     this.stats.dailyIncome = income;
     this.stats.dailyUpkeep = upkeep;
     this.stats.facilityUpkeep = facilityUpkeep;
@@ -723,6 +796,9 @@ export class MacroSim {
     delete this.macro.prosperity;
     delete this.macro.waterStartTick;
     delete this.macro.powerStartTick;
+    delete this.macro.sanitationStartTick;
+    delete this.macro.policies;
+    this.services.budget = 1;
     this.onMacroChange?.();
   }
 

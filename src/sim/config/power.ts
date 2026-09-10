@@ -12,5 +12,5 @@ export const POWER_SPECS: Readonly<Record<number, { capacity: number }>> = {
 /** parks do not conduct electricity; other civic buildings have a fixed demand. */
 export function facilityPowerDemand(kind: number): number {
   if (POWER_SPECS[kind] || kind === 4 || kind === 5) return 0;
-  return [80, 80, 200, 120, 0, 0, 100, 120, 300, 80, 200][kind] ?? 100;
+  return [80, 80, 200, 120, 0, 0, 100, 120, 300, 80, 200, 0, 0, 0, 250, 100, 20][kind] ?? 100;
 }

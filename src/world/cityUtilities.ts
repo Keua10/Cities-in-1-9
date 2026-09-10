@@ -9,6 +9,7 @@ import {
 } from '../sim/buildings';
 import { FAC_GAS, facilityPowerDemand } from '../sim/config/power';
 import { FAC_GROUNDWATER, FAC_TREATMENT } from '../sim/config/water';
+import { FAC_INCINERATOR, FAC_CREMATORIUM, FAC_CEMETERY } from '../sim/config/sanitation';
 import {
   canPlaceFacility,
   FACILITY_SPECS,
@@ -40,6 +41,9 @@ export function seedCityUtilities(world: World, bornDay: number): void {
     1,
     Math.ceil(
       ((demand +
+        9 * facilityPowerDemand(FAC_INCINERATOR) +
+        5 * facilityPowerDemand(FAC_CREMATORIUM) +
+        4 * facilityPowerDemand(FAC_CEMETERY) +
         civicDemand +
         waterCount * facilityPowerDemand(FAC_GROUNDWATER) +
         sewerCount * facilityPowerDemand(FAC_TREATMENT)) *
@@ -85,10 +89,18 @@ export function seedCityUtilities(world: World, bornDay: number): void {
       }
     return true;
   };
-  const install = (kind: number, count: number): void => {
+  const install = (kind: number, count: number, near?: [number, number]): void => {
     let installed = 0;
     const span = FACILITY_SPECS[kind].span;
-    for (const [x, y] of candidates) {
+    const ordered = near
+      ? [...candidates].sort(
+          (a, b) =>
+            Math.abs(a[0] - near[0]) +
+            Math.abs(a[1] - near[1]) -
+            (Math.abs(b[0] - near[0]) + Math.abs(b[1] - near[1])),
+        )
+      : candidates;
+    for (const [x, y] of ordered) {
       if (installed >= count) break;
       if (!plotFits(x, y, span)) continue;
       let outlet: [number, number] | undefined;
@@ -111,6 +123,12 @@ export function seedCityUtilities(world: World, bornDay: number): void {
     if (installed < count)
       throw new Error(`생성 도시 ${FACILITY_SPECS[kind].name} 부지가 부족합니다`);
   };
+  const neighborhoods = [0.2, 0.5, 0.8].flatMap((fy) => [0.2, 0.5, 0.8].map((fx) => [fx, fy]));
+  for (const [i, [fx, fy]] of neighborhoods.entries()) {
+    const near: [number, number] = [ox + Math.floor(size * fx), oy + Math.floor(size * fy)];
+    install(FAC_INCINERATOR, 1, near);
+    install(i % 2 ? FAC_CEMETERY : FAC_CREMATORIUM, 1, near);
+  }
   install(FAC_TREATMENT, sewerCount);
   install(FAC_GAS, powerCount);
   install(FAC_GROUNDWATER, waterCount);

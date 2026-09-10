@@ -341,6 +341,9 @@ canvas {
  * 저장 배지 바로 아래에 붙인다.
  */
 #city-panel {
+  max-height: calc(100dvh - 110px - var(--safe-top));
+  overflow-y: auto;
+  overscroll-behavior: contain;
   position: fixed;
   top: calc(46px + var(--safe-top));
   right: 10px;
@@ -352,7 +355,35 @@ canvas {
   background: var(--panel);
   backdrop-filter: blur(6px);
   font-variant-numeric: tabular-nums;
-  pointer-events: none;
+  pointer-events: auto;
+}
+
+.cp-policies {
+  margin: 8px 0;
+  font-size: 11px;
+}
+.cp-policies summary {
+  cursor: pointer;
+  color: #c9def1;
+}
+.cp-policies p {
+  color: var(--ink-dim);
+  line-height: 1.5;
+}
+.cp-policy {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px;
+  margin: 10px 0;
+}
+.cp-policy input {
+  grid-column: 1 / -1;
+  width: 100%;
+  margin: 0;
+}
+.cp-policy-reset {
+  font-size: 11px;
+  padding: 5px 8px;
 }
 
 .cp-top {

@@ -11,6 +11,13 @@ import {
 import { FACILITY_SPECS, touchesRoadTiles } from './facilities';
 import { edgeNeighbors } from './roadGraph';
 import { AMENITY_SCORE_SCALE, OVERLOAD_SLOPE, SERVICE_FIELD_MAX_DIST } from './simConstants';
+import {
+  FAC_INCINERATOR,
+  FAC_CREMATORIUM,
+  ROAD_SERVICE_KINDS,
+  serviceChannel,
+  usesServiceBudget,
+} from './config/sanitation';
 
 /**
  * 3.3단계의 심장. **한 클래스가 두 가족을 모두 들고 있다.**
@@ -80,6 +87,7 @@ interface CoverageChunk {
 }
 
 export class ServiceField {
+  budget = 1;
   power: { supplyAt(x: number, y: number): number } | null = null;
   private chunks = new Map<string, CoverageChunk>();
   /** 이번 rebuild 에 잡힌 시설 전부. 번호가 곧 owner 값이다. */
@@ -116,7 +124,7 @@ export class ServiceField {
   /** 하루 시설 유지비 합계. 도로가 끊겨 죽은 시설도 낸다 — 실제로 그렇다. */
   dailyUpkeep(): number {
     let sum = 0;
-    for (const f of this.facilities) sum += FACILITY_SPECS[f.kind].upkeepPerDay;
+    for (const f of this.facilities) sum += this.upkeepOfKind(f.kind);
     return sum;
   }
 
@@ -126,7 +134,7 @@ export class ServiceField {
     for (const f of this.facilities) {
       const spec = FACILITY_SPECS[f.kind];
       if (spec.welfare || spec.capacity <= 0) continue;
-      if (this.load[f.index] / spec.capacity > 1) n++;
+      if (this.load[f.index] / this.capacityOfKind(f.kind) > 1) n++;
     }
     return n;
   }
@@ -146,7 +154,38 @@ export class ServiceField {
 
   qualityOf(index: number): number {
     const f = this.facilities[index];
-    return f ? this.quality[index] * (this.power?.supplyAt(f.tx, f.ty) ?? 1) : 0;
+    if (!f || (FACILITY_SPECS[f.kind].needsRoad && !f.hasRoad)) return 0;
+    const capacity = this.capacityOfKind(f.kind);
+    const quality =
+      capacity > 0
+        ? clamp01(1 - Math.max(0, this.load[index] / capacity - 1) * OVERLOAD_SLOPE)
+        : this.quality[index];
+    return (
+      quality *
+      (usesServiceBudget(f.kind) ? Math.min(1, this.budget) : 1) *
+      (this.power?.supplyAt(f.tx, f.ty) ?? 1)
+    );
+  }
+
+  capacityOfKind(kind: number): number {
+    return FACILITY_SPECS[kind].capacity * (usesServiceBudget(kind) ? this.budget : 1);
+  }
+
+  upkeepOfKind(kind: number): number {
+    return FACILITY_SPECS[kind].upkeepPerDay * (usesServiceBudget(kind) ? this.budget : 1);
+  }
+
+  accrueSanitation(
+    tx: number,
+    ty: number,
+    span: number,
+    demand: number,
+    residential: boolean,
+  ): void {
+    for (const channel of [FAC_INCINERATOR, ...(residential ? [FAC_CREMATORIUM] : [])]) {
+      const owner = this.ownerFor(tx, ty, span, channel);
+      if (owner >= 0) this.pending[owner] += demand;
+    }
   }
 
   /* ---------------- 5.2 건물이 자기 담당 시설을 찾는 법 ---------------- */
@@ -159,6 +198,7 @@ export class ServiceField {
    * (복지는 반대로 footprint 안 칸들의 평균을 쓴다. 두 규칙이 다른 것은 의도된 것이다.)
    */
   ownerFor(tx: number, ty: number, span: number, kind: number): number {
+    kind = serviceChannel(kind);
     let best = SERVICE_DIST_NONE;
     let owner = -1;
     for (const [rx, ry] of edgeNeighbors(tx, ty, span)) {
@@ -175,6 +215,7 @@ export class ServiceField {
   }
 
   distFor(tx: number, ty: number, span: number, kind: number): number {
+    kind = serviceChannel(kind);
     let best = SERVICE_DIST_NONE;
     for (const [rx, ry] of edgeNeighbors(tx, ty, span)) {
       const c = this.chunks.get(chunkKey(chunkIndexOf(rx), chunkIndexOf(ry)));
@@ -377,8 +418,10 @@ export class ServiceField {
     for (const p of parcels) {
       const dist: (Uint8Array | null)[] = [];
       const owner: (Uint16Array | null)[] = [];
-      for (let kind = 0; kind < SERVICE_KIND_COUNT; kind++) {
-        if (!kindUsed[kind]) {
+      for (let kind = 0; kind < FACILITY_COUNT; kind++) {
+        if (
+          !this.facilities.some((f) => serviceChannel(f.kind) === kind && usesServiceBudget(f.kind))
+        ) {
           dist.push(null);
           owner.push(null);
           continue;
@@ -406,7 +449,7 @@ export class ServiceField {
    * 같은 기존 상수와 감각이 맞는다.
    */
   private runCoverageBfs(world: World): void {
-    for (let kind = 0; kind < SERVICE_KIND_COUNT; kind++) {
+    for (const kind of ROAD_SERVICE_KINDS) {
       const spec = FACILITY_SPECS[kind];
       const maxDist = Math.min(spec.range, SERVICE_FIELD_MAX_DIST, SERVICE_DIST_NONE - 1);
 
@@ -414,7 +457,7 @@ export class ServiceField {
       // 시설 목록 순서대로 넣으므로 동률에서 항상 같은 쪽이 이긴다.
       let queue: number[] = [];
       for (const f of this.facilities) {
-        if (f.kind !== kind) continue;
+        if (serviceChannel(f.kind) !== kind) continue;
         for (const [rx, ry] of edgeNeighbors(f.tx, f.ty, f.span)) {
           if (world.getBuild(rx, ry) !== Build.Road) continue;
           if (this.write(rx, ry, kind, 0, f.index)) queue.push(rx, ry);

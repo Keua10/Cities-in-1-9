@@ -399,7 +399,10 @@ console.log('2. 격리 — isAnchor 를 안 고쳤는가');
   }
   check('5 isAnchor(9)~isAnchor(15) 가 전부 false', anchorsClean);
   check('5 isFacilityAnchor(9)~(15) 가 전부 true', facilityAnchors);
-  check('5 isFacilityAnchor(8) 과 (16) 은 false', !isFacilityAnchor(8) && !isFacilityAnchor(16));
+  check(
+    '5 시설 코드 범위 밖은 false',
+    !isFacilityAnchor(FAC_BASE - 1) && !isFacilityAnchor(FAC_BASE + FACILITY_SPECS.length),
+  );
 }
 
 {

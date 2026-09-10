@@ -455,11 +455,12 @@ function buildFacilitySheet(tools: Tools, onPick: () => void): FacilitySheet {
     ['복지 시설', []],
     ['상하수도 시설', []],
     ['발전 시설', []],
+    ['위생·장의 시설', []],
   ];
   for (let kind = 0; kind < FACILITY_COUNT; kind++) {
-    groups[POWER_SPECS[kind] ? 3 : WATER_SPECS[kind] ? 2 : isWelfareKind(kind) ? 1 : 0][1].push(
-      kind,
-    );
+    groups[
+      kind >= 14 ? 4 : POWER_SPECS[kind] ? 3 : WATER_SPECS[kind] ? 2 : isWelfareKind(kind) ? 1 : 0
+    ][1].push(kind);
   }
 
   const buttons: Array<[HTMLButtonElement, number]> = [];
@@ -485,6 +486,8 @@ function buildFacilitySheet(tools: Tools, onPick: () => void): FacilitySheet {
         `<s>₩${spec.cost.toLocaleString('ko-KR')} · 하루 ₩${spec.upkeepPerDay.toLocaleString('ko-KR')}</s>` +
         `<small>도시 레벨 ${spec.unlockLevel}부터</small>`;
       const water = WATER_SPECS[kind];
+      if (kind >= 14)
+        btn.innerHTML += `<small>도로 ${spec.range}칸 · 담당 정원 ${spec.capacity.toLocaleString('ko-KR')} · 전력 필요</small><small>${kind === 14 ? '모든 구역의 쓰레기를 소각 처리' : '주거 장의 수요 담당 · 화장·묘지 중 가까운 시설 배정'}</small>`;
       if (POWER_SPECS[kind])
         btn.innerHTML += `<small>발전 용량 ${POWER_SPECS[kind].capacity.toLocaleString('ko-KR')} · 도로 필요</small>`;
       if (water)

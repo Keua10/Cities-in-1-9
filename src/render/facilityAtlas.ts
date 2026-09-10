@@ -15,7 +15,7 @@ import { FACILITY_SPECS } from '../sim/facilities';
  * ---------------------------------------------------------------
  *
  *   파일: public/sprites/facilities.png
- *   원본: 576 x 384 (기존 7종). 런타임은 1152 x 384로 확장해 상하수도 4종과 발전소 3종을 더한다.
+ *   원본: 576 x 384 (기존 7종). 런타임은 1536 x 384로 확장해 기반시설 10종을 더한다.
  *
  *   밴드 span1  y   0 ~  63   셀  64x64    x: 0=소공원
  *   밴드 span2  y  64 ~ 191   셀 128x128   x: 0=소방서, 1=경찰서, 2=공원
@@ -64,6 +64,9 @@ export const FACILITY_ATLAS_COLUMN: readonly number[] = [
   6, // 11 풍력 span2
   4, // 12 가스 span3
   5, // 13 태양광 span3
+  6, // 14 소각시설 span3
+  7, // 15 화장시설 span2
+  7, // 16 공동묘지 span3
 ];
 
 /** 각 밴드의 열 수. 가장 넓은 밴드가 아틀라스 폭을 정한다. */
@@ -108,6 +111,7 @@ export async function loadFacilityAtlas(): Promise<FacilityAtlas> {
   // 기존 7종 아트는 원본 위치를 보존하고, 새 시설은 빈 열에 코드로 그린다.
   drawWaterFacilities(ctx);
   drawPowerFacilities(ctx);
+  drawSanitationFacilities(ctx);
 
   const texture = Texture.from(canvas);
   texture.source.scaleMode = 'nearest';
@@ -223,7 +227,7 @@ export function drawWaterFacilities(ctx: CanvasRenderingContext2D): void {
 }
 
 export function drawPowerFacilities(ctx: CanvasRenderingContext2D): void {
-  for (let kind = 11; kind < FACILITY_COUNT; kind++) {
+  for (let kind = 11; kind < 14; kind++) {
     const size = facilityCellSize(FACILITY_SPECS[kind].span),
       ox = FACILITY_ATLAS_COLUMN[kind] * size,
       oy = facilityBandY(FACILITY_SPECS[kind].span);
@@ -275,6 +279,57 @@ export function drawPowerFacilities(ctx: CanvasRenderingContext2D): void {
             size * 0.07,
           );
         }
+    }
+  }
+}
+
+export function drawSanitationFacilities(ctx: CanvasRenderingContext2D): void {
+  for (let kind = 14; kind <= 16; kind++) {
+    const size = facilityCellSize(FACILITY_SPECS[kind].span);
+    const ox = FACILITY_ATLAS_COLUMN[kind] * size,
+      oy = facilityBandY(FACILITY_SPECS[kind].span);
+    const cemetery = kind === 16;
+    drawFacility(
+      ctx,
+      ox,
+      oy,
+      size,
+      size / 2,
+      size * (cemetery ? 0.015 : 0.16),
+      cemetery
+        ? ['#608c5a', '#496f46', '#365735']
+        : kind === 14
+          ? ['#ad9271', '#826a50', '#635342']
+          : ['#c6b7a0', '#988978', '#736658'],
+      cemetery,
+    );
+    if (cemetery) {
+      for (let row = 0; row < 3; row++)
+        for (let col = 0; col < 4; col++) {
+          const x = ox + size * (0.3 + col * 0.1 + row * 0.025);
+          const y = oy + size * (0.61 + row * 0.065);
+          ctx.fillStyle = '#374c39';
+          ctx.fillRect(x - 1, y + size * 0.02, size * 0.065, size * 0.025);
+          ctx.fillStyle = '#d1d0c3';
+          ctx.fillRect(x, y - size * 0.025, size * 0.04, size * 0.06);
+        }
+    } else {
+      ctx.fillStyle = kind === 14 ? '#71594b' : '#a39686';
+      ctx.fillRect(ox + size * 0.6, oy + size * 0.26, size * 0.07, size * 0.33);
+      ctx.fillStyle = '#44382f';
+      ctx.fillRect(ox + size * 0.59, oy + size * 0.25, size * 0.09, size * 0.025);
+      ctx.fillStyle = kind === 14 ? '#df8940' : '#e6d9c7';
+      ctx.fillRect(ox + size * 0.36, oy + size * 0.58, size * 0.1, size * 0.09);
+      if (kind === 14) {
+        ctx.fillStyle = '#65866a';
+        for (let i = 0; i < 3; i++)
+          ctx.fillRect(
+            ox + size * (0.23 + i * 0.075),
+            oy + size * 0.75,
+            size * 0.055,
+            size * 0.055,
+          );
+      }
     }
   }
 }

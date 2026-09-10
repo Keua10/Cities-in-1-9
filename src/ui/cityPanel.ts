@@ -3,6 +3,7 @@ import type { MacroSim } from '../sim/macro';
 import { BUILDING_UNLOCK_LEVEL, CITY_LEVELS } from '../sim/progression';
 import { SERVICE_KIND_COUNT } from '../sim/services';
 import { FACILITY_NAMES, TICKS_PER_DAY } from '../sim/simConstants';
+import { DEFAULT_POLICIES, type CityPolicies } from '../sim/policies';
 
 /**
  * 학생이 보는 도시 상태판.
@@ -16,6 +17,7 @@ import { FACILITY_NAMES, TICKS_PER_DAY } from '../sim/simConstants';
  *   2) 수요 막대는 CSS 변수로 폭만 바꾼다. DOM 을 새로 만들지 않는다.
  */
 export class CityPanel {
+  private sim: MacroSim | null = null;
   onIncidentFocus: (() => void) | null = null;
   private safetyEl: HTMLElement;
   private safetyNoteEl: HTMLElement;
@@ -47,6 +49,16 @@ export class CityPanel {
     if (!el) throw new Error(`도시 상태판을 찾을 수 없습니다: ${selector}`);
     this.root = el;
     this.root.innerHTML = template();
+    for (const input of el.querySelectorAll<HTMLInputElement>('[data-policy]')) {
+      input.addEventListener('input', () => {
+        this.sim?.setPolicies({ [input.dataset.policy!]: Number(input.value) });
+        this.updatePolicies();
+      });
+    }
+    must(el, '.cp-policy-reset').addEventListener('click', () => {
+      this.sim?.setPolicies(DEFAULT_POLICIES);
+      this.updatePolicies();
+    });
     this.safetyEl = must(el, '.cp-safety-counts');
     this.safetyNoteEl = must(el, '.cp-safety-note');
     this.incidentButton = must(el, '.cp-incident-focus') as HTMLButtonElement;
@@ -56,7 +68,7 @@ export class CityPanel {
     this.levelEl = must(el, '.cp-city-level');
     this.prosperityEl = must(el, '.cp-prosperity');
     this.unlockEl = must(el, '.cp-unlock');
-    this.waterEl = must(el, '.cp-water');
+    this.waterEl = must(el, '.cp-water-status');
     this.powerEl = must(el, '.cp-power');
     this.popEl = must(el, '.cp-pop');
     this.dateEl = must(el, '.cp-date');
@@ -82,8 +94,18 @@ export class CityPanel {
   }
 
   update(now: number, sim: MacroSim): void {
+    this.sim = sim;
     if (now - this.lastPaint < 250) return;
     this.lastPaint = now;
+    this.updatePolicies();
+    setText(
+      must(this.root, '.cp-sanitation'),
+      `쓰레기 처리 ${Math.round(sim.sanitation.waste * 100)}% · 장의 서비스 ${Math.round(sim.sanitation.funeral * 100)}%\n` +
+        '소각시설은 모든 구역, 화장시설·공동묘지는 주거 담당' +
+        (sim.sanitationGraceDaysLeft > 0
+          ? `\n부족 감점 유예 ${sim.sanitationGraceDaysLeft}일 남음`
+          : ''),
+    );
 
     setText(this.moneyEl, formatMoney(sim.money));
     this.moneyEl.classList.toggle('broke', sim.money <= 0);
@@ -162,6 +184,21 @@ export class CityPanel {
     );
     this.updateSafety(sim);
     setText(this.noteEl, describe(sim));
+  }
+
+  private updatePolicies(): void {
+    if (!this.sim) return;
+    const policies = this.sim.policies;
+    for (const input of this.root.querySelectorAll<HTMLInputElement>('[data-policy]')) {
+      const key = input.dataset.policy as keyof CityPolicies;
+      if (document.activeElement !== input) input.value = String(policies[key]);
+      setText(must(this.root, `[data-policy-value="${key}"]`), `${policies[key]}%`);
+    }
+    const { income, upkeep } = this.sim.financeEstimate();
+    setText(
+      must(this.root, '.cp-finance'),
+      `하루 예상 세입 ${formatMoney(income)} · 지출 ${formatMoney(upkeep)}\n수지 ${formatMoney(income - upkeep)} (현재 입주 기준)`,
+    );
   }
 
   private updateSafety(sim: MacroSim): void {
@@ -275,6 +312,14 @@ function template(): string {
       </div>
     </div>
     <div class="cp-progression">
+      <details class="cp-policies">
+        <summary>세율·서비스 예산</summary>
+        ${policyControls()}
+        <p>세율을 올리면 세입은 늘고 해당 구역의 입주 만족도는 낮아집니다. 기준 세율은 9%입니다.</p>
+        <p>서비스 예산은 소방·경찰·병원·학교·위생·장의 시설의 유지비와 처리 능력에 적용됩니다. 전기·수도·공원은 별도입니다.</p>
+        <button type="button" class="cp-policy-reset">기본 정책 복원</button>
+      </details>
+      <div class="cp-finance cp-water" aria-live="polite"></div>
       <b class="cp-city-level" role="status">도시 Lv.1 · 마을</b>
       <div class="cp-prosperity">번영도 0 / 100</div>
       <div class="cp-unlock"></div>
@@ -296,9 +341,11 @@ function template(): string {
     </div>
     <div class="cp-facility-note"></div>
     <div class="cp-section-title">상하수도</div>
-    <div class="cp-water"></div>
+    <div class="cp-water cp-water-status"></div>
     <div class="cp-section-title">전기</div>
     <div class="cp-power cp-water"></div>
+    <div class="cp-section-title">위생·장의</div>
+    <div class="cp-sanitation cp-water"></div>
     <div class="cp-safety">
       <div class="cp-section-title">도시 안전 <button class="cp-incident-focus" type="button" disabled>사건 위치 보기</button></div>
       <div class="cp-safety-counts" role="status" aria-live="polite">화재 0 · 범죄 0 · 질병 0</div>
@@ -313,6 +360,15 @@ function template(): string {
  *
  * **복지도 커버율과 같은 무게로 보여준다.** 게이지 하나가 덜 중요해 보이면 안 된다.
  */
+function policyControls(): string {
+  return (['taxR', 'taxC', 'taxI', 'serviceBudget'] as const)
+    .map(
+      (key, i) =>
+        `<label class="cp-policy"><span>${['주거 세율', '상업 세율', '공업 세율', '서비스 예산'][i]}</span><b data-policy-value="${key}">${DEFAULT_POLICIES[key]}%</b><input aria-label="${['주거 세율', '상업 세율', '공업 세율', '서비스 예산'][i]}" data-policy="${key}" type="range" min="${i === 3 ? 50 : 0}" max="${i === 3 ? 150 : 20}" step="1" value="${DEFAULT_POLICIES[key]}"></label>`,
+    )
+    .join('');
+}
+
 function gaugeRows(): string {
   const services = Array.from({ length: SERVICE_KIND_COUNT }, (_, kind) => {
     return gaugeRow('cp-svc', FACILITY_NAMES[kind], `data-kind="${kind}"`);

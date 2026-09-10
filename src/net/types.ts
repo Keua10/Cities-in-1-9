@@ -1,4 +1,5 @@
 import type { DisasterState } from '../sim/disasterTypes';
+import type { CityPolicies } from '../sim/policies';
 import { START_MONEY } from '../sim/simConstants';
 
 /**
@@ -29,6 +30,8 @@ import { START_MONEY } from '../sim/simConstants';
  * 사건 목록은 선택 필드이며 없는 저장본도 읽을 수 있어 SCHEMA_VERSION 은 그대로 둔다.
  */
 export interface MacroState {
+  policies?: CityPolicies;
+  sanitationStartTick?: number;
   powerStartTick?: number;
   /** STEP 4.2 부족 감점 유예 시작 틱. 접속 때마다 갱신하지 않는다. */
   waterStartTick?: number;

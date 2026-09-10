@@ -1,11 +1,11 @@
 /* ---------------- 3.3단계: 시설 ---------------- */
-/* 종류 수(FACILITY_COUNT = 14)와 복지 경계(FAC_WELFARE_BASE = 4)는 저장 코드 범위라서
+/* 종류 수(FACILITY_COUNT = 17)와 복지 경계(FAC_WELFARE_BASE = 4)는 저장 코드 범위라서
    buildings.ts 에 있다. 여기 있는 것은 전부 밸런스 값이고, 순서는
    [소방, 경찰, 병원, 학교, 소공원, 공원, 체육시설] 로 고정이다.
-   0~3 = 필수 서비스, 4~6 = 복지, 7~10 = 상하수도, 11~13 = 발전소.
+   0~3 = 필수 서비스, 4~6 = 복지, 7~10 = 상하수도, 11~13 = 발전소, 14~16 = 위생·장의.
    인프라 용량은 config/water.ts, config/power.ts에 있다. */
 
-export const FACILITY_SPAN: readonly number[] = [2, 2, 3, 3, 1, 2, 3, 2, 2, 2, 3, 2, 3, 3];
+export const FACILITY_SPAN: readonly number[] = [2, 2, 3, 3, 1, 2, 3, 2, 2, 2, 3, 2, 3, 3, 3, 2, 3];
 export const FACILITY_NAMES: readonly string[] = [
   '소방서',
   '경찰서',
@@ -21,6 +21,9 @@ export const FACILITY_NAMES: readonly string[] = [
   '풍력 발전소',
   '가스 발전소',
   '태양광 발전소',
+  '쓰레기 소각시설',
+  '화장시설',
+  '공동묘지',
 ];
 
 /**
@@ -32,6 +35,7 @@ export const FACILITY_NAMES: readonly string[] = [
  */
 export const FACILITY_COST: readonly number[] = [
   4_500, 4_000, 14_000, 10_000, 600, 4_600, 6_000, 3000, 8000, 2000, 12000, 5000, 18000, 22000,
+  10000, 6500, 3000,
 ];
 
 /**
@@ -47,7 +51,7 @@ export const FACILITY_COST: readonly number[] = [
  * 쓸 것인가)은 그대로 남기고, 도시를 목 조르던 고정비만 낮춘 것이다.
  */
 export const FACILITY_UPKEEP_PER_DAY: readonly number[] = [
-  170, 160, 360, 300, 15, 110, 135, 90, 180, 50, 240, 100, 650, 180,
+  170, 160, 360, 300, 15, 110, 135, 90, 180, 50, 240, 100, 650, 180, 280, 140, 70,
 ];
 
 /**
@@ -55,7 +59,9 @@ export const FACILITY_UPKEEP_PER_DAY: readonly number[] = [
  *   0~3 필수 서비스 — 도로 BFS 거리 상한(칸). 병원은 구급차라 길고, 학교는 걸어서 간다.
  *   4~6 복지       — 유클리드 거리(타일). 공원이 가장 넓다.
  */
-export const FACILITY_RANGE: readonly number[] = [40, 34, 55, 30, 8, 16, 14, 0, 0, 0, 0, 0, 0, 0];
+export const FACILITY_RANGE: readonly number[] = [
+  40, 34, 55, 30, 8, 16, 14, 0, 0, 0, 0, 0, 0, 0, 64, 64, 64,
+];
 
 /** 도로에 닿아야 놓을 수 있는가. 소공원만 false — 자투리땅용이다. */
 export const FACILITY_NEEDS_ROAD: readonly boolean[] = [
@@ -73,16 +79,22 @@ export const FACILITY_NEEDS_ROAD: readonly boolean[] = [
   true,
   true,
   true,
+  true,
+  true,
+  true,
 ];
 
-/* --- 필수 서비스(0~3)만 쓰는 값. 복지 자리는 0 이다. --- */
+/* --- 도로 서비스(0~3, 14~16)의 담당 용량. --- */
 
 /** 담당 한계. 소방서만 건물 수, 나머지는 인구. */
 export const FACILITY_CAPACITY: readonly number[] = [
-  220, 3_000, 5_000, 2_500, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  220, 3_000, 5_000, 2_500, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 10000, 6000, 5000,
 ];
 export const FACILITY_CAPACITY_IS_BUILDINGS: readonly boolean[] = [
   true,
+  false,
+  false,
+  false,
   false,
   false,
   false,
@@ -125,7 +137,7 @@ export const OVERLOAD_SLOPE = 0.8;
  * 이라는 2장의 세 줄이 그대로 거리로 나온다.
  */
 export const FACILITY_STRENGTH: readonly number[] = [
-  0, 0, 0, 0, 0.65, 1.5, 1.6, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0.65, 1.5, 1.6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 ];
 
 /** [kind][zone] 만족도 가중치. 합이 SERVICE_PENALTY_MAX 를 넘어도 된다(상한에서 잘린다). */
