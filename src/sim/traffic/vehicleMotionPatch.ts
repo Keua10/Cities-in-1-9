@@ -27,6 +27,8 @@ const ARRIVAL_STOP_OFFSET_TILES = 0.08;
 const ARRIVAL_DWELL_MS = 650;
 const ARRIVAL_POSITION_EPS = 0.003;
 const ARRIVAL_SPEED_EPS = 0.08;
+/** 서로 충돌 판정으로 동시에 frozen 된 차량을 같은 교착 쌍으로 보는 거리. */
+const DEADLOCK_PAIR_DIST_TILES = VEHICLE_BODY_LENGTH_TILES + DESIRED_GAP_TILES;
 
 interface MotionFrame {
   vehicle: Vehicle;
@@ -213,6 +215,11 @@ function moveVehiclesPatched(
   for (const f of frames) sim.project(f);
   sim.resolveOverlaps(frames);
 
+  // 동시에 서로를 frozen 시킨 가까운 두 차량은 둘 다 같은 양으로 물러나면
+  // 상대 위치가 거의 유지되어 교착이 반복될 수 있다. 한 쌍당 한 대만 양보자로
+  // 골라 비대칭으로 물러나게 하면 상대 차량이 빠져나갈 공간이 생긴다.
+  const deadlockYielders = selectDeadlockYielders(frames, sim.control);
+
   // 3) 반영.
   const remove = new Set<Vehicle>();
   for (const f of frames) {
@@ -223,11 +230,15 @@ function moveVehiclesPatched(
       vehicle.speed = 0;
       vehicle.frozenMs += dtMs;
       if (vehicle.frozenMs > FREEZE_BREAK_MS) {
-        const back = Math.max(0, vehicle.routeIdx + vehicle.tileT - FREEZE_BACKOFF_TILES);
-        vehicle.routeIdx = Math.floor(back);
-        vehicle.tileT = back - vehicle.routeIdx;
-        const reserved = sim.control.reservationOf(vehicle);
-        if (reserved && vehicle.routeIdx < reserved.entryIndex) sim.control.release(vehicle);
+        const paired = hasFrozenPartner(frames, f);
+        // 교착 쌍에서는 선택된 한 대만 물러난다. 단독 frozen은 기존 동작 유지.
+        if (!paired || deadlockYielders.has(vehicle)) {
+          const back = Math.max(0, vehicle.routeIdx + vehicle.tileT - FREEZE_BACKOFF_TILES);
+          vehicle.routeIdx = Math.floor(back);
+          vehicle.tileT = back - vehicle.routeIdx;
+          const reserved = sim.control.reservationOf(vehicle);
+          if (reserved && vehicle.routeIdx < reserved.entryIndex) sim.control.release(vehicle);
+        }
       }
     } else {
       vehicle.frozenMs = 0;
@@ -309,6 +320,69 @@ function moveVehiclesPatched(
     for (const vehicle of remove) sim.control.release(vehicle);
     sim.vehicles = sim.vehicles.filter((vehicle) => !remove.has(vehicle));
   }
+}
+
+/** 가까운 frozen 차량이 있는지 확인한다. 같은 차선의 정상 신호대기는 frozen이 아니므로 여기 안 걸린다. */
+function hasFrozenPartner(frames: readonly MotionFrame[], self: MotionFrame): boolean {
+  if (!self.frozen) return false;
+  const maxD2 = DEADLOCK_PAIR_DIST_TILES * DEADLOCK_PAIR_DIST_TILES;
+  for (const other of frames) {
+    if (other === self || !other.frozen) continue;
+    const dx = other.x - self.x;
+    const dy = other.y - self.y;
+    if (dx * dx + dy * dy <= maxD2) return true;
+  }
+  return false;
+}
+
+/**
+ * 동시에 frozen 된 가까운 차량 쌍마다 한 대만 양보자로 고른다.
+ * 예약을 가진 차를 우선 통과시키고, 둘 다 같은 상태면 교차로 안쪽으로 더 진행한
+ * 차량을 우선한다. 끝까지 같으면 목적지 좌표로 결정적으로 타이브레이크한다.
+ */
+function selectDeadlockYielders(
+  frames: readonly MotionFrame[],
+  control: {
+    hasReservation(vehicle: Vehicle): boolean;
+  },
+): Set<Vehicle> {
+  const yielders = new Set<Vehicle>();
+  const maxD2 = DEADLOCK_PAIR_DIST_TILES * DEADLOCK_PAIR_DIST_TILES;
+
+  for (let i = 0; i < frames.length; i++) {
+    const a = frames[i];
+    if (!a.frozen) continue;
+    for (let j = i + 1; j < frames.length; j++) {
+      const b = frames[j];
+      if (!b.frozen) continue;
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      if (dx * dx + dy * dy > maxD2) continue;
+      yielders.add(deadlockLoser(a.vehicle, b.vehicle, control));
+    }
+  }
+  return yielders;
+}
+
+function deadlockLoser(
+  a: Vehicle,
+  b: Vehicle,
+  control: { hasReservation(vehicle: Vehicle): boolean },
+): Vehicle {
+  const ar = control.hasReservation(a);
+  const br = control.hasReservation(b);
+  if (ar !== br) return ar ? b : a;
+
+  const ap = a.routeIdx + a.tileT;
+  const bp = b.routeIdx + b.tileT;
+  if (Math.abs(ap - bp) > 0.02) return ap > bp ? b : a;
+
+  if (a.waitMs !== b.waitMs) return a.waitMs > b.waitMs ? b : a;
+
+  // 객체 배열 순서에 의존하지 않는 결정적 타이브레이크.
+  const ak = ((a.destTx * 73856093) ^ (a.destTy * 19349663) ^ (a.route.tiles.length * 83492791)) >>> 0;
+  const bk = ((b.destTx * 73856093) ^ (b.destTy * 19349663) ^ (b.route.tiles.length * 83492791)) >>> 0;
+  return ak <= bk ? b : a;
 }
 
 function tileAt(vehicle: Vehicle): [number, number] {
