@@ -16,6 +16,7 @@ import {
 import { Build, canPlaceRoad, DIRS } from './build';
 import { isWater } from './terrain';
 import type { World } from './world';
+import { seedCityUtilities } from './cityUtilities';
 
 /**
  * 테스트용 대도시 생성기.
@@ -106,7 +107,9 @@ export function seedCityIfEmpty(world: World, bornDay = 0): SeededCity | null {
 
 /** 조건 없이 새로 만든다. "맵 초기화" 버튼이 부른다. */
 export function generateCity(world: World, bornDay = 0): SeededCity | null {
-  return new CityBuilder(world, bornDay).run();
+  const center = new CityBuilder(world, bornDay).run();
+  if (center) seedCityUtilities(world, bornDay);
+  return center;
 }
 
 class CityBuilder {
@@ -714,7 +717,7 @@ class CityBuilder {
           if (!this.inside(nx, ny) || !this.inside(nx + span, ny + span)) continue;
           const tx = this.ox + nx;
           const ty = this.oy + ny;
-          if (!canPlaceFacility(this.world, tx, ty, kind).ok) continue;
+          if (!canPlaceFacility(this.world, tx, ty, kind, 5).ok) continue;
           this.world.placeFacility(tx, ty, kind, this.bornDay);
           return true;
         }

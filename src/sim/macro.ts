@@ -25,6 +25,7 @@ import { DisasterSim } from './disasters';
 import { growParcel, type GrowthContext } from './growth';
 import { RoadField } from './roadGraph';
 import { WaterField } from './water';
+import { PowerField } from './power';
 import { WATER_GRACE_DAYS, WATER_RAMP_DAYS } from './config/water';
 import {
   CITY_LEVELS,
@@ -111,6 +112,7 @@ export class MacroSim {
    */
   readonly services = new ServiceField();
   readonly water = new WaterField();
+  readonly power = new PowerField();
   readonly disasters: DisasterSim;
   private assignment: AssignmentTable | null = null;
   private congestion: CongestionMap | null = null;
@@ -145,6 +147,8 @@ export class MacroSim {
     private macro: MacroState,
   ) {
     this.disasters = new DisasterSim(macro.disasters, macro.tick);
+    this.water.power = this.power;
+    this.services.power = this.power;
   }
 
   /** STEP 3.2 파생 레이어를 연결한다. 저장 상태에는 포함하지 않는다. */
@@ -218,6 +222,15 @@ export class MacroSim {
    */
   primeCatchup(nowMs: number): void {
     if (
+      !Number.isFinite(this.macro.powerStartTick) ||
+      this.macro.powerStartTick! < 0 ||
+      this.macro.powerStartTick! > this.tick
+    ) {
+      this.macro.powerStartTick = this.tick;
+      this.onMacroChange?.();
+    }
+    this.power.ensure(this.world);
+    if (
       !Number.isFinite(this.macro.waterStartTick) ||
       this.macro.waterStartTick! < 0 ||
       this.macro.waterStartTick! > this.tick
@@ -248,6 +261,7 @@ export class MacroSim {
 
   /** 실시간 프레임에서 부른다. 지나간 만큼 틱을 돌린다. */
   update(deltaMs: number, budget: number): void {
+    this.power.ensure(this.world);
     this.water.ensure(this.world);
     if (this.catchupLeft > 0) {
       const n = Math.min(this.catchupLeft, budget);
@@ -272,6 +286,7 @@ export class MacroSim {
 
   private step(): void {
     this.macro.tick++;
+    this.power.ensure(this.world);
     this.water.ensure(this.world);
 
     if (
@@ -475,7 +490,16 @@ export class MacroSim {
               grace *
               this.waterPenaltyFactor +
             0.2 * water.contamination * water.supply;
-          const needsGap = Math.min(NEEDS_PENALTY_MAX, serviceGap + amenityGap + waterGap);
+          const powerAge = (this.tick - (this.macro.powerStartTick ?? this.tick)) / TICKS_PER_DAY;
+          const powerGap =
+            0.3 *
+            (1 - this.power.supplyAt(tx, ty)) *
+            grace *
+            Math.max(0, Math.min(1, (powerAge - 30) / 30));
+          const needsGap = Math.min(
+            NEEDS_PENALTY_MAX,
+            serviceGap + amenityGap + waterGap + powerGap,
+          );
 
           const incidentPenalty = this.disasters.penaltyAt(tx, ty);
           const sat =
@@ -667,7 +691,11 @@ export class MacroSim {
     // 3.3단계: 시설 유지비가 붙는다. **도로가 끊겨 죽은 시설도 유지비를 낸다.**
     // 실제로 그렇고, 학생에게 도로 철거의 대가를 알려주는 신호이기도 하다.
     const facilityUpkeep = this.services.dailyUpkeep();
-    const upkeep = this.stats.roads * UPKEEP_ROAD_PER_DAY + facilityUpkeep + this.water.upkeep;
+    const upkeep =
+      this.stats.roads * UPKEEP_ROAD_PER_DAY +
+      facilityUpkeep +
+      this.water.upkeep +
+      this.power.upkeep;
     this.stats.dailyIncome = income;
     this.stats.dailyUpkeep = upkeep;
     this.stats.facilityUpkeep = facilityUpkeep;
@@ -694,6 +722,7 @@ export class MacroSim {
     delete this.macro.disasters;
     delete this.macro.prosperity;
     delete this.macro.waterStartTick;
+    delete this.macro.powerStartTick;
     this.onMacroChange?.();
   }
 

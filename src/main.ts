@@ -143,6 +143,7 @@ async function boot(): Promise<void> {
   //    SaveManager 가 따로 옮겨 담을 필요 없이 저장에 그대로 실린다.
   const sim = new MacroSim(world, macro);
   renderer.waterField = sim.water;
+  renderer.powerField = sim.power;
   sim.onMacroChange = () => saver.noteMacroChange();
   const congestion = new CongestionMap();
   const assignment = new AssignmentTable();
@@ -261,7 +262,7 @@ async function boot(): Promise<void> {
     camera.applyTo(renderer.root);
     // 시설 도구를 든 동안 커서 아래 footprint 를 미리 보여준다.
     renderer.setFacilityPreview(cursor ? tools.facilityPreviewAt(cursor.tx, cursor.ty) : null);
-    renderer.waterVisible = tools.pipeView;
+    renderer.utilityMode = tools.utilityMode;
     setPedestrianRenderZoom(camera.zoom);
     renderer.update(camera, now);
     renderer.flush();

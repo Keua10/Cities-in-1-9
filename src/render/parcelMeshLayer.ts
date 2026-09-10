@@ -10,6 +10,12 @@ interface ParcelMesh {
 
 /** Revision-based lifetime shared by building and facility meshes. */
 export class ParcelMeshLayer {
+  private opacity = 1;
+  setOpacity(value: number): void {
+    if (value === this.opacity) return;
+    this.opacity = value;
+    for (const entry of this.meshes.values()) entry.mesh.alpha = value;
+  }
   private meshes = new Map<string, ParcelMesh>();
   private empty = new Map<string, { parcel: Parcel; revision: number }>();
 
@@ -41,6 +47,7 @@ export class ParcelMeshLayer {
         return 0;
       }
       mesh.mesh.zIndex = parcel.cx + parcel.cy + this.depthOffset;
+      mesh.mesh.alpha = this.opacity;
       this.meshes.set(key, mesh);
       this.parent.addChild(mesh.mesh);
     }

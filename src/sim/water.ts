@@ -11,6 +11,7 @@ import {
 } from './buildings';
 import {
   DISCHARGE_RADIUS,
+  PIPE_REACH,
   FAC_RIVER_PUMP,
   PIPE_SEWER,
   PIPE_UPKEEP,
@@ -18,7 +19,9 @@ import {
   WATER_SPECS,
 } from './config/water';
 import { FACILITY_SPECS, touchesRoadTiles, touchesWater } from './facilities';
-import { edgeNeighbors } from './roadGraph';
+import { rangeOffsets } from './utilityRange';
+import type { PowerField } from './power';
+const reach = rangeOffsets(PIPE_REACH);
 
 const key = (x: number, y: number) => `${x},${y}`;
 interface PipeNode {
@@ -42,6 +45,7 @@ interface Consumer {
   sewer: number;
 }
 interface Plant {
+  output: number;
   x: number;
   y: number;
   kind: number;
@@ -57,6 +61,8 @@ const EMPTY: WaterStatus = { supply: 0, drainage: 0, contamination: 0 };
 
 /** 배관 연결과 건물 정원만으로 재구성한다. 입주율 감소로 수요까지 줄어드는 순환을 피한다. */
 export class WaterField {
+  power: PowerField | null = null;
+  readonly coverage = new Map<string, WaterStatus>();
   revision = -1;
   readonly nodes = new Map<string, PipeNode>();
   private water: Network[] = [];
@@ -80,6 +86,7 @@ export class WaterField {
 
   rebuild(world: World): void {
     this.nodes.clear();
+    this.coverage.clear();
     this.consumers.clear();
     this.plants = [];
     const parcels = world.pipeParcels().sort((a, b) => a.cy - b.cy || a.cx - b.cx);
@@ -117,15 +124,18 @@ export class WaterField {
           if (!spec) continue;
           const span = FACILITY_SPECS[kind].span;
           const networks = this.touching(x, y, span, spec.pipe === PIPE_WATER ? 'water' : 'sewer');
+          const power = this.power?.supplyAt(x, y) ?? 1;
           const active =
+            power > 0 &&
             touchesRoadTiles(world, x, y, span) &&
             (!spec.needsWater || touchesWater(world, x, y, span)) &&
             networks.length > 0;
-          this.plants.push({ x, y, kind, networks, active });
+          this.plants.push({ x, y, kind, networks, active, output: spec.capacity * power });
           if (!active) continue;
           // 여러 독립 관망에 닿으면 용량을 나눠 연결한다. 용량을 중복 지급하지 않는다.
           const groups = spec.pipe === PIPE_WATER ? this.water : this.sewer;
-          for (const id of networks) groups[id].capacity += spec.capacity / networks.length;
+          for (const id of networks)
+            groups[id].capacity += (spec.capacity * power) / networks.length;
         }
       }
     }
@@ -167,7 +177,7 @@ export class WaterField {
         pollution += spec.pollution * Math.max(0, 1 - distance / DISCHARGE_RADIUS);
       }
       for (const id of pump.networks) {
-        const contribution = WATER_SPECS[pump.kind].capacity / pump.networks.length;
+        const contribution = pump.output / pump.networks.length;
         this.water[id].pollution = Math.min(
           1,
           this.water[id].pollution +
@@ -193,6 +203,41 @@ export class WaterField {
       sewerCapacity: this.sewer.reduce((sum, n) => sum + n.capacity, 0),
       pipeCount,
     };
+    const owners = new Map<string, { water: number; sewer: number }>();
+    for (const n of this.nodes.values()) {
+      for (const [dx, dy] of reach) {
+        const k = key(n.x + dx, n.y + dy),
+          prev = owners.get(k) ?? { water: -1, sewer: -1 };
+        for (const type of ['water', 'sewer'] as const) {
+          const groups = type === 'water' ? this.water : this.sewer;
+          const a = n[type],
+            b = prev[type];
+          if (
+            a >= 0 &&
+            (b < 0 ||
+              groups[a].capacity > groups[b].capacity ||
+              (groups[a].capacity === groups[b].capacity && a < b))
+          )
+            prev[type] = a;
+        }
+        owners.set(k, prev);
+      }
+    }
+    for (const [k, o] of owners) {
+      const w = this.water[o.water],
+        s = this.sewer[o.sewer];
+      this.coverage.set(k, {
+        supply: w ? Math.min(1, w.capacity / Math.max(1, w.load)) : 0,
+        drainage: s ? Math.min(1, s.capacity / Math.max(1, s.load)) : 0,
+        contamination: w?.pollution ?? 0,
+      });
+    }
+    // A building is connected when any footprint tile is in range. Show its actual allocated network.
+    for (const c of this.consumers.values())
+      for (let dy = 0; dy < c.span; dy++)
+        for (let dx = 0; dx < c.span; dx++) {
+          this.coverage.set(key(c.x + dx, c.y + dy), this.statusAt(c.x, c.y));
+        }
     this.revision = world.utilityRevision;
   }
 
@@ -223,8 +268,8 @@ export class WaterField {
       const id = this.nodes.get(key(tx, ty))?.[type] ?? -1;
       if (id >= 0) ids.add(id);
     };
-    for (let dy = 0; dy < span; dy++) for (let dx = 0; dx < span; dx++) add(x + dx, y + dy);
-    for (const [tx, ty] of edgeNeighbors(x, y, span)) add(tx, ty);
+    for (let dy = 0; dy < span; dy++)
+      for (let dx = 0; dx < span; dx++) for (const [rx, ry] of reach) add(x + dx + rx, y + dy + ry);
     return [...ids].sort((a, b) => a - b);
   }
 
@@ -252,7 +297,7 @@ export class WaterField {
 
   facilityStatus(tx: number, ty: number): string {
     const plant = this.plants.find((p) => p.x === tx && p.y === ty);
-    if (!plant || !plant.active) return '가동 중지: 도로·해당 배관·하천 연결 확인';
+    if (!plant || !plant.active) return '가동 중지: 전기·도로·배관·하천 연결 확인';
     const spec = WATER_SPECS[plant.kind];
     const groups = spec.pipe === PIPE_WATER ? this.water : this.sewer;
     const load = plant.networks.reduce((sum, id) => sum + groups[id].load, 0);

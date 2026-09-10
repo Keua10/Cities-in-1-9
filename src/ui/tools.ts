@@ -4,6 +4,8 @@ import { FACILITY_COUNT, isWelfareKind } from '../sim/buildings';
 import { canPlaceFacility, FACILITY_SPECS } from '../sim/facilities';
 import type { MacroSim } from '../sim/macro';
 import { PIPE_COST, PIPE_SEWER, PIPE_WATER, WATER_SPECS } from '../sim/config/water';
+import { POWER_SPECS, WIRE_COST } from '../sim/config/power';
+import type { UtilityMode } from '../render/utilityLayer';
 import { chunkIndexOf } from '../core/iso';
 import { COST_ROAD, COST_ZONE } from '../sim/simConstants';
 import {
@@ -26,7 +28,9 @@ export type ToolId =
   | 'bulldoze'
   | 'waterPipe'
   | 'sewerPipe'
-  | 'pipeErase';
+  | 'pipeErase'
+  | 'wire'
+  | 'wireErase';
 
 /** 도구 -> build 레이어에 쓸 값. 'select' 와 'bulldoze' 는 따로 다룬다. */
 const TOOL_VALUE: Partial<Record<ToolId, number>> = {
@@ -47,6 +51,8 @@ export const TOOL_LABELS: Record<ToolId, string> = {
   waterPipe: '상수도관',
   sewerPipe: '하수도관',
   pipeErase: '배관 철거',
+  wire: '전선',
+  wireErase: '전선 철거',
 };
 
 /** 한 번의 드래그 이벤트에서 채울 수 있는 최대 칸 수. 순간이동 방지. */
@@ -66,7 +72,7 @@ const MESSAGE_MS = 2500;
  * 철거는 공짜다 — 학생이 실수를 되돌리는 걸 돈으로 막을 이유가 없다.
  */
 export class Tools {
-  inspectPipes = false;
+  inspectMode: UtilityMode = 'off';
   tool: ToolId = 'select';
   /** 시설 도구가 지금 들고 있는 종류. 시설 시트에서 고른다. */
   facilityKind = 0;
@@ -91,14 +97,18 @@ export class Tools {
     return this.sim.cityLevel;
   }
 
-  get pipeView(): boolean {
-    return (
-      this.inspectPipes ||
-      this.tool === 'waterPipe' ||
-      this.tool === 'sewerPipe' ||
-      this.tool === 'pipeErase' ||
-      (this.tool === 'facility' && !!WATER_SPECS[this.facilityKind])
-    );
+  get utilityMode(): UtilityMode {
+    if (
+      this.tool === 'wire' ||
+      this.tool === 'wireErase' ||
+      (this.tool === 'facility' && POWER_SPECS[this.facilityKind])
+    )
+      return 'power';
+    if (this.tool === 'sewerPipe') return 'sewer';
+    if (this.tool === 'waterPipe' || this.tool === 'pipeErase') return 'water';
+    const water = this.tool === 'facility' ? WATER_SPECS[this.facilityKind] : null;
+    if (water) return water.pipe === PIPE_WATER ? 'water' : 'sewer';
+    return this.inspectMode;
   }
 
   setTool(tool: ToolId): void {
@@ -109,8 +119,10 @@ export class Tools {
 
   /** 지금 표시해야 할 안내 문구. 없으면 빈 문자열. */
   activeMessage(now: number): string {
-    if ((!this.message || now - this.messageAt > MESSAGE_MS) && this.pipeView) {
-      return '파랑=상수도 · 갈색=하수도 · 빨강=오염 · 같은 관은 맞닿으면 연결. 상·하수도 사이는 빈 칸 1개 이상! 건물·시설 아래나 바로 옆까지 연결하세요.';
+    if ((!this.message || now - this.messageAt > MESSAGE_MS) && this.utilityMode !== 'off') {
+      return this.utilityMode === 'power'
+        ? '노랑=전력 공급 범위 · 주황=용량 부족 · 회색 전선=단절 · 건물 가장자리 3칸 이내 자동 공유. 빈 땅은 전달하지 않습니다.'
+        : '파랑=급수 범위 · 갈색=하수 범위 · 빨강=오염 · 주황=용량 부족 · 배관 반경 4칸. 상·하수도관은 빈 칸 1개 이상 띄우세요.';
     }
     if (!this.message || now - this.messageAt > MESSAGE_MS)
       return this.tool === 'road' ? '클릭: 독립 도로 · 드래그: 지나간 방향으로 설치·연결' : '';
@@ -224,6 +236,20 @@ export class Tools {
 
   private apply(tx: number, ty: number): void {
     if (this.tool === 'select') return;
+    if (this.tool === 'wire' || this.tool === 'wireErase') {
+      if (!this.world.isExplored(chunkIndexOf(tx), chunkIndexOf(ty))) {
+        this.note('아직 개척하지 않은 땅입니다');
+        return;
+      }
+      const present = this.tool === 'wire';
+      if (this.world.getWire(tx, ty) === present) return;
+      if (present && !this.sim.spend(WIRE_COST)) {
+        this.note('돈이 모자랍니다');
+        return;
+      }
+      this.world.setWire(tx, ty, present);
+      return;
+    }
     if (this.tool === 'waterPipe' || this.tool === 'sewerPipe' || this.tool === 'pipeErase') {
       if (!this.world.isExplored(chunkIndexOf(tx), chunkIndexOf(ty))) {
         this.note('아직 개척하지 않은 땅입니다');
@@ -354,6 +380,8 @@ export function bindToolButtons(tools: Tools, onChange?: () => void): void {
     ['btn-tool-water', 'waterPipe'],
     ['btn-tool-sewer', 'sewerPipe'],
     ['btn-tool-pipe-erase', 'pipeErase'],
+    ['btn-tool-wire', 'wire'],
+    ['btn-tool-wire-erase', 'wireErase'],
   ];
 
   const buttons: Array<[HTMLElement, ToolId]> = [];
@@ -389,8 +417,15 @@ export function bindToolButtons(tools: Tools, onChange?: () => void): void {
   syncAll();
   const pipeButton = document.getElementById('btn-pipes');
   pipeButton?.addEventListener('click', () => {
-    tools.inspectPipes = !tools.inspectPipes;
-    pipeButton.setAttribute('aria-pressed', String(tools.inspectPipes));
+    const modes: UtilityMode[] = ['off', 'water', 'sewer', 'power'];
+    tools.inspectMode = modes[(modes.indexOf(tools.inspectMode) + 1) % modes.length];
+    pipeButton.textContent = {
+      off: '공급 범위 보기',
+      water: '급수 범위',
+      sewer: '하수 범위',
+      power: '전력 범위',
+    }[tools.inspectMode];
+    pipeButton.setAttribute('aria-pressed', String(tools.inspectMode !== 'off'));
   });
 }
 
@@ -419,9 +454,12 @@ function buildFacilitySheet(tools: Tools, onPick: () => void): FacilitySheet {
     ['필수 시설', []],
     ['복지 시설', []],
     ['상하수도 시설', []],
+    ['발전 시설', []],
   ];
   for (let kind = 0; kind < FACILITY_COUNT; kind++) {
-    groups[WATER_SPECS[kind] ? 2 : isWelfareKind(kind) ? 1 : 0][1].push(kind);
+    groups[POWER_SPECS[kind] ? 3 : WATER_SPECS[kind] ? 2 : isWelfareKind(kind) ? 1 : 0][1].push(
+      kind,
+    );
   }
 
   const buttons: Array<[HTMLButtonElement, number]> = [];
@@ -447,6 +485,8 @@ function buildFacilitySheet(tools: Tools, onPick: () => void): FacilitySheet {
         `<s>₩${spec.cost.toLocaleString('ko-KR')} · 하루 ₩${spec.upkeepPerDay.toLocaleString('ko-KR')}</s>` +
         `<small>도시 레벨 ${spec.unlockLevel}부터</small>`;
       const water = WATER_SPECS[kind];
+      if (POWER_SPECS[kind])
+        btn.innerHTML += `<small>발전 용량 ${POWER_SPECS[kind].capacity.toLocaleString('ko-KR')} · 도로 필요</small>`;
       if (water)
         btn.innerHTML += `<small>${water.pipe === PIPE_WATER ? '급수' : '하수'} 용량 ${water.capacity.toLocaleString('ko-KR')}${water.needsWater ? ' · 하천 인접' : ''}${water.pipe === PIPE_SEWER ? ` · 배출 오염 ${Math.round(water.pollution * 100)}%` : ''}</small>`;
       btn.addEventListener('click', () => {

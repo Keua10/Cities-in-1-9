@@ -80,6 +80,7 @@ interface CoverageChunk {
 }
 
 export class ServiceField {
+  power: { supplyAt(x: number, y: number): number } | null = null;
   private chunks = new Map<string, CoverageChunk>();
   /** 이번 rebuild 에 잡힌 시설 전부. 번호가 곧 owner 값이다. */
   private facilities: FacilityRecord[] = [];
@@ -144,7 +145,8 @@ export class ServiceField {
   }
 
   qualityOf(index: number): number {
-    return index >= 0 && index < this.quality.length ? this.quality[index] : 0;
+    const f = this.facilities[index];
+    return f ? this.quality[index] * (this.power?.supplyAt(f.tx, f.ty) ?? 1) : 0;
   }
 
   /* ---------------- 5.2 건물이 자기 담당 시설을 찾는 법 ---------------- */

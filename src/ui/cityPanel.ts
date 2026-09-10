@@ -26,6 +26,7 @@ export class CityPanel {
   private prosperityEl: HTMLElement;
   private unlockEl: HTMLElement;
   private waterEl: HTMLElement;
+  private powerEl: HTMLElement;
   private popEl: HTMLElement;
   private dateEl: HTMLElement;
   private occupancyEl: HTMLElement;
@@ -56,6 +57,7 @@ export class CityPanel {
     this.prosperityEl = must(el, '.cp-prosperity');
     this.unlockEl = must(el, '.cp-unlock');
     this.waterEl = must(el, '.cp-water');
+    this.powerEl = must(el, '.cp-power');
     this.popEl = must(el, '.cp-pop');
     this.dateEl = must(el, '.cp-date');
     this.occupancyEl = must(el, '.cp-occupancy-value');
@@ -141,6 +143,14 @@ export class CityPanel {
 
     setText(this.facilityNoteEl, describeFacilities(sim));
     const water = sim.water.summary;
+    const power = sim.power.summary;
+    setText(
+      this.powerEl,
+      `전력 ${Math.round(power.supply * 100)}% · 발전 ${power.capacity.toLocaleString('ko-KR')} / 수요 ${power.demand.toLocaleString('ko-KR')}\n` +
+        (power.unpoweredBuildings
+          ? `공급 부족 ${power.unpoweredBuildings}채 · 전선과 건물 연결 확인`
+          : '건물 간 자동 전력 공유 중'),
+    );
     setText(
       this.waterEl,
       `급수 ${Math.round(water.supply * 100)}% · 하수 ${Math.round(water.drainage * 100)}%\n` +
@@ -287,6 +297,8 @@ function template(): string {
     <div class="cp-facility-note"></div>
     <div class="cp-section-title">상하수도</div>
     <div class="cp-water"></div>
+    <div class="cp-section-title">전기</div>
+    <div class="cp-power cp-water"></div>
     <div class="cp-safety">
       <div class="cp-section-title">도시 안전 <button class="cp-incident-focus" type="button" disabled>사건 위치 보기</button></div>
       <div class="cp-safety-counts" role="status" aria-live="polite">화재 0 · 범죄 0 · 질병 0</div>

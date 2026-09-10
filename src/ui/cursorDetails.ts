@@ -2,6 +2,7 @@ import { TIER_NAMES } from '../sim/buildings';
 import { FACILITY_SPECS } from '../sim/facilities';
 import type { MacroSim } from '../sim/macro';
 import { WATER_SPECS } from '../sim/config/water';
+import { POWER_SPECS, facilityPowerDemand } from '../sim/config/power';
 import { SERVICE_KIND_COUNT } from '../sim/services';
 import { AMENITY_NEED_BY_TIER, FACILITY_NAMES } from '../sim/simConstants';
 
@@ -16,7 +17,10 @@ import { AMENITY_NEED_BY_TIER, FACILITY_NAMES } from '../sim/simConstants';
 export function describeFacility(sim: MacroSim, tx: number, ty: number, kind: number): string {
   const spec = FACILITY_SPECS[kind];
   const upkeep = `하루 ₩${spec.upkeepPerDay.toLocaleString('ko-KR')}`;
-  if (WATER_SPECS[kind]) return `${spec.name} · ${sim.water.facilityStatus(tx, ty)} · ${upkeep}`;
+  if (POWER_SPECS[kind])
+    return `${spec.name} · 발전 용량 ${POWER_SPECS[kind].capacity.toLocaleString('ko-KR')} · ${sim.power.supplyAt(tx, ty) > 0 ? '가동' : '가동 중지: 도로 확인'} · ${upkeep}`;
+  if (WATER_SPECS[kind])
+    return `${spec.name} · ${sim.water.facilityStatus(tx, ty)} · 전력 ${Math.round(sim.power.supplyAt(tx, ty) * 100)}% (수요 ${facilityPowerDemand(kind)}) · ${upkeep}`;
 
   if (spec.welfare) {
     return `${spec.name} · 반경 ${spec.range}타일(직선) · 세기 ${spec.strength} · ${upkeep}`;

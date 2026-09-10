@@ -8,6 +8,7 @@ import {
   facilityBandY,
   facilityCellSize,
   drawWaterFacilities,
+  drawPowerFacilities,
 } from '../../src/render/facilityAtlas';
 
 const image = await loadImage('public/sprites/facilities.png');
@@ -56,6 +57,7 @@ const extended = createCanvas(FACILITY_ATLAS_W, FACILITY_ATLAS_H);
 const extendedCtx = extended.getContext('2d');
 extendedCtx.drawImage(image, 0, 0);
 drawWaterFacilities(extendedCtx as unknown as CanvasRenderingContext2D);
+drawPowerFacilities(extendedCtx as unknown as CanvasRenderingContext2D);
 for (const spec of FACILITY_SPECS.slice(7)) {
   const size = facilityCellSize(spec.span);
   const data = extendedCtx.getImageData(
@@ -68,4 +70,4 @@ for (const spec of FACILITY_SPECS.slice(7)) {
   for (let i = 3; i < data.length; i += 4) if (data[i]) pixels++;
   assert.ok(pixels > size * size * 0.15, `${spec.name} runtime artwork is visible`);
 }
-console.log('상하수도 4종 런타임 아트 및 확장 아틀라스 통과');
+console.log('상하수도 4종·발전소 3종 런타임 아트 및 확장 아틀라스 통과');

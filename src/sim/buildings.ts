@@ -89,7 +89,7 @@ export function zoneOfCode(v: number): number {
 /** 시설 코드 시작점. 지구 건물 코드 0~8 뒤에 붙인다. 절대 앞당기지 마라. */
 export const FAC_BASE = 9;
 /** 시설 종류 수. 이 값은 저장된 코드 범위를 정하므로 simConstants 가 아니라 여기 있다. */
-export const FACILITY_COUNT = 11;
+export const FACILITY_COUNT = 14;
 /** kind 가 이 값 이상이면 복지 시설. 0~3 필수 서비스, 4~6 복지. */
 export const FAC_WELFARE_BASE = 4;
 

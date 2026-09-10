@@ -1,4 +1,5 @@
 export const PIPE_WATER = 1;
+export const PIPE_REACH = 4;
 export const PIPE_SEWER = 2;
 export const PIPE_COST = 12;
 export const PIPE_UPKEEP = 0.05;
