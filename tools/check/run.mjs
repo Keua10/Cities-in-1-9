@@ -4,6 +4,7 @@ import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const checks = {
+  infrastructure: 'tools/check/terrainInfrastructureCheck.ts',
   policies: 'tools/check/policySanitationCheck.ts',
   power: 'tools/check/powerCheck.ts',
   water: 'tools/check/waterCheck.ts',

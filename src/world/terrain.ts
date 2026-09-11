@@ -154,6 +154,55 @@ export function heightAt(tx: number, ty: number): number {
   return h < 0 ? 0 : h > MAX_HEIGHT ? MAX_HEIGHT : h;
 }
 
+/** STEP 4.7: wide-area quantiles of the existing continuous noise, not random tiles.
+ * Plain/mountain/water = non-water below height 5 / height 5+ / water.
+ * Legacy functions above stay unchanged for base selection and saved land.
+ */
+export function outerTerrainAt(
+  tx: number,
+  ty: number,
+  blend = 1,
+): { tile: TerrainId; height: number } {
+  if (blend <= 0) return { tile: terrainAt(tx, ty), height: heightAt(tx, ty) };
+  const e = elevationAt(tx, ty);
+  const sea = SEA_LEVEL + (0.14 - SEA_LEVEL) * blend;
+  if (e < sea)
+    return {
+      tile: e < sea - (0.08 - 0.02 * blend) ? Terrain.WaterDeep : Terrain.WaterShallow,
+      height: 0,
+    };
+  // Broad lowlands, then smooth foothills; the 70th percentile reaches mountain height 5.
+  const outerHeight =
+    e < 0.17
+      ? 0
+      : e < 0.4
+        ? 1
+        : e < 0.58
+          ? 1 + ((e - 0.4) * 4) / 0.18
+          : 5 + ((e - 0.58) * 3) / 0.42;
+  const height = Math.max(
+    0,
+    Math.min(
+      MAX_HEIGHT,
+      Math.floor((blend < 1 ? heightAt(tx, ty) * (1 - blend) : 0) + outerHeight * blend),
+    ),
+  );
+  const moisture = moistureAt(tx, ty);
+  const tile =
+    e < SHORE_LEVEL + (0.165 - SHORE_LEVEL) * blend
+      ? Terrain.Sand
+      : e > ROCK_LEVEL + (0.58 - ROCK_LEVEL) * blend
+        ? Terrain.Rock
+        : moisture > 0.62
+          ? Terrain.Forest
+          : moisture < 0.36
+            ? e > 0.62
+              ? Terrain.Dirt
+              : Terrain.GrassDry
+            : Terrain.Grass;
+  return { tile, height };
+}
+
 /** 절벽 옆면 재질. 바위산은 바위, 나머지는 흙. */
 export function wallMaterial(topTerrain: number): 'rock' | 'soil' {
   return topTerrain === Terrain.Rock ? 'rock' : 'soil';
@@ -162,6 +211,7 @@ export function wallMaterial(topTerrain: number): 'rock' | 'soil' {
 export function generateChunk(
   cx: number,
   cy: number,
+  outerBlend?: (tx: number, ty: number) => number,
 ): {
   tiles: Uint8Array;
   heights: Uint8Array;
@@ -175,8 +225,14 @@ export function generateChunk(
     for (let lx = 0; lx < CHUNK_SIZE; lx++) {
       const tx = baseX + lx;
       const ty = baseY + ly;
-      tiles[row + lx] = terrainAt(tx, ty);
-      heights[row + lx] = heightAt(tx, ty);
+      if (outerBlend) {
+        const sample = outerTerrainAt(tx, ty, outerBlend(tx, ty));
+        tiles[row + lx] = sample.tile;
+        heights[row + lx] = sample.height;
+      } else {
+        tiles[row + lx] = terrainAt(tx, ty);
+        heights[row + lx] = heightAt(tx, ty);
+      }
     }
   }
   return { tiles, heights };

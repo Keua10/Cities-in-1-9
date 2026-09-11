@@ -77,6 +77,11 @@ async function boot(): Promise<void> {
     tick: 0,
     tickedAt: Date.now(),
   };
+  const terrainMigrated = !Array.isArray(macro.legacyTerrainChunks);
+  if (terrainMigrated) {
+    macro.legacyTerrainChunks = city ? [...new Set([...city.explored, ...overrides.keys()])] : [];
+  }
+  world.preserveTerrainChunks(macro.legacyTerrainChunks!);
   const seededCenter = seedCityIfEmpty(world, Math.floor(macro.tick / 24));
   if (seededCenter && macro.money < SEEDED_CITY_MONEY) macro.money = SEEDED_CITY_MONEY;
 
@@ -124,6 +129,7 @@ async function boot(): Promise<void> {
       : new OfflineSaveManager();
   saver.onStatus = (status, message) => badge.set(status, message);
   saver.start();
+  if (terrainMigrated) saver.noteMacroChange();
   if (loadFailed) badge.set('error', '불러오기 실패 — 저장되지 않습니다');
 
   const hud = new Hud();

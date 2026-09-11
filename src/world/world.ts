@@ -16,7 +16,7 @@ import {
 import { facilitySpan } from '../sim/facilities';
 import { Build, DIRS } from './build';
 import { baseOriginChunk } from './spawn';
-import { generateChunk, heightAt, type TerrainId } from './terrain';
+import { generateChunk, outerTerrainAt, type TerrainId } from './terrain';
 
 /** 생성값과 달라진 칸만 담는 배열. OVERRIDE_NONE 인 칸은 "생성값 그대로". */
 export interface ChunkOverride {
@@ -134,6 +134,34 @@ export interface BuildingInfo {
  * Firestore 로 간다.
  */
 export class World {
+  private legacyTerrain = new Set<string>();
+
+  /** Configure once, before loading/rendering chunks. Persist this list in macro metadata. */
+  preserveTerrainChunks(keys: readonly string[]): void {
+    this.legacyTerrain = new Set(keys.filter((key) => /^-?\d+,-?\d+$/.test(key)));
+    this.chunks.clear();
+  }
+
+  private terrainBlend = (tx: number, ty: number): number => {
+    const distance = (x0: number, y0: number, span: number) =>
+      Math.max(x0 - tx, tx - (x0 + span - 1), y0 - ty, ty - (y0 + span - 1), 0);
+    let d = distance(
+      this.baseCx * CHUNK_SIZE,
+      this.baseCy * CHUNK_SIZE,
+      BASE_CHUNK_SPAN * CHUNK_SIZE,
+    );
+    if (d === 0) return 0;
+    // Only nearby preserved chunks can affect the 32-tile transition belt.
+    const cx = chunkIndexOf(tx),
+      cy = chunkIndexOf(ty);
+    for (let y = cy - 1; y <= cy + 1; y++)
+      for (let x = cx - 1; x <= cx + 1; x++) {
+        if (this.legacyTerrain.has(chunkKey(x, y)))
+          d = Math.min(d, distance(x * CHUNK_SIZE, y * CHUNK_SIZE, CHUNK_SIZE));
+      }
+    const t = Math.min(1, d / 32);
+    return t * t * (3 - 2 * t);
+  };
   utilityRevision = 0;
   /** 타일 수가 같아도 연결 편집을 감지한다. */
   roadRevision = 0;
@@ -271,7 +299,7 @@ export class World {
     const key = chunkKey(cx, cy);
     let chunk = this.chunks.get(key);
     if (!chunk) {
-      const { tiles, heights } = generateChunk(cx, cy);
+      const { tiles, heights } = generateChunk(cx, cy, this.terrainBlend);
       const parcel = this.getParcel(cx, cy);
       chunk = {
         cx,
@@ -335,7 +363,7 @@ export class World {
       const v = p.heightOverride[i];
       if (v !== OVERRIDE_NONE) return v;
     }
-    return heightAt(tx, ty);
+    return outerTerrainAt(tx, ty, this.terrainBlend(tx, ty)).height;
   }
 
   /** 지형 편집(터레이닝)용. 지금은 안 쓰지만 렌더러가 이미 대응한다. */

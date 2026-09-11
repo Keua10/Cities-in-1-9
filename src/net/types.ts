@@ -17,6 +17,8 @@ export interface TransportState {
  * 매크로 상태. 파생값은 저장하지 않고, 사용자가 직접 정한 희소 설정만 선택 필드로 저장한다.
  */
 export interface MacroState {
+  /** STEP 4.7: already explored legacy terrain. Empty list means migration is complete. */
+  legacyTerrainChunks?: string[];
   policies?: CityPolicies;
   sanitationStartTick?: number;
   powerStartTick?: number;

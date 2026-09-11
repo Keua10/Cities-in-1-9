@@ -323,7 +323,7 @@ function template(): string {
       <b class="cp-city-level" role="status">도시 Lv.1 · 마을</b>
       <div class="cp-prosperity">번영도 0 / 100</div>
       <div class="cp-unlock"></div>
-      <div class="cp-progression-help">인구·입주율·하루 수지에 따라 매일 누적</div>
+      <div class="cp-progression-help">인구·입주율·하루 수지에 따라 매일 누적<br>L3 건물은 공원·전기·수도 부족에 특히 민감합니다.</div>
     </div>
     <div class="cp-occupancy">
       <div class="cp-occupancy-head"><span>공실률</span><b class="cp-occupancy-value">100%</b></div>

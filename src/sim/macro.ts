@@ -26,6 +26,7 @@ import { growParcel, type GrowthContext } from './growth';
 import { RoadField } from './roadGraph';
 import { WaterField } from './water';
 import { PowerField } from './power';
+import { utilityPenalty } from './config/infrastructure';
 import { normalizePolicies, taxRate, taxSatisfactionPenalty, type CityPolicies } from './policies';
 import { FAC_INCINERATOR, FAC_CREMATORIUM } from './config/sanitation';
 import { WATER_GRACE_DAYS, WATER_RAMP_DAYS } from './config/water';
@@ -543,24 +544,20 @@ export class MacroSim {
           // 만족도에는 합쳐서 한 번 들어간다. 총합 상한이 하강 나선을 막는
           // 유일한 바닥이기 때문이다.
           const water = this.water.statusAt(tx, ty);
-          // 전기·수도 전반의 계층별 민감도 튜닝은 STEP 4.8에서 진행한다.
-          const waterGap =
-            (0.18 * (1 - water.supply) + 0.12 * (1 - water.drainage)) *
-              grace *
-              this.waterPenaltyFactor +
-            0.2 * water.contamination * water.supply;
           const powerAge = (this.tick - (this.macro.powerStartTick ?? this.tick)) / TICKS_PER_DAY;
-          const powerGap =
-            0.3 *
-            (1 - this.power.supplyAt(tx, ty)) *
-            grace *
-            Math.max(0, Math.min(1, (powerAge - 30) / 30));
+          const utilitiesGap = utilityPenalty(
+            level,
+            water,
+            this.power.supplyAt(tx, ty),
+            grace,
+            this.waterPenaltyFactor,
+            Math.max(0, Math.min(1, (powerAge - 30) / 30)),
+          );
           const needsGap = Math.min(
             NEEDS_PENALTY_MAX,
             serviceGap +
               amenityGap +
-              waterGap +
-              powerGap +
+              utilitiesGap +
               (0.15 * (1 - this.services.qualityAt(tx, ty, level, FAC_INCINERATOR)) +
                 (zone === ZONE_R
                   ? 0.1 * (1 - this.services.qualityAt(tx, ty, level, FAC_CREMATORIUM))
