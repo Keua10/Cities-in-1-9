@@ -34,7 +34,7 @@ import { SaveBadge } from './ui/saveBadge';
 import { bindToolbar } from './ui/toolbar';
 import { bindToolButtons, Tools } from './ui/tools';
 import { TransportHubPanel } from './ui/transportHubPanel';
-import { seedCityIfEmpty, SEEDED_CITY_MONEY } from './world/citySeed';
+import { randomCitySeed, seedCityIfEmpty, SEEDED_CITY_MONEY } from './world/citySeed';
 import { findDryTileNearBase } from './world/spawn';
 import type { ChunkOverride } from './world/world';
 import { World } from './world/world';
@@ -82,8 +82,13 @@ async function boot(): Promise<void> {
     macro.legacyTerrainChunks = city ? [...new Set([...city.explored, ...overrides.keys()])] : [];
   }
   world.preserveTerrainChunks(macro.legacyTerrainChunks!);
-  const seededCenter = seedCityIfEmpty(world, Math.floor(macro.tick / 24));
-  if (seededCenter && macro.money < SEEDED_CITY_MONEY) macro.money = SEEDED_CITY_MONEY;
+  // 씨앗을 저장해 둔다. 같은 도시를 다시 열면 같은 도시가 나오고, "맵 초기화"
+  // 는 새 씨앗을 적고 새로고침하므로 누를 때마다 다른 도시가 나온다.
+  const seededCenter = seedCityIfEmpty(world, Math.floor(macro.tick / 24), macro.genSeed);
+  if (seededCenter) {
+    if (macro.genSeed !== seededCenter.seed) macro.genSeed = seededCenter.seed;
+    if (macro.money < SEEDED_CITY_MONEY) macro.money = SEEDED_CITY_MONEY;
+  }
 
   const app = new Application();
   await app.init({
@@ -213,6 +218,8 @@ async function boot(): Promise<void> {
       transportPanel.hide();
       world.clearBuilt();
       macro.transport = undefined;
+      // 새 씨앗. 이게 없으면 초기화해도 똑같은 도시가 다시 만들어진다.
+      macro.genSeed = randomCitySeed();
       sim.resetState(SEEDED_CITY_MONEY, Date.now());
       try {
         await saver.saveNow();

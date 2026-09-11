@@ -1,6 +1,7 @@
 import { BASE_CHUNK_SPAN, CHUNK_SIZE } from '../core/constants';
 import { localIndexOf } from '../core/iso';
-import { BLD_NONE, simRandom, ZONE_C, ZONE_I, ZONE_R } from '../sim/buildings';
+import { BLD_NONE, ZONE_C, ZONE_I, ZONE_R } from '../sim/buildings';
+import { JOB_CAPACITY_C, JOB_CAPACITY_I, RESIDENT_CAPACITY } from '../sim/buildings';
 import {
   canPlaceFacility,
   FAC_FIRE,
@@ -13,74 +14,112 @@ import {
   facilitySpan,
   touchesRoadTiles,
 } from '../sim/facilities';
-import { Build, canPlaceRoad, DIRS } from './build';
+import { Build, canConnectRoads, canPlaceRoad, DIRS } from './build';
 import { isWater } from './terrain';
 import type { World } from './world';
 import { seedCityUtilities } from './cityUtilities';
+import { deriveSeed, randomCitySeed, Rng } from './rng';
 
 /**
- * 테스트용 대도시 생성기.
+ * 대도시 생성기 (다시 만든 판).
  *
  * ---------------------------------------------------------------
- * 왜 격자 도시를 만들지 않는가
+ * 예전 생성기가 무엇을 틀렸는가
  * ---------------------------------------------------------------
- * 예전 testCity.ts 는 20x20 에 3x3 격자 도로를 깔았다. 시뮬레이션이 도는지
- * 보기에는 충분했지만, 그걸로는 **아무것도 검증되지 않는다.** 격자 도시에는
- * 경사 도로도, 막다른 길도, 교차로 밀도 차이도, 물가 지형도 없다.
+ * 1. **영역과 반경이 어긋났다.** 기본 도시는 2x2 청크(128타일)인데 생성기는
+ *    반경 70짜리 도시를 그렸다. 지름 140 > 128 이라 구역 씨앗의 절반이 영역
+ *    밖으로 나가 버려지고, 남은 쪽으로 도시가 쏠렸다. 도심이 (91,103) 같은
+ *    구석에 서는 도시가 그래서 나왔다.
+ * 2. **도로 연결을 나중에 추측했다.** 도로를 "맞닿음" 기준으로 깔아 놓고,
+ *    다 깐 다음 주변 도로의 진행축을 재서 연결 비트를 만들었다. 그런데 도심
+ *    연결 검사(pruneDisconnected)는 그 전에 맞닿음 그래프로 했다. 두 그래프가
+ *    다르니 **실제로는 도심과 끊긴 도로 덩어리가 그대로 남았다** — 측정해 보면
+ *    도로망이 최대 5조각으로 갈라지고 33%가 도심에서 못 간다.
+ * 3. **용도 비율이 지형 운에 맡겨졌다.** 구역 종류를 각도로 배정하고 지형이
+ *    자르는 대로 뒀더니 도시 0 은 R/C/I = 3452/395/37 (일자리/필요 0.21,
+ *    실업률 79%), 도시 4 는 반대로 2.45 가 나왔다.
+ * 4. **시설을 정원이 아니라 고정 격자로 깔았다.** 182채가 서고 유지비가 수입을
+ *    넘어(18,445 vs 23,233) 도시가 첫날부터 적자였다.
+ * 5. **매번 같은 도시가 나왔다.** 난수가 전부 좌표 해시라 "맵 초기화" 를 눌러도
+ *    결과가 한 글자도 안 바뀌었다.
  *
- * 이 생성기는 실제 도시가 자라는 순서를 그대로 따라간다.
- *
- *   1. 지형을 읽고 도심이 설 만한 자리를 고른다 (평지 + 물 아님)
- *   2. 도심 둘레에 부도심·주거·공업 **구역 씨앗** 을 뿌린다
- *   3. 씨앗끼리 간선도로로 잇는다 — 길찾기가 지형을 피해 돌아가므로
- *      직선이 아니라 등고선을 따라 휘어진다
- *   4. 구역마다 **자기 결의 격자** 로 이면도로를 깐다 (블록 크기·방향·위상이
- *      구역마다 다르다. 그래서 구역 경계에서 길이 어긋나고, 그 어긋남이
- *      도시를 기계적이지 않게 만든다)
- *   5. 비탈 규칙을 못 지키는 도로를 걷어내고, 도심에서 끊긴 도로도 걷어낸다
- *   6. 시설 -> 지구 -> 건물 순으로 채운다
- *
- * 모든 난수는 좌표 해시다(simRandom). 같은 도시 번호면 언제 몇 번을 돌려도
- * 같은 도시가 나온다 — 그래야 "지난번 그 비탈길" 을 다시 열어볼 수 있다.
+ * ---------------------------------------------------------------
+ * 다시 만든 원칙
+ * ---------------------------------------------------------------
+ * - **경계는 계산이 아니라 규칙이다.** 모든 쓰기는 `inside()` 를 통과한 좌표에만
+ *   일어난다. 도시는 2x2 청크를 절대 넘지 않는다.
+ * - **도로망은 추측하지 않고 만든다.** 후보 도로에서 도심을 뿌리로 하는 연결
+ *   그래프를 직접 키우고, 그 그래프에 못 들어온 후보는 아예 놓지 않는다.
+ *   간선(edge)을 받아들일 때마다 build.ts 의 비탈 규칙을 그 자리에서 검사하므로
+ *   "놓고 나서 고치는" 단계가 없다. 결과는 **항상 한 덩어리, 항상 규칙에 맞는**
+ *   도로망이다.
+ * - **용도 비율은 목표에서 거꾸로 잡는다.** 시뮬레이션의 균형식
+ *   (RESIDENTS_PER_JOB, SHOP_JOBS_PER_RESIDENT)에서 나오는 정원비를 타일수로
+ *   바꿔 할당량을 정하고, 지구를 그 할당량까지만 키운다.
+ * - **시설 수는 정원에서 나온다.** 소방서 정원 220채, 경찰 3,000명 …에 실제
+ *   건물/인구를 나눠서 필요한 만큼만 짓는다.
+ * - **씨앗 하나로 굴러간다.** 씨앗이 다르면 도시가 다르고, 같으면 똑같이 다시
+ *   만들어진다.
  */
 
-/** 도시 기본 영역 한 변(타일). 4x4 청크 = 256. */
+/** 도시 기본 영역 한 변(타일). 2x2 청크 = 128. */
 const SPAN = BASE_CHUNK_SPAN * CHUNK_SIZE;
+/** 영역 가장자리 여유. 도로·지구·건물 어느 것도 여기를 넘지 않는다. */
+const EDGE = 4;
 
-/**
- * 도시 반경(타일). 구역 씨앗을 뿌리는 거리와 도시 테두리가 여기서 나온다.
- *
- * **이 숫자는 취향이 아니라 예산이다.**
- * 매크로 시뮬레이션은 하루에 한 번(60초마다) 통근 배정과 혼잡 추정을 다시
- * 만드는데, 둘 다 "집 한 채마다 도로망 BFS" 라서 비용이 도시 넓이의 제곱에
- * 가깝게 는다. 처음 만든 반경 125짜리 도시(건물 6,700채)는 그 재계산에
- * 6.5초가 걸렸다 — 1분마다 6.5초씩 멈추는 도시는 대도시가 아니라 슬라이드다.
- *
- * 반경 70이면 건물 3천여 채, 하루치 재계산이 한 틱에 0.4초 안쪽이다. 화면(줌 1.0)에 40x30
- * 타일이 들어오므로 이 크기도 끝에서 끝까지 걸어 다니면 한참 걸린다.
- */
-const CITY_RADIUS = 70;
-/** 영역 가장자리 여유. 이웃 도시 쪽으로 도로가 새어 나가지 않게 한다. */
-const EDGE = 6;
-
-/** 구역 종류. 블록 모양·지구 구성·건물 밀도가 여기서 갈린다. */
+/** 구역(섹션) 종류. */
 const K_DOWNTOWN = 0;
 const K_SUBCENTER = 1;
 const K_RESIDENTIAL = 2;
 const K_INDUSTRIAL = 3;
 
-interface Seed {
+/**
+ * 용도별 타일 할당 비율.
+ *
+ * 취향이 아니라 sim/config/macro.ts 에서 역산한 값이다.
+ *   일자리 정원 = 주거 정원 / RESIDENTS_PER_JOB(1.35)
+ *   상업 정원   = 인구 x SHOP_JOBS_PER_RESIDENT(0.18)
+ * 이므로 정원비는 R : C : I = 1 : 0.18 : 0.56 이다. 타일당 평균 정원
+ * (주거 11, 상업 8.5, 공업 13, 계층이 섞인 도시 기준)으로 나누면 타일비가
+ * 1 : 0.23 : 0.47 = 58.6% : 13.6% : 27.8% 가 나온다.
+ */
+const ZONE_SHARE_C = 0.145;
+const ZONE_SHARE_I = 0.21;
+
+/** 공업 혐오(INDUSTRY_NUISANCE_RADIUS=6)를 완충하는 상업 띠의 두께. */
+const INDUSTRY_BUFFER = 3;
+
+/** 지구를 칠하는 도로로부터의 최대 거리. 3 이면 3x3 공장까지 들어간다. */
+const ZONE_DEPTH = 3;
+
+/**
+ * 목표 평균 복지 점수.
+ *
+ * AMENITY_NEED_BY_TIER 는 저소득 0.35 / 중산층 0.9 / 고소득 1.8 이다. 1.3 이면
+ * 아래 두 계층은 완전히 채우고 고소득도 7할을 채운다(모자란 만큼의 감점은
+ * AMENITY_GAP_MAX 0.24 의 3할, 즉 0.07). 1.8 까지 채우려면 공원이 배로 필요한데
+ * 그 유지비가 만족도 이득보다 크다.
+ */
+const AMENITY_TARGET = 1.3;
+
+/** 도로 후보의 우선순위. 낮을수록 먼저 연결 그래프에 들어간다. */
+const PRIO_ARTERIAL = 0;
+const PRIO_LOCAL = 1;
+
+interface Section {
   x: number;
   y: number;
   kind: number;
+  /** 0 = 도심, 1 = 안쪽 고리, 2 = 바깥 고리. */
+  ring: number;
   /** 블록 한 변(도로 간격). 두 값이 다르면 긴 블록이 된다. */
   blockW: number;
   blockH: number;
   /** 격자 위상. 구역마다 달라서 경계에서 길이 어긋난다. */
   phaseX: number;
   phaseY: number;
-  /** 도심에서의 거리. 건물 밀도를 여기서 뽑는다. */
-  ring: number;
+  /** 이 구역이 뻗는 거리(타일). */
+  reach: number;
 }
 
 /**
@@ -94,65 +133,112 @@ export const SEEDED_CITY_MONEY = 300_000;
 export interface SeededCity {
   tx: number;
   ty: number;
+  /** 이 도시를 만든 씨앗. 저장해 두면 같은 도시를 다시 만들 수 있다. */
+  seed: number;
+}
+
+/** 씨앗을 안 주면 도시 위치에서 만든다. 같은 학생은 처음 한 번 같은 도시를 받는다. */
+function defaultSeed(world: World): number {
+  return deriveSeed((world.baseCx * 7919 + world.baseCy * 104729) | 0, 0x5c17);
 }
 
 /**
  * 아직 아무것도 안 지어진 도시에만 큰 도시를 심는다.
  * 저장된 도로/지구가 하나라도 있으면 절대 손대지 않는다.
  */
-export function seedCityIfEmpty(world: World, bornDay = 0): SeededCity | null {
+export function seedCityIfEmpty(world: World, bornDay = 0, seed?: number): SeededCity | null {
   if (world.developedParcels().length > 0) return null;
-  return generateCity(world, bornDay);
+  return generateCity(world, bornDay, seed);
 }
 
 /** 조건 없이 새로 만든다. "맵 초기화" 버튼이 부른다. */
-export function generateCity(world: World, bornDay = 0): SeededCity | null {
-  const center = new CityBuilder(world, bornDay).run();
-  if (center) seedCityUtilities(world, bornDay);
+export function generateCity(world: World, bornDay = 0, seed?: number): SeededCity | null {
+  const actual = seed === undefined ? defaultSeed(world) : seed >>> 0;
+  const center = new CityBuilder(world, bornDay, actual).run();
+  if (!center) return null;
+  seedCityUtilities(world, bornDay, actual);
+  // 시설이 들어서면서 헐린 건물 자리에 도로와 안 닿는 지구 칸이 남는다.
+  // 도시가 완전히 선 뒤에 한 번에 거둬들인다.
+  trimUnbuildableZones(world);
   return center;
 }
+
+/**
+ * 영원히 쓸 수 없는 지구 칸을 거둬들인다.
+ *
+ * growth.ts 의 신축은 **1x1 부지 검사를 먼저 통과한 칸만** 후보로 쓴다
+ * (buildPass -> plotFits(...,1,...)). 즉 도로에 직접 맞닿지 않은 빈 지구 칸은
+ * 이미 선 건물의 몸통이 아닌 한 영원히 빈 땅이다. 예전 생성기는 그런 칸을
+ * 지구 타일의 34%나 남겼다 — 화면에는 "도로 없음" 빗금으로 보이고, 도시 패널의
+ * 공실률에도 계속 잡히는 죽은 땅이다.
+ */
+function trimUnbuildableZones(world: World): void {
+  const ox = world.baseCx * CHUNK_SIZE;
+  const oy = world.baseCy * CHUNK_SIZE;
+  for (let y = 0; y < SPAN; y++) {
+    for (let x = 0; x < SPAN; x++) {
+      const tx = ox + x;
+      const ty = oy + y;
+      if (zoneOfBuildId(world.getBuild(tx, ty)) < 0) continue;
+      if (world.getBld(tx, ty) !== BLD_NONE) continue;
+      if (world.buildingCovering(tx, ty)) continue;
+      if (touchesRoadTiles(world, tx, ty, 1)) continue;
+      world.setBuild(tx, ty, Build.None, false);
+    }
+  }
+}
+
+/** "맵 초기화" 가 쓰는 새 씨앗. */
+export { randomCitySeed };
 
 class CityBuilder {
   private ox: number;
   private oy: number;
-  private seedBase: number;
 
   private land = new Uint8Array(SPAN * SPAN);
   private hgt = new Uint8Array(SPAN * SPAN);
-  /** 1 = 도로 예정. 실제 setBuild 는 규칙 검사를 통과한 뒤에 한 번만 한다. */
-  private plan = new Uint8Array(SPAN * SPAN);
-  /** 이 칸이 속한 구역 씨앗 번호. -1 은 도시 밖(자연 상태). */
+  /** 도로 후보와 그 우선순위. 255 = 후보 아님. */
+  private cand = new Uint8Array(SPAN * SPAN).fill(255);
+  /** 실제로 놓기로 확정한 도로. */
+  private road = new Uint8Array(SPAN * SPAN);
+  /** 확정한 도로 간선. 방향 d 로 연결됨을 뜻하는 비트. */
+  private links = new Uint8Array(SPAN * SPAN);
+  /** 비탈 간선만 모은 비트. 비탈 규칙 검사에 쓴다. */
+  private slopeBits = new Uint8Array(SPAN * SPAN);
+  /** 이 칸이 속한 섹션 번호. -1 은 도시 밖. */
   private owner = new Int16Array(SPAN * SPAN).fill(-1);
+  /** 도로에서의 거리(0 = 도로, 255 = 멀거나 도달 불가). */
+  private roadDist = new Uint8Array(SPAN * SPAN).fill(255);
 
-  private seeds: Seed[] = [];
+  private sections: Section[] = [];
   private cx = 0;
   private cy = 0;
+  private rng: Rng;
 
   constructor(
     private world: World,
     private bornDay: number,
+    private seed: number,
   ) {
     this.ox = world.baseCx * CHUNK_SIZE;
     this.oy = world.baseCy * CHUNK_SIZE;
-    // 도시 번호가 다르면 배치도 달라진다. 지형 자체가 이미 다르지만,
-    // 블록 위상까지 갈라 두면 두 도시가 형제처럼 보이지 않는다.
-    this.seedBase = (world.baseCx * 7919 + world.baseCy * 104729) | 0;
+    this.rng = new Rng(seed);
   }
 
   run(): SeededCity | null {
     this.readTerrain();
-    if (!this.chooseCenter()) return null;
-    this.placeSeeds();
-    this.assignDistricts();
+    if (!this.chooseCore()) return null;
+    this.placeSections();
     this.planArterials();
     this.planLocalStreets();
-    this.enforceSlopeRule();
-    this.pruneDisconnected();
-    this.commitRoads();
-    this.placeFacilities();
+    this.growRoadNetwork();
+    if (!this.commitRoads()) return null;
+    this.measureRoadDistance();
+    this.assignSections();
     this.paintZones();
     this.placeBuildings();
-    return { tx: this.ox + this.cx, ty: this.oy + this.cy };
+    this.placeServiceFacilities();
+    return { tx: this.ox + this.cx, ty: this.oy + this.cy, seed: this.seed };
   }
 
   /* ---------------- 좌표 도우미 ---------------- */
@@ -161,28 +247,33 @@ class CityBuilder {
     return y * SPAN + x;
   }
 
+  /** 도시가 쓸 수 있는 유일한 범위. 여기를 벗어난 좌표에는 아무것도 쓰지 않는다. */
   private inside(x: number, y: number): boolean {
     return x >= EDGE && y >= EDGE && x < SPAN - EDGE && y < SPAN - EDGE;
-  }
-
-  private rnd(a: number, b: number, c: number): number {
-    return simRandom(this.seedBase, a, b, c);
   }
 
   /**
    * 0~1 사이의 부드러운 잡음. 격자 간격 `cell` 타일마다 값을 뽑고 사이를 부드럽게 잇는다.
    * 구역 경계를 구불구불하게 만들고, 길찾기 비용에 결을 넣는 데 쓴다.
    */
-  private noise(x: number, y: number, cell: number, salt: number): number {
-    const gx = Math.floor(x / cell);
-    const gy = Math.floor(y / cell);
-    const fx = smooth(x / cell - gx);
-    const fy = smooth(y / cell - gy);
-    const a = this.rnd(gx, gy, salt);
-    const b = this.rnd(gx + 1, gy, salt);
-    const c = this.rnd(gx, gy + 1, salt);
-    const d = this.rnd(gx + 1, gy + 1, salt);
-    return (a + (b - a) * fx) * (1 - fy) + (c + (d - c) * fx) * fy;
+  private makeNoise(cell: number, salt: number): (x: number, y: number) => number {
+    const rng = new Rng(deriveSeed(this.seed, salt));
+    const size = Math.ceil(SPAN / cell) + 2;
+    const grid = new Float32Array(size * size);
+    for (let i = 0; i < grid.length; i++) grid[i] = rng.next();
+    const at = (gx: number, gy: number): number =>
+      grid[Math.min(size - 1, Math.max(0, gy)) * size + Math.min(size - 1, Math.max(0, gx))];
+    return (x, y) => {
+      const gx = Math.floor(x / cell);
+      const gy = Math.floor(y / cell);
+      const fx = smooth(x / cell - gx);
+      const fy = smooth(y / cell - gy);
+      const a = at(gx, gy);
+      const b = at(gx + 1, gy);
+      const c = at(gx, gy + 1);
+      const d = at(gx + 1, gy + 1);
+      return (a + (b - a) * fx) * (1 - fy) + (c + (d - c) * fx) * fy;
+    };
   }
 
   /* ---------------- 1. 지형 읽기 ---------------- */
@@ -203,27 +294,36 @@ class CityBuilder {
 
   /**
    * 도심은 "넓고 평평하고 영역 한가운데에 가까운" 자리다.
-   * 물가를 싫어하지는 않는다 — 강가·바닷가 도심이 오히려 도시답다.
+   *
+   * 예전과 달리 **탐색 범위를 영역의 가운데 30%로 묶는다.** 도심이 구석에 서면
+   * 구역 고리의 한쪽이 통째로 영역 밖으로 나가고, 그 절반이 버려진다.
    */
-  private chooseCenter(): boolean {
+  private chooseCore(): boolean {
+    const lo = Math.floor(SPAN * 0.35);
+    const hi = Math.ceil(SPAN * 0.65);
     let best = -1;
-    for (let y = EDGE + 16; y < SPAN - EDGE - 16; y += 3) {
-      for (let x = EDGE + 16; x < SPAN - EDGE - 16; x += 3) {
+    for (let y = lo; y <= hi; y += 2) {
+      for (let x = lo; x <= hi; x += 2) {
         const i = this.idx(x, y);
         if (!this.land[i]) continue;
         const h = this.hgt[i];
         let open = 0;
         let flat = 0;
-        for (let dy = -15; dy <= 15; dy += 3) {
-          for (let dx = -15; dx <= 15; dx += 3) {
-            const j = this.idx(x + dx, y + dy);
+        for (let dy = -12; dy <= 12; dy += 3) {
+          for (let dx = -12; dx <= 12; dx += 3) {
+            const nx = x + dx;
+            const ny = y + dy;
+            if (!this.inside(nx, ny)) continue;
+            const j = this.idx(nx, ny);
             if (!this.land[j]) continue;
             open++;
             if (this.hgt[j] === h) flat++;
           }
         }
-        const pull = Math.hypot(x - SPAN / 2, y - SPAN / 2) * 0.16;
-        const score = open + flat * 0.7 - pull;
+        const pull = Math.hypot(x - SPAN / 2, y - SPAN / 2) * 0.2;
+        // 흔들기: 씨앗이 다르면 같은 지형에서도 도심이 조금씩 옮겨 앉는다.
+        const jitter = this.rng.range(-2.5, 2.5);
+        const score = open + flat * 0.7 - pull + jitter;
         if (score > best) {
           best = score;
           this.cx = x;
@@ -234,78 +334,97 @@ class CityBuilder {
     return best > 0;
   }
 
-  /* ---------------- 3. 구역 씨앗 ---------------- */
+  /* ---------------- 3. 섹션(구역) ---------------- */
 
-  private placeSeeds(): void {
-    this.pushSeed(this.cx, this.cy, K_DOWNTOWN, 0);
+  /**
+   * 도심 + 안쪽 고리 + 바깥 고리.
+   *
+   * 고리 반지름은 영역 크기에서 잡는다. 바깥 고리(0.30 x SPAN = 38)에 구역
+   * 반경(최대 18)을 더해도 56 이라 도심이 영역 가운데 30% 안에 있는 한 도시
+   * 전체가 2x2 안에 들어온다.
+   */
+  private placeSections(): void {
+    this.pushSection(this.cx, this.cy, K_DOWNTOWN, 0, 15);
 
-    // 안쪽 고리 — 도심을 둘러싼 부도심과 오래된 주거지.
-    const inner = 5;
+    // 안쪽 고리 — 부도심과 오래된 주거지가 도심을 둘러싼다.
+    const inner = 4;
+    const innerSpin = this.rng.next() * Math.PI * 2;
+    const subAt = this.rng.int(inner);
     for (let i = 0; i < inner; i++) {
-      const a = (i / inner) * Math.PI * 2 + this.rnd(i, 11, 3) * 0.7;
-      const r = CITY_RADIUS * (0.34 + this.rnd(i, 12, 3) * 0.12);
-      const kind = i % 2 === 0 ? K_RESIDENTIAL : K_SUBCENTER;
-      this.pushSeed(
+      const a = innerSpin + (i / inner) * Math.PI * 2 + this.rng.range(-0.28, 0.28);
+      const r = SPAN * this.rng.range(0.15, 0.19);
+      const kind = i === subAt || i === (subAt + 2) % inner ? K_SUBCENTER : K_RESIDENTIAL;
+      this.pushSection(
         Math.round(this.cx + Math.cos(a) * r),
         Math.round(this.cy + Math.sin(a) * r * 0.92),
         kind,
         1,
+        14,
       );
     }
 
-    // 바깥 고리 — 신도시 주거와 공업지대. 공업은 서로 붙여 놓는다.
-    const outer = 7;
-    const industrialAt = Math.floor(this.rnd(3, 3, 3) * outer);
+    // 바깥 고리 — 신도시 주거와 공업지대.
+    // 공업은 **서로 붙여서 한쪽에 몰아 놓는다.** 청크 단위 공업 혐오
+    // (macro.updateNuisance)는 흩어 놓으나 몰아 놓으나 총량이 같지만, 몰아
+    // 놓아야 주거지와 상업 완충대를 사이에 둘 수 있다.
+    const outer = 6;
+    const outerSpin = this.rng.next() * Math.PI * 2;
+    const indAt = this.rng.int(outer);
     for (let i = 0; i < outer; i++) {
-      const a = ((i + 0.5) / outer) * Math.PI * 2 + this.rnd(i, 21, 4) * 0.5;
-      const r = CITY_RADIUS * (0.66 + this.rnd(i, 22, 4) * 0.26);
-      const industrial = i === industrialAt || i === (industrialAt + 1) % outer;
-      this.pushSeed(
+      const a = outerSpin + ((i + 0.5) / outer) * Math.PI * 2 + this.rng.range(-0.2, 0.2);
+      const r = SPAN * this.rng.range(0.27, 0.32);
+      const industrial = i === indAt || i === (indAt + 1) % outer;
+      this.pushSection(
         Math.round(this.cx + Math.cos(a) * r),
         Math.round(this.cy + Math.sin(a) * r * 0.92),
         industrial ? K_INDUSTRIAL : K_RESIDENTIAL,
         2,
+        industrial ? 16 : 17,
       );
     }
   }
 
-  /** 물이나 영역 밖이면 가까운 뭍으로 끌어당긴다. 못 찾으면 그 씨앗은 버린다. */
-  private pushSeed(x: number, y: number, kind: number, ring: number): void {
-    const spot = this.nearestLand(x, y, 14);
+  /** 물이나 영역 밖이면 가까운 뭍으로 끌어당긴다. 못 찾으면 그 섹션은 버린다. */
+  private pushSection(x: number, y: number, kind: number, ring: number, reach: number): void {
+    const spot = this.nearestLand(x, y, 16);
     if (!spot) return;
-    const n = this.seeds.length;
-    // 블록 모양. 종류마다 결이 다르고, 같은 종류끼리도 조금씩 다르다.
+    // 이미 있는 섹션과 너무 붙으면 버린다. 붙어 있으면 격자가 서로를 갉아먹는다.
+    for (const s of this.sections) {
+      if (Math.hypot(s.x - spot.x, s.y - spot.y) < 10) return;
+    }
     let bw: number;
     let bh: number;
     if (kind === K_DOWNTOWN) {
-      bw = 5;
-      bh = 7;
+      bw = this.rng.between(4, 5);
+      bh = this.rng.between(5, 6);
     } else if (kind === K_SUBCENTER) {
-      bw = 5;
-      bh = 8 + Math.floor(this.rnd(n, 31, 5) * 3);
+      bw = this.rng.between(4, 6);
+      bh = this.rng.between(5, 7);
     } else if (kind === K_INDUSTRIAL) {
-      bw = 7 + Math.floor(this.rnd(n, 32, 5) * 2);
-      bh = 10 + Math.floor(this.rnd(n, 33, 5) * 4);
+      // 공장 부지는 깊다. 한 변을 길게 잡아 3x3 공장이 들어갈 속살을 만든다.
+      bw = this.rng.between(6, 7);
+      bh = this.rng.between(6, 8);
     } else {
-      bw = 5 + Math.floor(this.rnd(n, 34, 5) * 2);
-      bh = 8 + Math.floor(this.rnd(n, 35, 5) * 5);
+      bw = this.rng.between(5, 6);
+      bh = this.rng.between(6, 8);
     }
     // 절반은 결을 90도 돌린다. 이웃 구역과 격자 방향이 어긋나야 도시가
     // 한 장의 모눈종이처럼 보이지 않는다.
-    if (this.rnd(n, 36, 5) < 0.5) {
+    if (this.rng.chance(0.5)) {
       const t = bw;
       bw = bh;
       bh = t;
     }
-    this.seeds.push({
+    this.sections.push({
       x: spot.x,
       y: spot.y,
       kind,
+      ring,
       blockW: bw,
       blockH: bh,
-      phaseX: Math.floor(this.rnd(n, 37, 5) * bw),
-      phaseY: Math.floor(this.rnd(n, 38, 5) * bh),
-      ring,
+      phaseX: this.rng.int(bw),
+      phaseY: this.rng.int(bh),
+      reach,
     });
   }
 
@@ -324,47 +443,23 @@ class CityBuilder {
     return null;
   }
 
-  /* ---------------- 4. 구역 나누기 ---------------- */
+  /* ---------------- 4. 간선도로 ---------------- */
 
   /**
-   * 가장 가까운 씨앗이 그 칸의 주인이다. 거리에 잡음을 곱하므로 경계가
-   * 직선이 아니라 구불구불해진다. 어느 씨앗에서도 멀면 도시 밖(-1)이다.
+   * 섹션을 잇는 뼈대.
+   *
+   * 예전 생성기는 간선을 2칸 폭으로 넓혔다. 이 게임의 도로는 한 칸이 이미
+   * 양방향이고 나란한 두 줄은 서로 연결되지 않으므로, 2칸 폭은 통행량을
+   * 늘리지 못하면서 유지비와 "왜 안 이어지지?" 만 늘린다. 그래서 한 칸으로 깐다.
    */
-  private assignDistricts(): void {
-    if (!this.seeds.length) return;
-    for (let y = EDGE; y < SPAN - EDGE; y++) {
-      for (let x = EDGE; x < SPAN - EDGE; x++) {
-        const i = this.idx(x, y);
-        if (!this.land[i]) continue;
-        const wobble = 0.78 + this.noise(x, y, 26, 71) * 0.5;
-        let bestD = Infinity;
-        let best = -1;
-        for (let s = 0; s < this.seeds.length; s++) {
-          const seed = this.seeds[s];
-          // 도심은 조금 더 넓게 잡는다. 실제 도시도 도심이 구역을 빨아들인다.
-          const bias = seed.kind === K_DOWNTOWN ? 0.82 : 1;
-          const d = Math.hypot(x - seed.x, y - seed.y) * wobble * bias;
-          if (d < bestD) {
-            bestD = d;
-            best = s;
-          }
-        }
-        // 도시의 바깥 테두리. 여기서부터는 들판으로 남긴다.
-        if (bestD > CITY_RADIUS * 0.3) continue;
-        this.owner[i] = best;
-      }
-    }
-  }
-
-  /* ---------------- 5. 간선도로 ---------------- */
-
   private planArterials(): void {
-    const inner = this.seeds.filter((s) => s.ring === 1);
-    const outer = this.seeds.filter((s) => s.ring === 2);
-    const hub = this.seeds[0];
+    const hub = this.sections[0];
     if (!hub) return;
+    const inner = this.sections.filter((s) => s.ring === 1);
+    const outer = this.sections.filter((s) => s.ring === 2);
+    const grain = this.makeNoise(18, 0x91);
 
-    for (const s of inner) this.stamp(this.route(hub, s), true);
+    for (const s of inner) this.stamp(this.route(hub, s, grain));
     for (const s of outer) {
       // 바깥 고리는 도심이 아니라 가장 가까운 안쪽 구역에 붙인다.
       // 모든 길이 도심으로 직행하면 도심이 로터리처럼 뭉개진다.
@@ -377,27 +472,30 @@ class CityBuilder {
           near = a;
         }
       }
-      this.stamp(this.route(near, s), true);
+      this.stamp(this.route(near, s, grain));
     }
 
-    // 순환도로. 안쪽 고리를 한 바퀴 잇되 한두 구간은 일부러 빼먹는다
+    // 순환도로. 고리를 한 바퀴 잇되 한두 구간은 일부러 빼먹는다
     // (실제 도시의 순환도로도 대개 미완성이다).
     for (let i = 0; i < inner.length; i++) {
-      if (this.rnd(i, 51, 6) < 0.22) continue;
-      this.stamp(this.route(inner[i], inner[(i + 1) % inner.length]), true);
+      if (this.rng.chance(0.18)) continue;
+      this.stamp(this.route(inner[i], inner[(i + 1) % inner.length], grain));
     }
     for (let i = 0; i < outer.length; i++) {
-      if (this.rnd(i, 52, 6) < 0.45) continue;
-      this.stamp(this.route(outer[i], outer[(i + 1) % outer.length]), false);
+      if (this.rng.chance(0.32)) continue;
+      this.stamp(this.route(outer[i], outer[(i + 1) % outer.length], grain));
     }
   }
 
   /**
-   * A* 길찾기. 물은 못 지나가고, 고도가 바뀌는 칸은 비싸다.
-   * 그래서 길이 등고선을 따라 휘고, 언덕은 넘어야 할 때만 넘는다 —
-   * 그 자리가 곧 경사 도로다.
+   * A* 길찾기.
+   *
+   * **한 걸음의 고도차가 1을 넘으면 아예 밟지 않는다.** build.ts 의
+   * canConnectRoads 가 그 연결을 거부하기 때문이다. 예전 생성기는 이 조건을
+   * 계획에 넣지 않아서, 절벽을 가로지르는 길을 그려 놓고 나중에 그 칸만 지웠다.
+   * 지워진 자리에서 길이 끊기고, 끊긴 뒤쪽이 도심에서 갈 수 없는 섬이 됐다.
    */
-  private route(a: Seed, b: Seed): number[] {
+  private route(a: Section, b: Section, grain: (x: number, y: number) => number): number[] {
     const start = this.idx(a.x, a.y);
     const goal = this.idx(b.x, b.y);
     const cost = new Float32Array(SPAN * SPAN).fill(Infinity);
@@ -408,7 +506,7 @@ class CityBuilder {
 
     let found = false;
     let guard = 0;
-    while (heap.size > 0 && guard++ < 220_000) {
+    while (heap.size > 0 && guard++ < 120_000) {
       const cur = heap.pop();
       if (cur === goal) {
         found = true;
@@ -417,17 +515,18 @@ class CityBuilder {
       const cx = cur % SPAN;
       const cy = (cur / SPAN) | 0;
       const base = cost[cur];
+      const ch = this.hgt[cur];
       for (const [dx, dy] of DIRS) {
         const nx = cx + dx;
         const ny = cy + dy;
         if (!this.inside(nx, ny)) continue;
         const ni = this.idx(nx, ny);
         if (!this.land[ni]) continue;
+        const climb = Math.abs(this.hgt[ni] - ch);
+        if (climb > 1) continue; // 절벽은 도로가 될 수 없다
         // 이미 깔린 길 위를 지나가면 싸다. 간선이 하나로 모여 큰길이 된다.
-        const reuse = this.plan[ni] ? 0.35 : 1;
-        const climb = Math.abs(this.hgt[ni] - this.hgt[cur]) * 2.6;
-        const grain = this.noise(nx, ny, 18, 91) * 1.1;
-        const next = base + reuse + climb + grain;
+        const reuse = this.cand[ni] !== 255 ? 0.3 : 1;
+        const next = base + reuse + climb * 2.6 + grain(nx, ny) * 1.1;
         if (next >= cost[ni]) continue;
         cost[ni] = next;
         prev[ni] = cur;
@@ -441,184 +540,168 @@ class CityBuilder {
     return path.reverse();
   }
 
-  /** 길을 계획에 새긴다. wide 면 같은 고도인 옆칸까지 2차선으로 넓힌다. */
-  private stamp(path: readonly number[], wide: boolean): void {
-    for (let k = 0; k < path.length; k++) {
-      const i = path[k];
-      this.plan[i] = 1;
-      if (!wide) continue;
-      const x = i % SPAN;
-      const y = (i / SPAN) | 0;
-      // 진행 방향의 직각으로 한 칸. 방향이 바뀌는 자리에서는 건너뛴다.
-      const nxt = path[k + 1] ?? path[k - 1] ?? i;
-      const dx = Math.sign((nxt % SPAN) - x);
-      const dy = Math.sign(((nxt / SPAN) | 0) - y);
-      const px = dy !== 0 ? 1 : 0;
-      const py = dx !== 0 ? 1 : 0;
-      const sx = x + px;
-      const sy = y + py;
-      if (!this.inside(sx, sy)) continue;
-      const si = this.idx(sx, sy);
-      // **고도가 같을 때만** 넓힌다. 비탈에서 옆으로 붙이면 그 칸이 여러
-      // 방향으로 비탈지게 되어 규칙에 걸린다(build.ts 경사 판정).
-      if (this.land[si] && this.hgt[si] === this.hgt[i]) this.plan[si] = 1;
-    }
+  private stamp(path: readonly number[]): void {
+    for (const i of path) this.cand[i] = PRIO_ARTERIAL;
   }
 
-  /* ---------------- 6. 이면도로 ---------------- */
+  /* ---------------- 5. 이면도로 ---------------- */
 
   /**
-   * 구역마다 자기 격자를 깐다. 선을 끝까지 긋지 않고 **구역 안에 있는 동안만**
-   * 긋는다. 그래서 물가·언덕·구역 경계에서 길이 자연스럽게 끊기고, 구역마다
-   * 격자의 방향과 위상이 달라 도시 전체가 한 장의 모눈이 되지 않는다.
+   * 섹션마다 자기 격자를 깐다. 선을 끝까지 긋지 않고 **섹션 반경 안에 있는
+   * 동안만** 긋는다. 그래서 물가·언덕·구역 경계에서 길이 자연스럽게 끊기고,
+   * 구역마다 격자의 방향과 위상이 달라 도시 전체가 한 장의 모눈이 되지 않는다.
    */
   private planLocalStreets(): void {
-    for (let s = 0; s < this.seeds.length; s++) {
-      const seed = this.seeds[s];
-      const box = this.districtBox(s);
-      if (!box) continue;
+    const wobble = this.makeNoise(22, 0x33);
+    for (let s = 0; s < this.sections.length; s++) {
+      const sec = this.sections[s];
+      const x0 = Math.max(EDGE, sec.x - sec.reach);
+      const x1 = Math.min(SPAN - EDGE - 1, sec.x + sec.reach);
+      const y0 = Math.max(EDGE, sec.y - sec.reach);
+      const y1 = Math.min(SPAN - EDGE - 1, sec.y + sec.reach);
+      const belongs = (x: number, y: number): boolean => {
+        if (!this.inside(x, y) || !this.land[this.idx(x, y)]) return false;
+        // 반경을 잡음으로 흔들어 구역 윤곽을 둥근 원이 아니게 만든다.
+        const limit = sec.reach * (0.78 + wobble(x, y) * 0.42);
+        return Math.hypot(x - sec.x, y - sec.y) <= limit;
+      };
 
-      for (let y = box.y0; y <= box.y1; y++) {
-        if (mod(y - seed.phaseY, seed.blockH) !== 0) continue;
-        this.runLine(s, box.x0, box.x1, y, true);
+      for (let y = y0; y <= y1; y++) {
+        if (mod(y - sec.phaseY, sec.blockH) !== 0) continue;
+        this.runLine(belongs, x0, x1, y, true);
       }
-      for (let x = box.x0; x <= box.x1; x++) {
-        if (mod(x - seed.phaseX, seed.blockW) !== 0) continue;
-        this.runLine(s, box.y0, box.y1, x, false);
+      for (let x = x0; x <= x1; x++) {
+        if (mod(x - sec.phaseX, sec.blockW) !== 0) continue;
+        this.runLine(belongs, y0, y1, x, false);
       }
     }
-  }
-
-  private districtBox(s: number): { x0: number; y0: number; x1: number; y1: number } | null {
-    let x0 = SPAN;
-    let y0 = SPAN;
-    let x1 = -1;
-    let y1 = -1;
-    for (let y = EDGE; y < SPAN - EDGE; y++) {
-      for (let x = EDGE; x < SPAN - EDGE; x++) {
-        if (this.owner[this.idx(x, y)] !== s) continue;
-        if (x < x0) x0 = x;
-        if (y < y0) y0 = y;
-        if (x > x1) x1 = x;
-        if (y > y1) y1 = y;
-      }
-    }
-    return x1 < 0 ? null : { x0, y0, x1, y1 };
   }
 
   /**
    * 선 하나를 긋는다. 구역 안에 있는 구간(run)만 남기고, 짧은 토막은 버린다.
    * 가끔 한쪽 끝을 잘라 막다른 길을 만들고, 가끔 도중에 한 칸 어긋나게 꺾는다.
    */
-  private runLine(s: number, from: number, to: number, fixed: number, horizontal: boolean): void {
+  private runLine(
+    belongs: (x: number, y: number) => boolean,
+    from: number,
+    to: number,
+    fixed: number,
+    horizontal: boolean,
+  ): void {
     let shift = 0;
     let run: number[] = [];
     const flush = (): void => {
-      if (run.length >= 6) {
-        // 막다른 길: 20% 확률로 끝을 두어 칸 자른다.
-        const cut =
-          this.rnd(run[0], fixed, 61) < 0.2 ? 1 + Math.floor(this.rnd(run[0], fixed, 62) * 3) : 0;
-        for (let k = 0; k < run.length - cut; k++) this.plan[run[k]] = 1;
+      if (run.length >= 5) {
+        // 막다른 길: 18% 확률로 끝을 두어 칸 자른다.
+        const cut = this.rng.chance(0.18) ? this.rng.between(1, 3) : 0;
+        for (let k = 0; k < run.length - cut; k++) {
+          if (this.cand[run[k]] === 255) this.cand[run[k]] = PRIO_LOCAL;
+        }
       }
       run = [];
     };
 
     for (let p = from; p <= to; p++) {
       // 구역 안에서 한 번쯤 한 칸 어긋난다. 완전한 직선은 도시를 기계처럼 보이게 한다.
-      if (this.rnd(p, fixed, 63) < 0.035) shift += this.rnd(p, fixed, 64) < 0.5 ? 1 : -1;
+      if (this.rng.chance(0.03)) shift += this.rng.chance(0.5) ? 1 : -1;
       const x = horizontal ? p : fixed + shift;
       const y = horizontal ? fixed + shift : p;
-      if (!this.inside(x, y)) {
+      if (!belongs(x, y)) {
         flush();
         continue;
       }
-      const i = this.idx(x, y);
-      if (this.owner[i] !== s || !this.land[i]) {
-        flush();
-        continue;
-      }
-      run.push(i);
+      run.push(this.idx(x, y));
     }
     flush();
   }
 
-  /* ---------------- 7. 규칙 정리 ---------------- */
+  /* ---------------- 6. 도로망 만들기 ---------------- */
 
   /**
-   * 비탈 규칙(build.ts)을 계획 단계에서 미리 지킨다.
+   * 도로망의 핵심. **연결 그래프를 직접 키운다.**
    *
-   * 한 칸이 여러 방향으로 비탈지면 그릴 수 없으므로 그 칸을 뺀다. 빼면 이웃의
-   * 상황도 바뀌므로 더 이상 바뀌지 않을 때까지 돌린다. 결과는 "언덕을 비스듬히
-   * 가로지르던 골목이 언덕 앞에서 끊긴 모습" 이고, 그게 실제 지형의 도시다.
+   * 도심에서 시작해서 후보 도로를 하나씩 붙여 나간다. 간선(두 칸 사이의 연결)을
+   * 붙일 때마다 build.ts 의 두 규칙을 그 자리에서 검사한다.
+   *
+   *   - 두 칸의 고도차가 1 이하일 것
+   *   - 한 칸이 여러 방향으로 비탈지지 않을 것 (마주 보는 두 방향은 허용)
+   *
+   * 검사를 통과한 간선만 받아들이고, 이 그래프에 끝내 들어오지 못한 후보는
+   * **놓지 않는다.** 그래서 완성된 도로망은 정의상
+   *   (1) 도심에서 전부 도달 가능하고
+   *   (2) 모든 연결이 규칙을 만족하며
+   *   (3) 고립된 도로 조각이 하나도 없다.
+   * 예전처럼 "놓고 나서 끊긴 걸 지우는" 뒷정리가 필요 없다.
+   *
+   * 간선 후보를 우선순위 버킷으로 처리한다. 간선도로를 먼저 받아들여야 비탈
+   * 규칙이 뼈대가 아니라 골목 쪽에서 걸린다.
    */
-  private enforceSlopeRule(): void {
-    for (let pass = 0; pass < 6; pass++) {
-      let removed = 0;
-      for (let y = EDGE; y < SPAN - EDGE; y++) {
-        for (let x = EDGE; x < SPAN - EDGE; x++) {
-          const i = this.idx(x, y);
-          if (!this.plan[i]) continue;
-          if (this.slopeOk(x, y)) continue;
-          this.plan[i] = 0;
-          removed++;
+  private growRoadNetwork(): void {
+    const start = this.nearestCandidate(this.cx, this.cy);
+    if (start < 0) return;
+
+    // 버킷 0 = 간선, 1 = 이면도로. 같은 버킷 안은 먼저 닿은 순서(BFS).
+    const buckets: number[][] = [[], []];
+    this.road[start] = 1;
+    buckets[this.cand[start] === PRIO_ARTERIAL ? 0 : 1].push(start);
+
+    for (let b = 0; b < buckets.length; b++) {
+      for (let head = 0; head < buckets[b].length; head++) {
+        const cur = buckets[b][head];
+        const x = cur % SPAN;
+        const y = (cur / SPAN) | 0;
+        for (let d = 0; d < 4; d++) {
+          const nx = x + DIRS[d][0];
+          const ny = y + DIRS[d][1];
+          if (!this.inside(nx, ny)) continue;
+          const ni = this.idx(nx, ny);
+          if (this.cand[ni] === 255) continue;
+          if (this.links[cur] & (1 << d)) continue;
+          if (!this.acceptEdge(cur, ni, d)) continue;
+          if (this.road[ni]) continue;
+          this.road[ni] = 1;
+          const prio = this.cand[ni] === PRIO_ARTERIAL ? 0 : 1;
+          buckets[Math.max(prio, b)].push(ni);
         }
       }
-      if (removed === 0) break;
     }
-  }
 
-  private slopeOk(x: number, y: number): boolean {
-    const h = this.hgt[this.idx(x, y)];
-    let count = 0;
-    let first = -1;
-    let second = -1;
-    for (let d = 0; d < 4; d++) {
-      const nx = x + DIRS[d][0];
-      const ny = y + DIRS[d][1];
-      if (!this.inside(nx, ny)) continue;
-      const ni = this.idx(nx, ny);
-      if (!this.plan[ni]) continue;
-      if (this.hgt[ni] === h) continue;
-      count++;
-      if (first < 0) first = d;
-      else if (second < 0) second = d;
-    }
-    if (count <= 1) return true;
-    if (count > 2) return false;
-    return (first + 2) % 4 === second;
-  }
-
-  /** 도심에서 도로만 밟아 못 가는 길은 없앤다. 섬처럼 뜬 골목은 도시가 아니다. */
-  private pruneDisconnected(): void {
-    const start = this.nearestPlanned(this.cx, this.cy);
-    if (start < 0) return;
-    const seen = new Uint8Array(SPAN * SPAN);
-    const queue = new Int32Array(SPAN * SPAN);
-    let head = 0;
-    let tail = 0;
-    queue[tail++] = start;
-    seen[start] = 1;
-    while (head < tail) {
-      const cur = queue[head++];
-      const x = cur % SPAN;
-      const y = (cur / SPAN) | 0;
-      for (const [dx, dy] of DIRS) {
-        const nx = x + dx;
-        const ny = y + dy;
-        if (!this.inside(nx, ny)) continue;
-        const ni = this.idx(nx, ny);
-        if (seen[ni] || !this.plan[ni]) continue;
-        seen[ni] = 1;
-        queue[tail++] = ni;
+    // 뼈대가 다 선 뒤에 남은 맞닿음을 한 번 더 이어 준다. 격자가 실제로
+    // 격자가 되려면 교차로가 있어야 하는데, 위 통과는 "처음 닿은" 간선만 쓴다.
+    for (let y = EDGE; y < SPAN - EDGE; y++) {
+      for (let x = EDGE; x < SPAN - EDGE; x++) {
+        const i = this.idx(x, y);
+        if (!this.road[i]) continue;
+        for (let d = 0; d < 2; d++) {
+          const nx = x + DIRS[d][0];
+          const ny = y + DIRS[d][1];
+          if (!this.inside(nx, ny)) continue;
+          const ni = this.idx(nx, ny);
+          if (!this.road[ni] || this.links[i] & (1 << d)) continue;
+          this.acceptEdge(i, ni, d);
+        }
       }
     }
-    for (let i = 0; i < this.plan.length; i++) {
-      if (this.plan[i] && !seen[i]) this.plan[i] = 0;
-    }
   }
 
-  private nearestPlanned(x: number, y: number): number {
-    for (let r = 0; r < 60; r++) {
+  /** 간선 하나를 규칙에 맞으면 받아들인다. */
+  private acceptEdge(a: number, b: number, d: number): boolean {
+    const back = (d + 2) & 3;
+    const dh = this.hgt[b] - this.hgt[a];
+    if (Math.abs(dh) > 1) return false;
+    if (dh !== 0) {
+      if (!slopeLegal(this.slopeBits[a] | (1 << d))) return false;
+      if (!slopeLegal(this.slopeBits[b] | (1 << back))) return false;
+      this.slopeBits[a] |= 1 << d;
+      this.slopeBits[b] |= 1 << back;
+    }
+    this.links[a] |= 1 << d;
+    this.links[b] |= 1 << back;
+    return true;
+  }
+
+  private nearestCandidate(x: number, y: number): number {
+    for (let r = 0; r < 48; r++) {
       for (let dy = -r; dy <= r; dy++) {
         for (let dx = -r; dx <= r; dx++) {
           if (r > 0 && Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
@@ -626,131 +709,325 @@ class CityBuilder {
           const ny = y + dy;
           if (!this.inside(nx, ny)) continue;
           const i = this.idx(nx, ny);
-          if (this.plan[i]) return i;
+          if (this.cand[i] !== 255) return i;
         }
       }
     }
     return -1;
   }
 
-  /* ---------------- 8. 실제로 놓기 ---------------- */
-
-  private commitRoads(): void {
-    for (let y = EDGE; y < SPAN - EDGE; y++) {
-      for (let x = EDGE; x < SPAN - EDGE; x++) {
-        if (!this.plan[this.idx(x, y)]) continue;
-        const tx = this.ox + x;
-        const ty = this.oy + y;
-        // 계획 단계에서 이미 규칙을 지켰지만, 마지막 관문은 한 곳(build.ts)이어야 한다.
-        if (!canPlaceRoad(this.world, tx, ty).ok) continue;
-        this.world.setBuild(tx, ty, Build.Road, false);
-      }
-    }
-  }
-
-  /* ---------------- 9. 시설 ---------------- */
+  /* ---------------- 7. 실제로 놓기 ---------------- */
 
   /**
-   * 시설을 **커버리지 격자** 로 놓는다.
+   * 계획한 도로를 월드에 놓는다.
    *
-   * 구역마다 한두 채씩 놓아 봤더니 도시가 커질수록 서비스 품질이 무너졌다.
-   * 이 게임의 만족도는 서비스·복지 감점이 0.5까지 깎아내리고, 2·3단계 건물의
-   * 입주 기준선이 0.45 / 0.62 라서, 커버가 모자라면 **큰 도시일수록 공실률이
-   * 올라간다.** 실제로 그렇게 만든 첫 판이 입주율 28% 였다.
-   *
-   * 그래서 간격을 정원과 반경에서 거꾸로 잡는다.
-   *
-   *   소방서  정원 220채   -> 24칸마다 (건물 밀도 기준으로 정원 언저리)
-   *   경찰서  정원 3,000명 -> 46칸마다
-   *   병원    정원 5,000명 -> 62칸마다
-   *   학교    정원 2,500명 -> 42칸마다
-   *   공원    중산층 요구를 6.4칸까지 채운다 -> 16칸마다
-   *   소공원  저소득 요구를 3.7칸까지 채운다 -> 11칸마다 (자투리 메우기)
-   *
-   * 격자점마다 잡음으로 흔들고, 구역 성격에 안 맞는 시설은 건너뛴다
-   * (공업지대에 학교와 체육시설을 놓지 않는다). 그래서 줄 맞춰 선 것처럼
-   * 보이지 않으면서도 도시 전체가 고르게 덮인다.
-   *
-   * 큰 것부터 놓는다. 3x3 병원이 자리를 못 잡는 게 소공원이 못 서는 것보다 아프다.
+   * 칸을 먼저 전부 놓고(고립 상태), 그다음 계획한 간선만 연다. 마지막 관문은
+   * 계획 단계가 아니라 build.ts 한 곳(canPlaceRoad / canConnectRoads)이다 —
+   * 학생이 직접 그린 도로와 완전히 같은 검사를 통과한 도로망만 남는다.
    */
-  private placeFacilities(): void {
-    const lattice: ReadonlyArray<readonly [number, number]> = [
-      [FAC_HOSPITAL, 62],
-      [FAC_POLICE, 46],
-      [FAC_SCHOOL, 42],
-      [FAC_SPORTS, 30],
-      [FAC_FIRE, 24],
-      [FAC_PARK, 16],
-      [FAC_MINIPARK, 11],
-    ];
+  private commitRoads(): boolean {
+    let placed = 0;
+    for (let y = EDGE; y < SPAN - EDGE; y++) {
+      for (let x = EDGE; x < SPAN - EDGE; x++) {
+        const i = this.idx(x, y);
+        if (!this.road[i]) continue;
+        const tx = this.ox + x;
+        const ty = this.oy + y;
+        if (!canPlaceRoad(this.world, tx, ty).ok) {
+          this.road[i] = 0;
+          continue;
+        }
+        this.world.placeGeneratedRoad(tx, ty);
+        placed++;
+      }
+    }
+    if (placed === 0) return false;
 
-    for (const [kind, spacing] of lattice) {
-      const half = spacing >> 1;
-      for (let y = EDGE + half; y < SPAN - EDGE; y += spacing) {
-        for (let x = EDGE + half; x < SPAN - EDGE; x += spacing) {
-          const jx = x + Math.round((this.rnd(x, y, kind + 100) - 0.5) * spacing * 0.6);
-          const jy = y + Math.round((this.rnd(x, y, kind + 200) - 0.5) * spacing * 0.6);
-          if (!this.inside(jx, jy)) continue;
-          const s = this.owner[this.idx(jx, jy)];
-          if (s < 0) continue;
-          if (!this.suitsDistrict(kind, this.seeds[s].kind)) continue;
-          this.tryFacility(kind, jx, jy, Math.min(9, half));
+    for (let y = EDGE; y < SPAN - EDGE; y++) {
+      for (let x = EDGE; x < SPAN - EDGE; x++) {
+        const i = this.idx(x, y);
+        if (!this.road[i]) continue;
+        for (let d = 0; d < 2; d++) {
+          if (!(this.links[i] & (1 << d))) continue;
+          const nx = x + DIRS[d][0];
+          const ny = y + DIRS[d][1];
+          if (!this.road[this.idx(nx, ny)]) continue;
+          const ax = this.ox + x;
+          const ay = this.oy + y;
+          const bx = this.ox + nx;
+          const by = this.oy + ny;
+          if (!canConnectRoads(this.world, ax, ay, bx, by).ok) continue;
+          this.world.connectRoads(ax, ay, bx, by, false);
         }
       }
     }
+
+    return this.pruneUnreachable();
   }
 
-  /** 구역 성격에 맞는 시설인가. 공장지대의 학교는 아무도 안 다닌다. */
-  private suitsDistrict(kind: number, districtKind: number): boolean {
-    if (districtKind !== K_INDUSTRIAL) return true;
-    return kind === FAC_FIRE || kind === FAC_POLICE || kind === FAC_MINIPARK;
-  }
-
-  private tryFacility(kind: number, x: number, y: number, limit: number): boolean {
-    const span = facilitySpan(kind);
-    for (let r = 0; r <= limit; r++) {
-      for (let dy = -r; dy <= r; dy++) {
+  /**
+   * 마지막 안전망.
+   *
+   * 위 단계가 맞다면 지울 것이 하나도 없어야 한다. 그래도 실제 월드의
+   * `roadsConnected` 로 다시 훑어서 도심에서 못 가는 도로를 **철거한다.**
+   * 생성기와 월드의 판정이 언젠가 어긋나더라도 "차가 못 가는 길"이 도시에
+   * 남지 않게 하는 값싼 보험이다.
+   */
+  private pruneUnreachable(): boolean {
+    let start = -1;
+    for (let r = 0; r < 64 && start < 0; r++) {
+      for (let dy = -r; dy <= r && start < 0; dy++) {
         for (let dx = -r; dx <= r; dx++) {
           if (r > 0 && Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
-          const nx = x + dx;
-          const ny = y + dy;
-          if (!this.inside(nx, ny) || !this.inside(nx + span, ny + span)) continue;
-          const tx = this.ox + nx;
-          const ty = this.oy + ny;
-          if (!canPlaceFacility(this.world, tx, ty, kind, 5).ok) continue;
-          this.world.placeFacility(tx, ty, kind, this.bornDay);
-          return true;
+          const nx = this.cx + dx;
+          const ny = this.cy + dy;
+          if (!this.inside(nx, ny)) continue;
+          if (this.road[this.idx(nx, ny)]) {
+            start = this.idx(nx, ny);
+            break;
+          }
         }
       }
     }
-    return false;
+    if (start < 0) return false;
+
+    const seen = new Uint8Array(SPAN * SPAN);
+    const queue: number[] = [start];
+    seen[start] = 1;
+    for (let head = 0; head < queue.length; head++) {
+      const cur = queue[head];
+      const x = cur % SPAN;
+      const y = (cur / SPAN) | 0;
+      for (const [dx, dy] of DIRS) {
+        const nx = x + dx;
+        const ny = y + dy;
+        if (!this.inside(nx, ny)) continue;
+        const ni = this.idx(nx, ny);
+        if (seen[ni] || !this.road[ni]) continue;
+        if (!this.world.roadsConnected(this.ox + x, this.oy + y, this.ox + nx, this.oy + ny))
+          continue;
+        seen[ni] = 1;
+        queue.push(ni);
+      }
+    }
+
+    for (let i = 0; i < this.road.length; i++) {
+      if (!this.road[i] || seen[i]) continue;
+      this.road[i] = 0;
+      this.world.setBuild(this.ox + (i % SPAN), this.oy + ((i / SPAN) | 0), Build.None, false);
+    }
+    // 도심 자리를 실제 도로망 위로 옮겨 둔다. 첫 카메라가 길 위를 본다.
+    this.cx = start % SPAN;
+    this.cy = (start / SPAN) | 0;
+    return true;
+  }
+
+  /* ---------------- 8. 도로에서의 거리 ---------------- */
+
+  /** 지구를 칠할 수 있는 깊이까지만 재는 BFS. 도로 칸이 0 이다. */
+  private measureRoadDistance(): void {
+    const queue: number[] = [];
+    for (let y = EDGE; y < SPAN - EDGE; y++) {
+      for (let x = EDGE; x < SPAN - EDGE; x++) {
+        const i = this.idx(x, y);
+        if (!this.road[i]) continue;
+        this.roadDist[i] = 0;
+        queue.push(i);
+      }
+    }
+    for (let head = 0; head < queue.length; head++) {
+      const cur = queue[head];
+      if (this.roadDist[cur] >= ZONE_DEPTH) continue;
+      const x = cur % SPAN;
+      const y = (cur / SPAN) | 0;
+      for (const [dx, dy] of DIRS) {
+        const nx = x + dx;
+        const ny = y + dy;
+        if (!this.inside(nx, ny)) continue;
+        const ni = this.idx(nx, ny);
+        if (this.roadDist[ni] !== 255 || !this.land[ni]) continue;
+        if (this.road[ni]) continue;
+        this.roadDist[ni] = this.roadDist[cur] + 1;
+        queue.push(ni);
+      }
+    }
+  }
+
+  /* ---------------- 9. 섹션 나누기 ---------------- */
+
+  /**
+   * 각 칸의 주인 섹션. 가장 가까운 씨앗이 주인이되 거리에 잡음을 곱해
+   * 경계를 구불구불하게 만든다.
+   */
+  private assignSections(): void {
+    if (!this.sections.length) return;
+    const wobble = this.makeNoise(26, 0x71);
+    for (let y = EDGE; y < SPAN - EDGE; y++) {
+      for (let x = EDGE; x < SPAN - EDGE; x++) {
+        const i = this.idx(x, y);
+        if (this.roadDist[i] === 255) continue;
+        const w = 0.8 + wobble(x, y) * 0.45;
+        let bestD = Infinity;
+        let best = -1;
+        for (let s = 0; s < this.sections.length; s++) {
+          const sec = this.sections[s];
+          // 도심은 조금 더 넓게 잡는다. 실제 도시도 도심이 구역을 빨아들인다.
+          const bias = sec.kind === K_DOWNTOWN ? 0.84 : 1;
+          const d = Math.hypot(x - sec.x, y - sec.y) * w * bias;
+          if (d < bestD) {
+            bestD = d;
+            best = s;
+          }
+        }
+        this.owner[i] = best;
+      }
+    }
   }
 
   /* ---------------- 10. 지구 ---------------- */
 
   /**
-   * 도로에서 두 칸 안쪽까지만 지구로 칠한다.
+   * 용도를 **할당량으로** 칠한다.
    *
-   * 세 칸 넘게 칠하면 그 안쪽은 도로에 닿지 못해 "지어져도 비는 건물" 이 된다
-   * (roadGraph 의 통근 거리는 필지에 **맞닿은** 도로에서 잰다). 안 칠한
-   * 블록 속살은 마당·공터로 남아서, 위에서 보면 도시가 훨씬 자연스럽다.
+   * 예전에는 칸마다 잡음을 굴려 용도를 정했다. 그러면 지형이 공업 구역을
+   * 통째로 잘라먹었을 때 도시 전체에 일자리가 없어진다(실제로 도시 0 의
+   * 공업 타일은 37칸이었다). 그래서 순서를 뒤집는다.
+   *
+   *   1. 칠할 수 있는 칸 N 을 센다
+   *   2. 목표 비율로 공업 0.28N, 상업 0.14N 을 정한다
+   *   3. 공업 씨앗에서 **할당량이 찰 때까지만** BFS 로 키운다
+   *   4. 공업 둘레 세 칸을 상업 완충대로 바꾼다 (주거를 공장에서 떼어 놓는다)
+   *   5. 도심·부도심에서 남은 상업 할당량을 키운다
+   *   6. 나머지 전부 주거
+   *
+   * 지형이 어떻게 생겼든 비율은 항상 목표에 맞고, 공업은 항상 도시 한쪽에
+   * 뭉쳐 있고, 주거와 공업 사이에는 항상 상업 띠가 있다.
    */
   private paintZones(): void {
-    const dist = new Uint8Array(SPAN * SPAN).fill(255);
-    const queue = new Int32Array(SPAN * SPAN);
-    let head = 0;
-    let tail = 0;
+    const zonable: number[] = [];
     for (let y = EDGE; y < SPAN - EDGE; y++) {
       for (let x = EDGE; x < SPAN - EDGE; x++) {
         const i = this.idx(x, y);
-        if (this.world.getBuild(this.ox + x, this.oy + y) !== Build.Road) continue;
-        dist[i] = 0;
-        queue[tail++] = i;
+        const d = this.roadDist[i];
+        if (d === 0 || d === 255) continue;
+        if (this.owner[i] < 0) continue;
+        if (this.world.getBuild(this.ox + x, this.oy + y) !== Build.None) continue;
+        zonable.push(i);
       }
     }
-    while (head < tail) {
-      const cur = queue[head++];
-      if (dist[cur] >= 2) continue;
+    if (!zonable.length) return;
+
+    const total = zonable.length;
+    const quotaI = Math.round(total * ZONE_SHARE_I);
+    const quotaC = Math.round(total * ZONE_SHARE_C);
+    const zone = new Int8Array(SPAN * SPAN).fill(-1);
+    for (const i of zonable) zone[i] = ZONE_R;
+
+    // 3. 공업. 공업 섹션 씨앗에서 시작하는 다중 출발 BFS.
+    const indSeeds: number[] = [];
+    for (const sec of this.sections) {
+      if (sec.kind !== K_INDUSTRIAL) continue;
+      const spot = this.nearestZonable(sec.x, sec.y, zone);
+      if (spot >= 0) indSeeds.push(spot);
+    }
+    const industrial = this.growZone(indSeeds, zone, quotaI, ZONE_I);
+
+    // 4. 완충대. 공업에서 INDUSTRY_BUFFER 칸 안쪽의 주거를 상업으로 바꾼다.
+    let usedC = 0;
+    if (industrial.length) {
+      const buffer = this.ringAround(industrial, zone, INDUSTRY_BUFFER);
+      for (const i of buffer) {
+        if (usedC >= quotaC) break;
+        zone[i] = ZONE_C;
+        usedC++;
+      }
+    }
+
+    // 5. 도심·부도심 상업.
+    const comSeeds: number[] = [];
+    for (const sec of this.sections) {
+      if (sec.kind !== K_DOWNTOWN && sec.kind !== K_SUBCENTER) continue;
+      const spot = this.nearestZonable(sec.x, sec.y, zone);
+      if (spot >= 0) comSeeds.push(spot);
+    }
+    usedC += this.growZone(comSeeds, zone, Math.max(0, quotaC - usedC), ZONE_C).length;
+
+    // 남은 상업 할당량은 간선 길가에 흩뿌린다. 동네 가게다.
+    if (usedC < quotaC) {
+      const shops = this.rng.shuffle(
+        zonable.filter((i) => zone[i] === ZONE_R && this.cand[i] === PRIO_ARTERIAL),
+      );
+      for (const i of shops) {
+        if (usedC >= quotaC) break;
+        zone[i] = ZONE_C;
+        usedC++;
+      }
+    }
+
+    const BUILD_OF = [Build.ZoneR, Build.ZoneC, Build.ZoneI];
+    const green = this.makeNoise(5, 0x82);
+    for (const i of zonable) {
+      const z = zone[i];
+      if (z < 0) continue;
+      const x = i % SPAN;
+      const y = (i / SPAN) | 0;
+      // 일부는 일부러 비워 공터·녹지로 둔다. 시뮬레이션이 앞으로 자랄 자리다.
+      if (z === ZONE_R && green(x, y) > 0.93) continue;
+      this.world.setBuild(this.ox + x, this.oy + y, BUILD_OF[z], false);
+    }
+  }
+
+  /** 다중 출발 BFS 로 한 용도를 할당량까지 키운다. 칠한 칸 목록을 돌려준다. */
+  private growZone(
+    seeds: readonly number[],
+    zone: Int8Array,
+    quota: number,
+    value: number,
+  ): number[] {
+    const out: number[] = [];
+    if (!seeds.length || quota <= 0) return out;
+    const seen = new Uint8Array(SPAN * SPAN);
+    const queue: number[] = [];
+    for (const s of seeds) {
+      if (seen[s]) continue;
+      seen[s] = 1;
+      queue.push(s);
+    }
+    for (let head = 0; head < queue.length && out.length < quota; head++) {
+      const cur = queue[head];
+      if (zone[cur] === ZONE_R) {
+        zone[cur] = value;
+        out.push(cur);
+      }
+      const x = cur % SPAN;
+      const y = (cur / SPAN) | 0;
+      for (const [dx, dy] of DIRS) {
+        const nx = x + dx;
+        const ny = y + dy;
+        if (!this.inside(nx, ny)) continue;
+        const ni = this.idx(nx, ny);
+        if (seen[ni]) continue;
+        // 도로 칸은 건너뛰되 그 너머로 퍼진다. 길 하나가 지구를 갈라놓지 않는다.
+        if (this.roadDist[ni] === 255) continue;
+        seen[ni] = 1;
+        queue.push(ni);
+      }
+    }
+    return out;
+  }
+
+  /** 주어진 칸들에서 depth 칸 이내의 주거 칸. 공업 둘레의 완충대를 만든다. */
+  private ringAround(core: readonly number[], zone: Int8Array, depth: number): number[] {
+    const dist = new Uint8Array(SPAN * SPAN).fill(255);
+    const queue: number[] = [];
+    for (const i of core) {
+      dist[i] = 0;
+      queue.push(i);
+    }
+    const out: number[] = [];
+    for (let head = 0; head < queue.length; head++) {
+      const cur = queue[head];
+      if (dist[cur] >= depth) continue;
       const x = cur % SPAN;
       const y = (cur / SPAN) | 0;
       for (const [dx, dy] of DIRS) {
@@ -760,52 +1037,27 @@ class CityBuilder {
         const ni = this.idx(nx, ny);
         if (dist[ni] !== 255) continue;
         dist[ni] = dist[cur] + 1;
-        queue[tail++] = ni;
+        queue.push(ni);
+        if (zone[ni] === ZONE_R) out.push(ni);
       }
     }
-
-    for (let y = EDGE; y < SPAN - EDGE; y++) {
-      for (let x = EDGE; x < SPAN - EDGE; x++) {
-        const i = this.idx(x, y);
-        if (dist[i] === 0 || dist[i] > 2) continue;
-        if (!this.land[i]) continue;
-        const s = this.owner[i];
-        if (s < 0) continue;
-        const tx = this.ox + x;
-        const ty = this.oy + y;
-        if (this.world.getBuild(tx, ty) !== Build.None) continue;
-        const zone = this.zoneFor(this.seeds[s], x, y);
-        if (zone < 0) continue;
-        this.world.setBuild(tx, ty, zone, false);
-      }
-    }
+    return out;
   }
 
-  /**
-   * 이 칸에 어떤 지구를 칠할까.
-   *
-   * 한 구역을 한 색으로 칠하지 않는다. 주거지에도 동네 가게가 있고, 공업지대
-   * 입구에도 상가가 있다. 잡음으로 섞되 **구역의 성격은 남게** 비율을 잡았고,
-   * 일부는 일부러 비워서 공터·녹지로 둔다.
-   */
-  private zoneFor(seed: Seed, x: number, y: number): number {
-    const n = this.noise(x, y, 9, 81);
-    const green = this.noise(x, y, 5, 82);
-    if (green > 0.93) return -1; // 공터
-
-    if (seed.kind === K_DOWNTOWN) {
-      return n < 0.72 ? Build.ZoneC : Build.ZoneR;
+  private nearestZonable(x: number, y: number, zone: Int8Array): number {
+    for (let r = 0; r < 24; r++) {
+      for (let dy = -r; dy <= r; dy++) {
+        for (let dx = -r; dx <= r; dx++) {
+          if (r > 0 && Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
+          const nx = x + dx;
+          const ny = y + dy;
+          if (!this.inside(nx, ny)) continue;
+          const i = this.idx(nx, ny);
+          if (zone[i] === ZONE_R) return i;
+        }
+      }
     }
-    if (seed.kind === K_SUBCENTER) {
-      if (n < 0.5) return Build.ZoneC;
-      return n < 0.92 ? Build.ZoneR : Build.ZoneI;
-    }
-    if (seed.kind === K_INDUSTRIAL) {
-      return n < 0.82 ? Build.ZoneI : Build.ZoneC;
-    }
-    // 주거지 — 큰길가에는 상가가 붙는다.
-    if (n > 0.88) return Build.ZoneC;
-    return Build.ZoneR;
+    return -1;
   }
 
   /* ---------------- 11. 건물 ---------------- */
@@ -815,42 +1067,65 @@ class CityBuilder {
    * 며칠(게임 시간)이 걸린다.
    *
    * 규칙 두 가지만 지키면 나머지는 시뮬레이션이 알아서 한다.
-   *   - 필지가 도로에 **맞닿아야** 한다 (안 그러면 통근 거리가 무한대라 영원히 빈다)
-   *   - 필지가 평평하고 한 청크 안에 들어가야 한다 (growth.ts 와 같은 조건)
+   *   - 부지가 도로에 **맞닿아야** 한다 (안 그러면 통근 거리가 무한대라 영원히 빈다)
+   *   - 부지가 평평하고 한 청크 안에 들어가야 한다 (growth.ts 와 같은 조건)
    *
    * 밀도는 도심에서 멀어질수록 낮아지고, 어디서든 일부는 빈터로 남긴다.
    * 그 빈터가 시뮬레이션이 앞으로 자랄 자리다.
    */
   private placeBuildings(): void {
-    const maxR = CITY_RADIUS * 0.95;
+    const maxR = SPAN * 0.42;
+    const zoneTiles: number[] = [];
+    // 0 = 빈터, 1~3 = 이 칸에 서길 바라는 건물 등급.
+    const wanted = new Uint8Array(SPAN * SPAN);
+
     for (let y = EDGE; y < SPAN - EDGE; y++) {
       for (let x = EDGE; x < SPAN - EDGE; x++) {
+        const i = this.idx(x, y);
+        const zone = zoneOfBuildId(this.world.getBuild(this.ox + x, this.oy + y));
+        if (zone < 0) continue;
+        zoneTiles.push(i);
+
+        const far = Math.min(1, Math.hypot(x - this.cx, y - this.cy) / maxR);
+        const intensity = 1 - far;
+        // 빈터 비율. 도심은 촘촘하고 변두리는 듬성듬성하다.
+        if (this.rng.next() > 0.44 + intensity * 0.34) continue;
+
+        const pick = this.rng.next();
+        if (intensity > 0.68) wanted[i] = pick < 0.5 ? 3 : 2;
+        else if (intensity > 0.4) wanted[i] = pick < 0.26 ? 3 : pick < 0.78 ? 2 : 1;
+        else wanted[i] = pick < 0.34 ? 2 : 1;
+        // 공장은 부지가 크다. 외곽의 큰 공장은 도시답지만, 정원이 커서
+        // 일자리 균형을 흔들므로 확률만 조금 올린다.
+        if (zone === ZONE_I && intensity < 0.5 && pick > 0.78) wanted[i] = 3;
+      }
+    }
+
+    /*
+     * **큰 것부터 놓는다.**
+     *
+     * 예전 판은 한 번만 훑으면서 칸마다 등급을 정했다. 그러면 먼저 놓인 1x1
+     * 집 한 채가 그 자리에 설 수 있었던 3x3 아파트를 영원히 막는다. 실제로
+     * 주거 건물의 등급 분포가 L1 1154 / L2 106 / L3 1 로 무너져서, 같은 땅에서
+     * 인구가 나올 수 있는 양의 절반도 못 채웠다.
+     *
+     * 그래서 3x3 -> 2x2 -> 1x1 순서로 세 번 훑는다. 앞 단계에서 자리를 못 잡은
+     * 칸은 다음 단계에서 한 등급 낮춰 다시 시도하므로 빈칸이 남지 않는다.
+     */
+    const order = this.rng.shuffle(zoneTiles);
+    for (let level = 3; level >= 1; level--) {
+      for (const i of order) {
+        if (wanted[i] < level) continue;
+        const x = i % SPAN;
+        const y = (i / SPAN) | 0;
         const tx = this.ox + x;
         const ty = this.oy + y;
         const build = this.world.getBuild(tx, ty);
         const zone = zoneOfBuildId(build);
         if (zone < 0) continue;
         if (this.world.getBld(tx, ty) !== BLD_NONE) continue;
-
-        const far = Math.min(1, Math.hypot(x - this.cx, y - this.cy) / maxR);
-        const intensity = 1 - far;
-        const roll = this.rnd(x, y, 91);
-        // 빈터 비율. 도심은 촘촘하고 변두리는 듬성듬성하다.
-        if (roll > 0.55 + intensity * 0.35) continue;
-
-        const pick = this.rnd(x, y, 92);
-        let level: number;
-        if (intensity > 0.72) level = pick < 0.45 ? 3 : 2;
-        else if (intensity > 0.45) level = pick < 0.2 ? 3 : pick < 0.72 ? 2 : 1;
-        else level = pick < 0.28 ? 2 : 1;
-        // 공업은 부지가 크다. 3단계 공장이 도시 외곽에 서는 게 자연스럽다.
-        if (zone === ZONE_I && intensity < 0.5 && pick > 0.6) level = 3;
-
-        for (let l = level; l >= 1; l--) {
-          if (!this.plotFits(x, y, l, build)) continue;
-          this.world.placeBuilding(tx, ty, zone, l, this.bornDay);
-          break;
-        }
+        if (!this.plotFits(x, y, level, build)) continue;
+        this.world.placeBuilding(tx, ty, zone, level, this.bornDay);
       }
     }
   }
@@ -861,6 +1136,7 @@ class CityBuilder {
     const ty = this.oy + y;
     if (localIndexOf(tx) + span > CHUNK_SIZE) return false;
     if (localIndexOf(ty) + span > CHUNK_SIZE) return false;
+    if (!this.inside(x + span - 1, y + span - 1)) return false;
     const h = this.hgt[this.idx(x, y)];
     for (let dy = 0; dy < span; dy++) {
       for (let dx = 0; dx < span; dx++) {
@@ -871,6 +1147,206 @@ class CityBuilder {
       }
     }
     return touchesRoadTiles(this.world, tx, ty, span);
+  }
+
+  /* ---------------- 12. 시설 ---------------- */
+
+  /**
+   * 시설을 **정원에서 역산한 개수만큼** 놓는다.
+   *
+   * 예전에는 간격이 고정된 격자로 깔았다(소공원 11칸마다 = 121곳). 도시 크기와
+   * 무관하게 182채가 서고, 유지비가 수입을 넘어 첫날부터 적자가 났다.
+   *
+   * 이제는 실제로 지어진 건물 수와 정원에서 필요한 수를 계산한다.
+   *   소방서  건물 220채당 1        경찰서  3,000명당 1
+   *   병원    5,000명당 1           학교    2,500명당 1
+   * 복지(공원·소공원·체육시설)는 주거 정원에 비례해서 깐다. 필요량
+   * (AMENITY_NEED_BY_TIER)은 계층이 높을수록 크므로 도심 쪽을 더 촘촘히 한다.
+   *
+   * 큰 것부터 놓는다. 3x3 병원이 자리를 못 잡는 게 소공원이 못 서는 것보다 아프다.
+   */
+  private placeServiceFacilities(): void {
+    const stats = this.countBuildings();
+    const pop = Math.max(1, stats.residents);
+    const area = this.cityArea();
+
+    /**
+     * 필수 서비스는 **정원과 도달 범위 둘 다** 로 정해야 한다.
+     *
+     * 정원만 보면(예전 판의 반대쪽 실수) 경찰서가 5채면 3,000 x 5 = 15,000명을
+     * 감당하니 충분해 보이지만, 서비스는 도로 BFS 로 퍼지므로 반경 34 밖의
+     * 동네는 정원이 남아돌아도 **경찰서가 없는 동네** 다. 실제로 경찰 커버율이
+     * 0.69 까지 떨어졌다. 그래서 둘 중 큰 쪽을 쓴다.
+     */
+    const byCapacity = (value: number, per: number): number => Math.ceil((value / per) * 1.25);
+    const byArea = (range: number): number => Math.ceil(area / (range * range * 0.42));
+    const service = (value: number, per: number, range: number): number =>
+      Math.max(1, byCapacity(value, per), byArea(range));
+
+    /*
+     * 필수 서비스는 **지구를 가리지 않고** 뿌린다.
+     *
+     * 주거지 쪽으로 당겨 놓았더니 공업지구에 소방서도 경찰서도 없는 도시가
+     * 나왔다. SERVICE_WEIGHT 를 보면 공업지구의 소방 가중치가 0.16 으로 가장
+     * 크고, 고소득 배율(1.35)까지 곱해져 감점이 0.35 에 이른다. 실제로 그
+     * 도시의 3단계 공장 입주율이 0.22 까지 내려갔다. 학교만 예외로 주거지
+     * 쪽에 둔다 — 공업지구의 학교 가중치는 0 이다.
+     */
+    this.scatterFacility(FAC_HOSPITAL, service(pop, 5_000, 55), -1);
+    this.scatterFacility(FAC_SCHOOL, service(pop, 2_500, 30), ZONE_R);
+    this.scatterFacility(FAC_POLICE, service(pop, 3_000, 34), -1);
+    this.scatterFacility(FAC_FIRE, service(stats.buildings, 220, 40), -1);
+
+    /*
+     * 복지(공원·체육시설·소공원)는 **면적 적분** 으로 잡는다.
+     *
+     * 시설 하나가 뿌리는 복지 총량은 strength x pi x r^2 / 3 이다(선형 감쇠의
+     * 원뿔 부피). 도시 넓이로 나누면 평균 복지 점수가 나온다. 목표는 평균
+     * AMENITY_TARGET — 저소득(0.35)·중산층(0.9) 요구를 완전히 채우고 고소득
+     * (1.8)도 상당 부분 채우는 선이다. 더 깔면 만족도는 조금 오르지만 유지비가
+     * 먼저 도시를 잡아먹는다.
+     *
+     * 주거지구 쪽에 몰아 놓는다. 공장 한가운데 공원은 아무 집도 덕을 못 본다.
+     */
+    const mass = (strength: number, range: number): number =>
+      (strength * Math.PI * range * range) / 3;
+    const budget = area * AMENITY_TARGET;
+    const parks = Math.max(3, Math.round((budget * 0.66) / mass(1.5, 16)));
+    const sports = Math.max(1, Math.round((budget * 0.18) / mass(1.6, 14)));
+    const mini = Math.max(4, Math.round((budget * 0.16) / mass(0.65, 8)));
+    this.scatterFacility(FAC_SPORTS, sports, ZONE_R);
+    this.scatterFacility(FAC_PARK, parks, ZONE_R);
+    this.scatterFacility(FAC_MINIPARK, mini, ZONE_R);
+  }
+
+  /** 도로가 닿는 칸 수. 시설 밀도를 여기서 잡는다. */
+  private cityArea(): number {
+    let n = 0;
+    for (let i = 0; i < this.roadDist.length; i++) if (this.roadDist[i] !== 255) n++;
+    return Math.max(1, n);
+  }
+
+  /**
+   * 시설 `count` 채를 도시 전체에 고르게 뿌린다.
+   *
+   * 후보를 무작위로 섞은 뒤 "이미 놓은 같은 종류에서 min 거리 이상" 인 자리만
+   * 고른다. 격자처럼 줄 맞춰 서지 않으면서도 한쪽에 몰리지 않는다. 자리를
+   * 못 찾으면 거리 조건을 낮춰 다시 돈다 — 예외를 던지지 않는다.
+   */
+  private scatterFacility(kind: number, count: number, prefer = -1): number {
+    if (count <= 0) return 0;
+    const span = facilitySpan(kind);
+    const all = [...Array(SPAN * SPAN).keys()].filter((i) => {
+      const x = i % SPAN;
+      const y = (i / SPAN) | 0;
+      return (
+        this.inside(x, y) &&
+        this.inside(x + span - 1, y + span - 1) &&
+        this.roadDist[i] !== 255 &&
+        this.roadDist[i] > 0
+      );
+    });
+    // 선호 지구가 있으면 그쪽을 앞에, 나머지를 뒤에 둔다. 자리가 모자라면
+    // 자연스럽게 뒤쪽으로 넘어가므로 "공원을 못 지었다" 가 생기지 않는다.
+    const spots =
+      prefer < 0
+        ? this.rng.shuffle(all)
+        : [
+            ...this.rng.shuffle(all.filter((i) => this.nearZone(i, prefer))),
+            ...this.rng.shuffle(all.filter((i) => !this.nearZone(i, prefer))),
+          ];
+
+    const placed: Array<[number, number]> = [];
+    // 도시 넓이에서 잡은 첫 목표 간격. 못 채우면 절반씩 줄여 다시 돈다.
+    let minGap = Math.max(4, Math.round(Math.sqrt((SPAN * SPAN * 0.55) / count) * 0.8));
+    for (let pass = 0; pass < 4 && placed.length < count; pass++, minGap = Math.floor(minGap / 2)) {
+      for (const i of spots) {
+        if (placed.length >= count) break;
+        const x = i % SPAN;
+        const y = (i / SPAN) | 0;
+        let tooClose = false;
+        for (const [px, py] of placed) {
+          if (Math.abs(px - x) + Math.abs(py - y) < minGap) {
+            tooClose = true;
+            break;
+          }
+        }
+        if (tooClose) continue;
+        const tx = this.ox + x;
+        const ty = this.oy + y;
+        // 시설 부지는 기존 지구·건물을 밀고 들어간다. 공공시설이 먼저다.
+        if (!this.clearFacilityPlot(x, y, span)) continue;
+        if (!canPlaceFacility(this.world, tx, ty, kind, 5).ok) continue;
+        this.world.placeFacility(tx, ty, kind, this.bornDay);
+        placed.push([x, y]);
+      }
+    }
+    return placed.length;
+  }
+
+  /** 이 칸 둘레 두 칸 안에 그 지구가 있는가. 복지 시설을 주거지 쪽으로 당긴다. */
+  private nearZone(i: number, zone: number): boolean {
+    const x = i % SPAN;
+    const y = (i / SPAN) | 0;
+    for (let dy = -2; dy <= 2; dy++) {
+      for (let dx = -2; dx <= 2; dx++) {
+        const nx = x + dx;
+        const ny = y + dy;
+        if (!this.inside(nx, ny)) continue;
+        if (zoneOfBuildId(this.world.getBuild(this.ox + nx, this.oy + ny)) === zone) return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * 시설 부지를 비운다.
+   *
+   * 도로·물·경사는 건드리지 않는다 — 그건 자리를 옮겨야 할 이유다. 지구와
+   * 건물만 걷어낸다. 부지에 걸친 건물은 **통째로** 헌다. 반만 허물면 유령 칸이
+   * 남고, 거절하면 도시가 다 들어선 뒤에는 3x3 병원이 설 자리가 거의 없다
+   * (실제로 목표 6채 중 4채밖에 못 세웠다).
+   */
+  private clearFacilityPlot(x: number, y: number, span: number): boolean {
+    const h = this.hgt[this.idx(x, y)];
+    for (let dy = 0; dy < span; dy++) {
+      for (let dx = 0; dx < span; dx++) {
+        const j = this.idx(x + dx, y + dy);
+        if (!this.land[j] || this.hgt[j] !== h) return false;
+        const b = this.world.getBuild(this.ox + x + dx, this.oy + y + dy);
+        if (b === Build.Road || b === Build.Civic) return false;
+      }
+    }
+    // 시설은 도로에 닿아야 한다. 아무것도 헐기 전에 확인한다.
+    if (!touchesRoadTiles(this.world, this.ox + x, this.oy + y, span)) return false;
+    for (let dy = 0; dy < span; dy++) {
+      for (let dx = 0; dx < span; dx++) {
+        const tx = this.ox + x + dx;
+        const ty = this.oy + y + dy;
+        if (this.world.buildingCovering(tx, ty)) this.world.demolishAt(tx, ty);
+        this.world.setBuild(tx, ty, Build.None, false);
+      }
+    }
+    return true;
+  }
+
+  private countBuildings(): { buildings: number; residents: number; jobs: number } {
+    let buildings = 0;
+    let residents = 0;
+    let jobs = 0;
+    for (let y = EDGE; y < SPAN - EDGE; y++) {
+      for (let x = EDGE; x < SPAN - EDGE; x++) {
+        const info = this.world.buildingCovering(this.ox + x, this.oy + y);
+        if (!info || info.kind !== null) continue;
+        if (info.tx !== this.ox + x || info.ty !== this.oy + y) continue;
+        buildings++;
+        const level = info.span - 1;
+        if (info.zone === ZONE_R) residents += RESIDENT_CAPACITY[level];
+        else if (info.zone === ZONE_C) jobs += JOB_CAPACITY_C[level];
+        else jobs += JOB_CAPACITY_I[level];
+      }
+    }
+    return { buildings, residents, jobs };
   }
 }
 
@@ -884,6 +1360,16 @@ function smooth(t: number): number {
 
 function mod(a: number, m: number): number {
   return ((a % m) + m) % m;
+}
+
+/**
+ * 비탈 마스크가 그릴 수 있는 모양인가.
+ * build.ts 의 canConnectRoads 와 **같은 판정이어야 한다** — 한 방향, 또는
+ * 마주 보는 두 방향(5 = 동서, 10 = 남북)만 비탈질 수 있다.
+ */
+function slopeLegal(mask: number): boolean {
+  if ((mask & (mask - 1)) === 0) return true;
+  return mask === 5 || mask === 10;
 }
 
 /** Build.ZoneR/C/I -> ZONE_R/C/I. 지구가 아니면 -1. */

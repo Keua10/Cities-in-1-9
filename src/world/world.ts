@@ -439,7 +439,7 @@ export class World {
   }
 
   /** 검증을 통과한 드래그의 연속 두 칸을 양방향으로 연결한다. */
-  connectRoads(ax: number, ay: number, bx: number, by: number): boolean {
+  connectRoads(ax: number, ay: number, bx: number, by: number, byUser = true): boolean {
     const d = DIRS.findIndex(([dx, dy]) => bx - ax === dx && by - ay === dy);
     if (
       d < 0 ||
@@ -448,9 +448,23 @@ export class World {
       this.roadsConnected(ax, ay, bx, by)
     )
       return false;
-    this.writeRoadBits(ax, ay, this.roadBits(ax, ay) | (1 << d), true);
-    this.writeRoadBits(bx, by, this.roadBits(bx, by) | (1 << ((d + 2) & 3)), true);
+    this.writeRoadBits(ax, ay, this.roadBits(ax, ay) | (1 << d), byUser);
+    this.writeRoadBits(bx, by, this.roadBits(bx, by) | (1 << ((d + 2) & 3)), byUser);
     return true;
+  }
+
+  /**
+   * 도시 생성기가 쓰는 도로 설치.
+   *
+   * `setBuild(..., byUser = false)` 는 연결 비트를 OVERRIDE_NONE(=255, 사방 연결)
+   * 으로 남긴다. 예전 저장본과의 호환을 위한 규칙인데, 새로 만드는 도시에 쓰면
+   * **비탈이든 평행 차선이든 맞닿기만 하면 전부 이어져 버린다.** 그래서 생성
+   * 도로는 항상 고립(0)으로 놓고, 이어야 할 곳만 connectRoads 로 연다.
+   * 그 결과 생성된 도로망은 학생이 직접 그린 도로와 완전히 같은 규칙을 따른다.
+   */
+  placeGeneratedRoad(tx: number, ty: number): void {
+    this.setBuild(tx, ty, Build.Road, false);
+    this.writeRoadBits(tx, ty, 0, false);
   }
 
   /**

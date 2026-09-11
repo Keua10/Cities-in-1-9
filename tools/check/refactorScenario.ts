@@ -2,7 +2,6 @@ import { createHash } from 'node:crypto';
 import * as constants from '../../src/sim/simConstants';
 import { CHUNK_SIZE } from '../../src/core/constants';
 import { World } from '../../src/world/world';
-import { seedCityIfEmpty } from '../../src/world/cityGen';
 import { Build } from '../../src/world/build';
 import { Terrain } from '../../src/world/terrain';
 import { MacroSim } from '../../src/sim/macro';
@@ -18,15 +17,14 @@ function digest(world: World): string {
   }
   return hash.digest('hex');
 }
-const generated = [];
-for (const cityIndex of [0, 3]) {
-  const world = new World(cityIndex);
-  generated.push({
-    center: seedCityIfEmpty(world),
-    digest: digest(world),
-    second: seedCityIfEmpty(world),
-  });
-}
+/*
+ * 예전에는 여기서 생성 도시 두 개를 만들어 baseline 커밋과 바이트까지 비교했다.
+ * 대도시 생성기는 이번에 **의도적으로** 다시 만들었으므로 그 비교는 더 이상
+ * "리팩터가 동작을 안 바꿨다" 를 뜻하지 않는다. 생성기 자체의 불변식(경계,
+ * 도로망 연결, 용도 비율, 난수성, 열흘 주행)은 tools/check/cityGenCheck.ts 가
+ * 따로 검사한다. 이 시나리오는 상수·매크로 이력·배정·저장 레이어의 동등성만
+ * 계속 본다.
+ */
 const world = new World(0),
   ox = world.baseCx * CHUNK_SIZE,
   oy = world.baseCy * CHUNK_SIZE;
@@ -72,7 +70,6 @@ for (let tick = 0; tick < 1440; tick++) {
 }
 export default {
   constants,
-  generated,
   history,
   links: [...assignment.allLinks()],
   digest: digest(world),

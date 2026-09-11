@@ -26,6 +26,14 @@ export interface MacroState {
   prosperity?: number;
   /** Hybrid harbor passenger/cargo allocation. Old saves simply have no field. */
   transport?: TransportState;
+  /**
+   * 이 도시를 만든 생성 씨앗.
+   *
+   * "맵 초기화" 는 새 씨앗을 뽑아서 여기 적고 새로고침한다. 그래야 초기화할
+   * 때마다 다른 도시가 나오고, 같은 도시를 다시 열었을 때는 같은 도시가 나온다.
+   * 필드가 없는 옛 저장본은 도시 위치에서 만든 기본 씨앗을 쓴다.
+   */
+  genSeed?: number;
   money: number;
   population: number;
   tick: number;

@@ -12,7 +12,9 @@
 
 ## 월드와 저장
 
-`world/world.ts`는 타일·지구·건물·시설의 실제 상태, 변경 revision, 저장 dirty 표시를 소유한다. `world/terrain.ts`는 시드 기반 지형, `world/slope.ts`는 도로와 차량이 공유하는 경사면, `world/cityGen.ts`는 구역별 초기 도시 생성이다.
+`world/world.ts`는 타일·지구·건물·시설의 실제 상태, 변경 revision, 저장 dirty 표시를 소유한다. `world/terrain.ts`는 시드 기반 지형, `world/slope.ts`는 도로와 차량이 공유하는 경사면이다.
+
+초기 대도시 생성은 세 파일로 나뉜다. `world/cityGen.ts`가 도로망·지구·건물·서비스 시설을, `world/cityUtilities.ts`가 전기·상하수도·위생·특수 시설을 만들고, `world/rng.ts`가 씨앗 하나로 굴러가는 난수를 준다. `world/citySeed.ts`는 기존 import 경로를 유지하는 재노출 창구다. 도로는 연결 그래프를 먼저 만들고 `build.ts`의 규칙을 통과한 간선만 여는 방식이라, 생성된 도로망은 항상 한 덩어리이고 학생이 그린 도로와 같은 규칙을 따른다. 용도 비율과 시설 수는 `sim/config/macro.ts`·`sim/config/facilities.ts`의 정원에서 역산한다 — 이 상수를 바꾸면 생성 도시의 균형도 따라 움직인다. 배경과 계측값은 [CITYGEN_REBUILD.md](CITYGEN_REBUILD.md)에 있다.
 
 `net/types.ts`는 도시/청크 저장 계약, `net/codec.ts`는 기존 RLE 코덱, `net/citySave.ts`는 Firestore 읽기·트랜잭션, `net/saveManager.ts`는 저장 예약·재시도·상태 표시를 담당한다. 이 정리에서 저장 형식·schema version·ID 값을 변경하지 않았다.
 
@@ -50,7 +52,7 @@ npm run check
 npm run check:parity
 ```
 
-`check`는 서비스·교통·차선·장기 성장·재난·아틀라스·구조 검사를 실행한다. `check:parity`는 고정된 이전 커밋의 실제 코드를 함께 실행해 렌더 버퍼와 시뮬레이션 결과를 비교한다. 기준 커밋은 각 검사 파일에 명시되어 있으며 Git 이력이 필요하다. 의도한 기능/밸런스 변경 시에는 비교 기준 갱신 여부도 검토한다.
+`check`는 서비스·교통·차선·장기 성장·재난·아틀라스·구조·대도시 생성 검사를 실행한다. `citygen`은 생성 도시가 기본 2x2 청크를 넘지 않는지, 도로망이 한 덩어리인지, 용도 비율과 일자리 균형이 맞는지, 열흘을 돌려도 흑자인지를 본다. `check:parity`는 고정된 이전 커밋의 실제 코드를 함께 실행해 렌더 버퍼와 시뮬레이션 결과를 비교한다. 기준 커밋은 각 검사 파일에 명시되어 있으며 Git 이력이 필요하다. 의도한 기능/밸런스 변경 시에는 비교 기준 갱신 여부도 검토한다.
 
 PowerShell 변동 프레임 검사는 다음과 같다.
 

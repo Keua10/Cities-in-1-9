@@ -26,6 +26,8 @@ import {
   isFacilityAnchor,
 } from '../../src/sim/buildings';
 import { TAX_PER_JOB, TAX_PER_RESIDENT } from '../../src/sim/simConstants';
+import { FAC_COMM_TOWER } from '../../src/sim/config/special';
+import { FAC_MINIPARK } from '../../src/sim/facilities';
 import { seedCityIfEmpty } from '../../src/world/citySeed';
 
 assert.deepEqual(normalizePolicies(), DEFAULT_POLICIES);
@@ -46,7 +48,12 @@ for (const spec of FACILITY_SPECS) {
     'unlockLevel',
   ] as const)
     assert.ok(Number.isFinite(spec[key]), `${spec.name} ${key}`);
-  assert.equal(spec.needsRoad, spec.kind !== 4, 'only mini park is road optional');
+  // 소공원(4)과 STEP 4.6 통신탑(17)만 도로 없이 놓을 수 있다.
+  assert.equal(
+    spec.needsRoad,
+    spec.kind !== FAC_MINIPARK && spec.kind !== FAC_COMM_TOWER,
+    'only mini park and the communication tower are road optional',
+  );
 }
 assert.equal(FACILITY_SPECS.length, FACILITY_COUNT);
 assert.equal(
