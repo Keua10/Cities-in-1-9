@@ -108,6 +108,27 @@ const SERVICE_GAP_TOLERANCE = 0.03;
 /** 빈 곳 메우기를 시도하는 횟수. 한 번에 종류마다 한 채씩 는다. */
 const SERVICE_TOPUP_ROUNDS = 4;
 
+/**
+ * A* 가 한 번 꺾을 때 무는 값(타일 환산).
+ *
+ * 3 이면 "세 칸 이상 아낄 때만 꺾는다" 는 뜻이다. 평지에서는 사실상 직진만
+ * 하고, 물가와 언덕에서만 휜다.
+ */
+const TURN_COST = 3;
+/** 길찾기 비용에 섞는 잡음. 완전히 같은 두 경로를 갈라놓을 정도만 남긴다. */
+const ROUTE_GRAIN = 0.15;
+/** 이보다 짧은 이면도로 토막은 놓지 않는다. 짧은 토막은 전부 막다른 길이 된다. */
+const MIN_STREET_RUN = 6;
+/** 이 길이 이하의 막다른 꼬투리는 걷어낸다. 그 이상은 골목 막다른 길로 남긴다. */
+const MAX_STUB_LENGTH = 2;
+/** 한 칸을 품는 2x2 네 개의 왼쪽 위 모서리. */
+const CORNER_OFFSETS: ReadonlyArray<readonly [number, number]> = [
+  [0, 0],
+  [-1, 0],
+  [0, -1],
+  [-1, -1],
+];
+
 /** 도로 후보의 우선순위. 낮을수록 먼저 연결 그래프에 들어간다. */
 const PRIO_ARTERIAL = 0;
 const PRIO_LOCAL = 1;
@@ -400,19 +421,27 @@ class CityBuilder {
     }
     let bw: number;
     let bh: number;
+    /*
+     * 블록 한 변은 4 아래로 내리지 않는다. 도로 사이 속살이 세 칸은 돼야 3x3
+     * 건물이 들어간다(ZONE_DEPTH).
+     *
+     * 나란한 차선을 없애면서 도로가 23% 줄었고, 그만큼 한 칸당 통행량이 올라
+     * 혼잡 감점이 커졌다(0.13~0.15). 블록을 한 칸씩 줄여 도로를 되돌린다.
+     * 직선 격자라서 칸이 작아져도 화면이 복잡해지지는 않는다.
+     */
     if (kind === K_DOWNTOWN) {
-      bw = this.rng.between(4, 5);
-      bh = this.rng.between(5, 6);
+      bw = this.rng.between(4, 4);
+      bh = this.rng.between(4, 5);
     } else if (kind === K_SUBCENTER) {
-      bw = this.rng.between(4, 6);
-      bh = this.rng.between(5, 7);
+      bw = this.rng.between(4, 5);
+      bh = this.rng.between(4, 6);
     } else if (kind === K_INDUSTRIAL) {
       // 공장 부지는 깊다. 한 변을 길게 잡아 3x3 공장이 들어갈 속살을 만든다.
-      bw = this.rng.between(6, 7);
-      bh = this.rng.between(6, 8);
-    } else {
       bw = this.rng.between(5, 6);
-      bh = this.rng.between(6, 8);
+      bh = this.rng.between(6, 7);
+    } else {
+      bw = this.rng.between(4, 5);
+      bh = this.rng.between(5, 7);
     }
     // 절반은 결을 90도 돌린다. 이웃 구역과 격자 방향이 어긋나야 도시가
     // 한 장의 모눈종이처럼 보이지 않는다.
@@ -502,29 +531,51 @@ class CityBuilder {
    * 지워진 자리에서 길이 끊기고, 끊긴 뒤쪽이 도심에서 갈 수 없는 섬이 됐다.
    */
   private route(a: Section, b: Section, grain: (x: number, y: number) => number): number[] {
-    const start = this.idx(a.x, a.y);
-    const goal = this.idx(b.x, b.y);
-    const cost = new Float32Array(SPAN * SPAN).fill(Infinity);
-    const prev = new Int32Array(SPAN * SPAN).fill(-1);
+    /*
+     * 상태가 **칸이 아니라 (칸, 들어온 방향)** 이다.
+     *
+     * 칸만 상태로 쓰면 꺾는 데 값이 안 붙어서, 평지에서도 길이 잡음을 따라
+     * 하늘하늘 휜다. 실제로 그렇게 나온 도시는 직선이면 될 자리까지 전부
+     * 구불구불했다(코너 82~111개, 예전 생성기는 15~47개).
+     *
+     * 방향을 상태에 넣으면 "꺾으면 TURN_COST 만큼 비싸다" 를 정확히 표현할 수
+     * 있다. 그래서 길은 **기본적으로 직진하고**, 물·절벽을 피하거나 TURN_COST
+     * 이상을 아낄 때만 꺾는다. 상태가 네 배로 늘지만 128x128x4 라 가볍다.
+     */
+    const size = SPAN * SPAN;
+    const cost = new Float32Array(size * 4).fill(Infinity);
+    const prev = new Int32Array(size * 4).fill(-1);
     const heap = new MinHeap();
-    cost[start] = 0;
-    heap.push(start, 0);
+    const start = this.idx(a.x, a.y);
+    // 출발 칸은 어느 방향으로 나가든 공짜다.
+    for (let d = 0; d < 4; d++) {
+      cost[start * 4 + d] = 0;
+      heap.push(start * 4 + d, 0);
+    }
 
-    let found = false;
+    const goal = this.idx(b.x, b.y);
+    let best = -1;
+    let bestCost = Infinity;
     let guard = 0;
-    while (heap.size > 0 && guard++ < 120_000) {
-      const cur = heap.pop();
+    while (heap.size > 0 && guard++ < 400_000) {
+      const state = heap.pop();
+      const cur = state >> 2;
+      const from = state & 3;
+      const base = cost[state];
+      if (base > bestCost) break;
       if (cur === goal) {
-        found = true;
-        break;
+        if (base < bestCost) {
+          bestCost = base;
+          best = state;
+        }
+        continue;
       }
       const cx = cur % SPAN;
       const cy = (cur / SPAN) | 0;
-      const base = cost[cur];
       const ch = this.hgt[cur];
-      for (const [dx, dy] of DIRS) {
-        const nx = cx + dx;
-        const ny = cy + dy;
+      for (let d = 0; d < 4; d++) {
+        const nx = cx + DIRS[d][0];
+        const ny = cy + DIRS[d][1];
         if (!this.inside(nx, ny)) continue;
         const ni = this.idx(nx, ny);
         if (!this.land[ni]) continue;
@@ -532,17 +583,19 @@ class CityBuilder {
         if (climb > 1) continue; // 절벽은 도로가 될 수 없다
         // 이미 깔린 길 위를 지나가면 싸다. 간선이 하나로 모여 큰길이 된다.
         const reuse = this.cand[ni] !== 255 ? 0.3 : 1;
-        const next = base + reuse + climb * 2.6 + grain(nx, ny) * 1.1;
-        if (next >= cost[ni]) continue;
-        cost[ni] = next;
-        prev[ni] = cur;
-        heap.push(ni, next + (Math.abs(nx - b.x) + Math.abs(ny - b.y)) * 0.9);
+        const turn = d === from ? 0 : TURN_COST;
+        const next = base + reuse + climb * 2.6 + turn + grain(nx, ny) * ROUTE_GRAIN;
+        const ns = ni * 4 + d;
+        if (next >= cost[ns]) continue;
+        cost[ns] = next;
+        prev[ns] = state;
+        heap.push(ns, next + (Math.abs(nx - b.x) + Math.abs(ny - b.y)) * 0.9);
       }
     }
-    if (!found) return [];
+    if (best < 0) return [];
 
     const path: number[] = [];
-    for (let i = goal; i !== -1; i = prev[i]) path.push(i);
+    for (let s = best; s !== -1; s = prev[s]) path.push(s >> 2);
     return path.reverse();
   }
 
@@ -594,12 +647,12 @@ class CityBuilder {
     fixed: number,
     horizontal: boolean,
   ): void {
-    let shift = 0;
     let run: number[] = [];
     const flush = (): void => {
-      if (run.length >= 5) {
-        // 막다른 길: 18% 확률로 끝을 두어 칸 자른다.
-        const cut = this.rng.chance(0.18) ? this.rng.between(1, 3) : 0;
+      if (run.length >= MIN_STREET_RUN) {
+        // 막다른 길: 가끔 끝을 한두 칸 자른다. 예전에는 확률도 길이도 컸는데,
+        // 잘린 끝이 전부 막다른 길이 되어 도시에 380개씩 쌓였다.
+        const cut = this.rng.chance(0.08) ? this.rng.between(1, 2) : 0;
         for (let k = 0; k < run.length - cut; k++) {
           if (this.cand[run[k]] === 255) this.cand[run[k]] = PRIO_LOCAL;
         }
@@ -607,14 +660,17 @@ class CityBuilder {
       run = [];
     };
 
+    /*
+     * **선은 곧게 긋는다.**
+     *
+     * 예전에는 칸마다 3% 확률로 한 칸씩 어긋나게 해서 "기계 같지 않은" 결을
+     * 노렸다. 그런데 그 어긋남이 누적되어 골목마다 지그재그가 생기고, 옆줄까지
+     * 흘러가 나란한 두 줄을 만들기도 했다. 도시가 기계처럼 보이지 않게 하는
+     * 일은 구역마다 다른 블록 크기·위상·방향이 이미 하고 있다.
+     */
     for (let p = from; p <= to; p++) {
-      // 구역 안에서 한 번쯤 한 칸 어긋난다. 완전한 직선은 도시를 기계처럼 보이게 한다.
-      // **±1 로 묶는다.** 누적되면 선이 옆줄까지 흘러가 나란한 두 줄이 된다.
-      if (this.rng.chance(0.03)) {
-        shift = Math.max(-1, Math.min(1, shift + (this.rng.chance(0.5) ? 1 : -1)));
-      }
-      const x = horizontal ? p : fixed + shift;
-      const y = horizontal ? fixed + shift : p;
+      const x = horizontal ? p : fixed;
+      const y = horizontal ? fixed : p;
       if (!belongs(x, y)) {
         flush();
         continue;
@@ -640,13 +696,13 @@ class CityBuilder {
    *   (1) 도심에서 전부 도달 가능하고
    *   (2) 모든 연결이 규칙을 만족하며
    *   (3) 고립된 도로 조각이 하나도 없다.
-   * 예전처럼 "놓고 나서 끊긴 걸 지우는" 뒷정리가 필요 없다.
    *
-   * 여기에 규칙이 하나 더 있다 — **평행 차선을 가로로 꿰지 않는다.**
-   * 자세한 것은 isRungEdge 주석에 있다.
+   * 여기에 규칙이 하나 더 있다 — **나란한 두 차선을 애초에 만들지 않는다.**
+   * 자세한 것은 wouldBlock 주석에 있다.
    *
    * 간선 후보를 우선순위 버킷으로 처리한다. 간선도로를 먼저 받아들여야 비탈
-   * 규칙이 뼈대가 아니라 골목 쪽에서 걸린다.
+   * 규칙이 뼈대가 아니라 골목 쪽에서 걸리고, 나란한 두 줄 중 살아남는 쪽도
+   * 골목이 아니라 간선이 된다.
    */
   private growRoadNetwork(): void {
     const start = this.nearestCandidate(this.cx, this.cy);
@@ -654,66 +710,40 @@ class CityBuilder {
 
     // 버킷 0 = 간선, 1 = 이면도로. 같은 버킷 안은 먼저 닿은 순서(BFS).
     const buckets: number[][] = [[], []];
-    const heads = [0, 0];
     this.road[start] = 1;
     buckets[this.cand[start] === PRIO_ARTERIAL ? 0 : 1].push(start);
 
-    // 후보 기준으로 본 rung. 아직 어느 후보가 도로가 될지 모르므로 넉넉하게
-    // 잡고, 여기 걸린 간선은 "다른 길이 없을 때만" 쓰도록 미뤄 둔다.
-    const candidate = (i: number): boolean => this.cand[i] !== 255;
-    let deferred: Array<[number, number, number]> = [];
-
-    for (;;) {
-      for (let b = 0; b < buckets.length; b++) {
-        while (heads[b] < buckets[b].length) {
-          const cur = buckets[b][heads[b]++];
-          const x = cur % SPAN;
-          const y = (cur / SPAN) | 0;
-          for (let d = 0; d < 4; d++) {
-            const nx = x + DIRS[d][0];
-            const ny = y + DIRS[d][1];
-            if (!this.inside(nx, ny)) continue;
-            const ni = this.idx(nx, ny);
-            if (this.cand[ni] === 255) continue;
-            if (this.links[cur] & (1 << d)) continue;
-            if (this.isRungEdge(cur, d, candidate)) {
-              // 평행 차선을 가로지르는 간선. 이걸로만 닿을 수 있는 칸이 남으면
-              // 그때 아래에서 다시 꺼낸다.
-              if (!this.road[ni]) deferred.push([cur, ni, d]);
-              continue;
-            }
-            if (!this.acceptEdge(cur, ni, d)) continue;
-            if (this.road[ni]) continue;
-            this.road[ni] = 1;
-            const prio = this.cand[ni] === PRIO_ARTERIAL ? 0 : 1;
-            buckets[Math.max(prio, b)].push(ni);
-          }
+    for (let b = 0; b < buckets.length; b++) {
+      for (let head = 0; head < buckets[b].length; head++) {
+        const cur = buckets[b][head];
+        const x = cur % SPAN;
+        const y = (cur / SPAN) | 0;
+        for (let d = 0; d < 4; d++) {
+          const nx = x + DIRS[d][0];
+          const ny = y + DIRS[d][1];
+          if (!this.inside(nx, ny)) continue;
+          const ni = this.idx(nx, ny);
+          if (this.cand[ni] === 255) continue;
+          if (this.links[cur] & (1 << d)) continue;
+          if (!this.road[ni] && this.wouldBlock(nx, ny)) continue;
+          if (!this.acceptEdge(cur, ni, d)) continue;
+          if (this.road[ni]) continue;
+          this.road[ni] = 1;
+          const prio = this.cand[ni] === PRIO_ARTERIAL ? 0 : 1;
+          buckets[Math.max(prio, b)].push(ni);
         }
       }
-
-      // 다른 경로로 끝내 못 닿은 칸에만 rung 을 연다. 그 rung 은 사다리가
-      // 아니라 **그 골목의 유일한 입구** 이므로 열어야 한다.
-      const pending = deferred;
-      deferred = [];
-      let opened = false;
-      for (const [from, to, d] of pending) {
-        if (this.road[to] || !this.road[from]) continue;
-        if (!this.acceptEdge(from, to, d)) continue;
-        this.road[to] = 1;
-        const prio = this.cand[to] === PRIO_ARTERIAL ? 0 : 1;
-        buckets[prio].push(to);
-        opened = true;
-      }
-      if (!opened) break;
     }
 
-    // 뼈대가 다 선 뒤에 남은 맞닿음을 한 번 더 이어 준다. 격자가 실제로
-    // 격자가 되려면 교차로가 있어야 하는데, 위 통과는 "처음 닿은" 간선만 쓴다.
+    this.trimStubs();
+
+    // 뼈대가 다 선 뒤에 남은 맞닿음을 **전부** 이어 준다. 격자가 실제로 격자가
+    // 되려면 교차로가 있어야 하는데, 위 통과는 "처음 닿은" 간선만 쓴다.
     //
-    // 이 시점에는 도로 칸이 확정됐으므로 rung 판정을 **실제 도로 집합** 으로
-    // 정확히 할 수 있다. 여기서는 rung 을 하나도 열지 않는다 — 연결이 목적인
-    // 간선은 위에서 이미 열렸고, 여기 남은 rung 은 전부 사다리 발이다.
-    const isRoad = (i: number): boolean => this.road[i] === 1;
+    // 여기서 예외를 두지 않는 것이 중요하다. 나란한 두 차선은 wouldBlock 이
+    // 애초에 못 생기게 막았으므로, 남은 맞닿음은 전부 이어야 할 교차로다.
+    // 맞닿았는데 안 이어진 자리를 남기면 화면에 연석만 보이고, 학생은 "왜 여기가
+    // 안 이어지지" 로 읽는다.
     for (let y = EDGE; y < SPAN - EDGE; y++) {
       for (let x = EDGE; x < SPAN - EDGE; x++) {
         const i = this.idx(x, y);
@@ -724,7 +754,6 @@ class CityBuilder {
           if (!this.inside(nx, ny)) continue;
           const ni = this.idx(nx, ny);
           if (!this.road[ni] || this.links[i] & (1 << d)) continue;
-          if (this.isRungEdge(i, d, isRoad)) continue;
           this.acceptEdge(i, ni, d);
         }
       }
@@ -732,48 +761,83 @@ class CityBuilder {
   }
 
   /**
-   * 이 간선이 **평행 차선을 가로지르는 가로대(rung)** 인가.
+   * 이 칸을 도로로 놓으면 **2x2 도로 덩어리** 가 생기는가.
    *
    * ---------------------------------------------------------------
-   * 왜 필요한가
+   * 왜 막는가
    * ---------------------------------------------------------------
-   * 나란히 붙은 도로 두 줄을 가로로 전부 이어 버리면 사다리가 되고, 화면에는
-   * 두 줄짜리 차선이 아니라 **한 덩어리 넓은 아스팔트** 로 보인다. 게다가
-   * roadTileCapacity 는 사거리(연결 4방향)를 0.5 로 깎으므로 통행량까지 준다.
-   * 실제로 도시 한 개에 사방으로 이어진 2x2 블록이 280개쯤 생겼다.
+   * 2x2 덩어리는 곧 나란히 붙은 두 차선이다. 가로로 이으면 사다리가 되어 한
+   * 덩어리 넓은 아스팔트로 보이고, 안 이으면 맞닿은 채 연석만 보이는 자리가
+   * 된다. 둘 다 틀렸다. **애초에 만들지 않는 것** 이 답이다.
+   *
+   * 놓지 않은 칸 때문에 못 가는 곳이 생기지는 않는다. BFS 로 자라는 중이라
+   * 이 칸을 거부해도 그 너머는 다른 길로 닿거나, 닿지 못하면 그건 원래 이
+   * 중복 차선으로만 갈 수 있던 곳이다.
    *
    * ---------------------------------------------------------------
    * 왜 이렇게 판정하는가
    * ---------------------------------------------------------------
-   * 예전 citySeed.ts 는 칸마다 앞뒤 7칸을 훑어 "이 도로의 주 진행축"을 추정하고,
-   * 양쪽이 모두 직각 축이면 평행 차선으로 보고 끊었다. 그 방식은 **짧은 구간에서
-   * 무너진다** — 두세 칸짜리 막다른 길이나 코너는 축을 정할 수가 없어서, 평행
-   * 차선인데 이어 버리거나 반대로 멀쩡한 연결을 끊어 도로망을 조각냈다.
+   * 예전 citySeed.ts 는 칸마다 앞뒤 7칸을 훑어 "이 도로의 주 진행축"을 추정하고
+   * 양쪽이 모두 직각 축이면 연결을 끊었다. 그 방식은 **짧은 구간에서 무너진다**
+   * — 두세 칸짜리 막다른 길이나 코너는 축을 정할 수가 없어서, 평행 차선인데
+   * 이어 버리거나 반대로 멀쩡한 연결을 끊어 도로망을 조각냈다.
    *
-   * 여기서는 축을 추정하지 않는다. 간선 하나의 **양옆 2x2만** 본다.
-   *
-   *     A B      A-C 간선은 동쪽 옆칸 B,D 가 모두 도로이므로 가로대다
-   *     C D
-   *
-   * 사거리·T자·계단식 꺾임에는 2x2 가 생기지 않으므로 걸리지 않는다. 길이가
-   * 전혀 들어가지 않아서 두 칸짜리 평행 차선도 스무 칸짜리와 똑같이 잡힌다.
+   * 여기서는 축을 추정하지 않고 2x2 네 칸만 본다. 사거리·T자·계단식 꺾임에는
+   * 2x2 가 생기지 않으므로 걸리지 않고, 길이가 판정에 전혀 안 들어가서 두
+   * 칸짜리 평행 차선도 스무 칸짜리와 똑같이 잡힌다.
    */
-  private isRungEdge(a: number, d: number, isRoad: (i: number) => boolean): boolean {
-    const ax = a % SPAN;
-    const ay = (a / SPAN) | 0;
-    const [dx, dy] = DIRS[d];
-    // 간선에 직각인 방향
-    const px = dy !== 0 ? 1 : 0;
-    const py = dx !== 0 ? 1 : 0;
-    for (const side of [1, -1]) {
-      const sx = ax + px * side;
-      const sy = ay + py * side;
-      const tx = sx + dx;
-      const ty = sy + dy;
-      if (!this.inside(sx, sy) || !this.inside(tx, ty)) continue;
-      if (isRoad(this.idx(sx, sy)) && isRoad(this.idx(tx, ty))) return true;
+  private wouldBlock(x: number, y: number): boolean {
+    // 이 칸을 품는 2x2 네 개를 모두 본다. 나머지 세 칸이 전부 도로면 덩어리다.
+    for (const [ox, oy] of CORNER_OFFSETS) {
+      let filled = 0;
+      for (let k = 0; k < 4; k++) {
+        const nx = x + ox + (k & 1);
+        const ny = y + oy + (k >> 1);
+        if (nx === x && ny === y) continue;
+        if (!this.inside(nx, ny) || !this.road[this.idx(nx, ny)]) break;
+        filled++;
+      }
+      if (filled === 3) return true;
     }
     return false;
+  }
+
+  /**
+   * 한두 칸짜리 막다른 꼬투리를 걷어낸다.
+   *
+   * 지형·비탈 규칙·중복 차선 금지에 걸려 선이 잘리면 한 칸짜리 부스러기가
+   * 남는다. 골목 막다른 길(cul-de-sac)은 도시다운 모습이지만 한두 칸짜리는
+   * 화면만 지저분하게 만든다. MAX_STUB_LENGTH 보다 긴 막다른 길은 남긴다.
+   */
+  private trimStubs(): void {
+    for (let pass = 0; pass < MAX_STUB_LENGTH; pass++) {
+      let removed = 0;
+      for (let y = EDGE; y < SPAN - EDGE; y++) {
+        for (let x = EDGE; x < SPAN - EDGE; x++) {
+          const i = this.idx(x, y);
+          if (!this.road[i]) continue;
+          let degree = 0;
+          let only = -1;
+          for (let d = 0; d < 4; d++) {
+            if (!(this.links[i] & (1 << d))) continue;
+            degree++;
+            only = d;
+          }
+          if (degree !== 1) continue;
+          this.road[i] = 0;
+          this.links[i] = 0;
+          this.slopeBits[i] = 0;
+          const nx = x + DIRS[only][0];
+          const ny = y + DIRS[only][1];
+          const ni = this.idx(nx, ny);
+          const back = (only + 2) & 3;
+          this.links[ni] &= ~(1 << back);
+          this.slopeBits[ni] &= ~(1 << back);
+          removed++;
+        }
+      }
+      if (removed === 0) break;
+    }
   }
 
   /** 간선 하나를 규칙에 맞으면 받아들인다. */

@@ -226,38 +226,94 @@ check('연결된 모든 도로쌍이 build.ts 의 연결 규칙을 통과한다'
   }
 });
 
-check('나란한 두 차선을 가로로 꿰지 않는다 (사다리 금지)', () => {
+check('나란한 두 차선을 애초에 만들지 않는다', () => {
   /*
-   * 맞닿은 도로를 전부 이으면 평행한 두 줄이 사다리가 되고, 화면에는 두 줄짜리
-   * 차선이 아니라 한 덩어리 넓은 아스팔트로 보인다. 사거리가 늘어 통행량도 준다
-   * (roadTileCapacity 는 연결 4방향을 0.5 로 깎는다).
+   * 2x2 도로 덩어리는 곧 나란히 붙은 두 차선이다. 가로로 이으면 사다리가 되어
+   * 한 덩어리 넓은 아스팔트로 보이고, 안 이으면 맞닿은 채 연석만 보이는 자리가
+   * 된다. 둘 다 틀렸으므로 애초에 만들지 않는다.
    *
-   * 판정은 2x2 한 칸만 본다 — 도로 네 칸이 정사각으로 모였는데 네 변이 전부
-   * 연결돼 있으면 사다리다. 길이를 보지 않으므로 두 칸짜리 평행 차선도 스무
-   * 칸짜리와 똑같이 잡힌다(예전 진행축 추정 방식이 짧은 구간에서 놓치던 부분).
+   * 판정은 2x2 네 칸만 본다 — 길이가 들어가지 않으므로 두 칸짜리 평행 차선도
+   * 스무 칸짜리와 똑같이 잡힌다(예전 진행축 추정 방식이 짧은 구간에서 놓치던
+   * 부분이다).
    */
   for (const [i, c] of sample.entries()) {
     const w = c.world;
     const road = (x: number, y: number): boolean => w.getBuild(x, y) === Build.Road;
-    let closed = 0;
+    let blocks = 0;
     let first = '';
     for (const [x, y] of c.scan.roads) {
       if (!road(x + 1, y) || !road(x, y + 1) || !road(x + 1, y + 1)) continue;
-      if (
-        w.roadsConnected(x, y, x + 1, y) &&
-        w.roadsConnected(x, y + 1, x + 1, y + 1) &&
-        w.roadsConnected(x, y, x, y + 1) &&
-        w.roadsConnected(x + 1, y, x + 1, y + 1)
-      ) {
-        closed++;
+      blocks++;
+      if (!first) first = `${x},${y}`;
+    }
+    assert.equal(blocks, 0, `city ${i}: ${blocks} 2x2 road blocks (first at ${first})`);
+  }
+});
+
+check('같은 높이로 맞닿은 도로는 예외 없이 이어진다', () => {
+  /*
+   * 맞닿았는데 안 이어진 자리는 화면에 연석으로 보이고 차도 못 지나간다.
+   * 높이가 다르면 build.ts 의 비탈 규칙 때문에 못 잇는 경우가 있지만, 같은
+   * 높이라면 이어지지 않을 이유가 없다. 예전에는 도시마다 370곳이 그랬다.
+   */
+  for (const [i, c] of sample.entries()) {
+    const w = c.world;
+    let broken = 0;
+    let first = '';
+    for (const [x, y] of c.scan.roads) {
+      for (const [dx, dy] of [
+        [1, 0],
+        [0, 1],
+      ]) {
+        const nx = x + dx;
+        const ny = y + dy;
+        if (w.getBuild(nx, ny) !== Build.Road) continue;
+        if (w.sampleHeight(x, y) !== w.sampleHeight(nx, ny)) continue;
+        if (w.roadsConnected(x, y, nx, ny)) continue;
+        broken++;
         if (!first) first = `${x},${y}`;
       }
     }
     assert.equal(
-      closed,
+      broken,
       0,
-      `city ${i}: ${closed} fully cross-linked 2x2 road blocks (first at ${first})`,
+      `city ${i}: ${broken} touching road pairs left unlinked (first at ${first})`,
     );
+  }
+});
+
+check('도로가 곧게 놓이고 막다른 꼬투리가 쌓이지 않는다', () => {
+  /*
+   * 직선이면 될 자리까지 구불구불하면 통행량도 줄고(코너·교차로는 용량이 깎인다)
+   * 화면도 어지럽다. 칸마다 난수로 어긋나게 하던 판에서는 도시 하나에 코너가
+   * 82~111개, 막다른 길이 374~392개까지 갔다.
+   */
+  for (const [i, c] of sample.entries()) {
+    const w = c.world;
+    let straight = 0;
+    let corner = 0;
+    let dead = 0;
+    for (const [x, y] of c.scan.roads) {
+      let mask = 0;
+      let n = 0;
+      for (let d = 0; d < 4; d++) {
+        if (!w.roadsConnected(x, y, x + DIRS[d][0], y + DIRS[d][1])) continue;
+        mask |= 1 << d;
+        n++;
+      }
+      if (n === 1) dead++;
+      else if (n === 2) {
+        if (mask === 5 || mask === 10) straight++;
+        else corner++;
+      }
+    }
+    const roads = c.scan.roads.length;
+    assert.ok(
+      straight / roads > 0.72,
+      `city ${i}: only ${((straight / roads) * 100) | 0}% of road tiles run straight`,
+    );
+    assert.ok(corner / roads < 0.05, `city ${i}: ${corner} corners in ${roads} road tiles`);
+    assert.ok(dead / roads < 0.035, `city ${i}: ${dead} dead ends in ${roads} road tiles`);
   }
 });
 
