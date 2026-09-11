@@ -226,6 +226,41 @@ check('연결된 모든 도로쌍이 build.ts 의 연결 규칙을 통과한다'
   }
 });
 
+check('나란한 두 차선을 가로로 꿰지 않는다 (사다리 금지)', () => {
+  /*
+   * 맞닿은 도로를 전부 이으면 평행한 두 줄이 사다리가 되고, 화면에는 두 줄짜리
+   * 차선이 아니라 한 덩어리 넓은 아스팔트로 보인다. 사거리가 늘어 통행량도 준다
+   * (roadTileCapacity 는 연결 4방향을 0.5 로 깎는다).
+   *
+   * 판정은 2x2 한 칸만 본다 — 도로 네 칸이 정사각으로 모였는데 네 변이 전부
+   * 연결돼 있으면 사다리다. 길이를 보지 않으므로 두 칸짜리 평행 차선도 스무
+   * 칸짜리와 똑같이 잡힌다(예전 진행축 추정 방식이 짧은 구간에서 놓치던 부분).
+   */
+  for (const [i, c] of sample.entries()) {
+    const w = c.world;
+    const road = (x: number, y: number): boolean => w.getBuild(x, y) === Build.Road;
+    let closed = 0;
+    let first = '';
+    for (const [x, y] of c.scan.roads) {
+      if (!road(x + 1, y) || !road(x, y + 1) || !road(x + 1, y + 1)) continue;
+      if (
+        w.roadsConnected(x, y, x + 1, y) &&
+        w.roadsConnected(x, y + 1, x + 1, y + 1) &&
+        w.roadsConnected(x, y, x, y + 1) &&
+        w.roadsConnected(x + 1, y, x + 1, y + 1)
+      ) {
+        closed++;
+        if (!first) first = `${x},${y}`;
+      }
+    }
+    assert.equal(
+      closed,
+      0,
+      `city ${i}: ${closed} fully cross-linked 2x2 road blocks (first at ${first})`,
+    );
+  }
+});
+
 check('학생이 생성 도로에 새 도로를 이어 붙일 수 있다', () => {
   // 생성 도로의 연결 비트가 학생이 그린 도로와 같은 규칙을 따르는지 본다.
   // 예전 판은 생성 도로를 "사방 연결(255)" 로 두거나 흐름 추정으로 열었기

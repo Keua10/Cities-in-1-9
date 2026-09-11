@@ -14,6 +14,7 @@ import {
   facilitySpan,
   touchesRoadTiles,
 } from '../sim/facilities';
+import { ServiceField } from '../sim/services';
 import { Build, canConnectRoads, canPlaceRoad, DIRS } from './build';
 import { isWater } from './terrain';
 import type { World } from './world';
@@ -101,6 +102,11 @@ const ZONE_DEPTH = 3;
  * 그 유지비가 만족도 이득보다 크다.
  */
 const AMENITY_TARGET = 1.3;
+
+/** 서비스가 안 닿아도 넘어가는 건물 비율. 이 밑으로는 한 채 더 짓는 게 손해다. */
+const SERVICE_GAP_TOLERANCE = 0.03;
+/** 빈 곳 메우기를 시도하는 횟수. 한 번에 종류마다 한 채씩 는다. */
+const SERVICE_TOPUP_ROUNDS = 4;
 
 /** 도로 후보의 우선순위. 낮을수록 먼저 연결 그래프에 들어간다. */
 const PRIO_ARTERIAL = 0;
@@ -603,7 +609,10 @@ class CityBuilder {
 
     for (let p = from; p <= to; p++) {
       // 구역 안에서 한 번쯤 한 칸 어긋난다. 완전한 직선은 도시를 기계처럼 보이게 한다.
-      if (this.rng.chance(0.03)) shift += this.rng.chance(0.5) ? 1 : -1;
+      // **±1 로 묶는다.** 누적되면 선이 옆줄까지 흘러가 나란한 두 줄이 된다.
+      if (this.rng.chance(0.03)) {
+        shift = Math.max(-1, Math.min(1, shift + (this.rng.chance(0.5) ? 1 : -1)));
+      }
       const x = horizontal ? p : fixed + shift;
       const y = horizontal ? fixed + shift : p;
       if (!belongs(x, y)) {
@@ -633,6 +642,9 @@ class CityBuilder {
    *   (3) 고립된 도로 조각이 하나도 없다.
    * 예전처럼 "놓고 나서 끊긴 걸 지우는" 뒷정리가 필요 없다.
    *
+   * 여기에 규칙이 하나 더 있다 — **평행 차선을 가로로 꿰지 않는다.**
+   * 자세한 것은 isRungEdge 주석에 있다.
+   *
    * 간선 후보를 우선순위 버킷으로 처리한다. 간선도로를 먼저 받아들여야 비탈
    * 규칙이 뼈대가 아니라 골목 쪽에서 걸린다.
    */
@@ -642,32 +654,66 @@ class CityBuilder {
 
     // 버킷 0 = 간선, 1 = 이면도로. 같은 버킷 안은 먼저 닿은 순서(BFS).
     const buckets: number[][] = [[], []];
+    const heads = [0, 0];
     this.road[start] = 1;
     buckets[this.cand[start] === PRIO_ARTERIAL ? 0 : 1].push(start);
 
-    for (let b = 0; b < buckets.length; b++) {
-      for (let head = 0; head < buckets[b].length; head++) {
-        const cur = buckets[b][head];
-        const x = cur % SPAN;
-        const y = (cur / SPAN) | 0;
-        for (let d = 0; d < 4; d++) {
-          const nx = x + DIRS[d][0];
-          const ny = y + DIRS[d][1];
-          if (!this.inside(nx, ny)) continue;
-          const ni = this.idx(nx, ny);
-          if (this.cand[ni] === 255) continue;
-          if (this.links[cur] & (1 << d)) continue;
-          if (!this.acceptEdge(cur, ni, d)) continue;
-          if (this.road[ni]) continue;
-          this.road[ni] = 1;
-          const prio = this.cand[ni] === PRIO_ARTERIAL ? 0 : 1;
-          buckets[Math.max(prio, b)].push(ni);
+    // 후보 기준으로 본 rung. 아직 어느 후보가 도로가 될지 모르므로 넉넉하게
+    // 잡고, 여기 걸린 간선은 "다른 길이 없을 때만" 쓰도록 미뤄 둔다.
+    const candidate = (i: number): boolean => this.cand[i] !== 255;
+    let deferred: Array<[number, number, number]> = [];
+
+    for (;;) {
+      for (let b = 0; b < buckets.length; b++) {
+        while (heads[b] < buckets[b].length) {
+          const cur = buckets[b][heads[b]++];
+          const x = cur % SPAN;
+          const y = (cur / SPAN) | 0;
+          for (let d = 0; d < 4; d++) {
+            const nx = x + DIRS[d][0];
+            const ny = y + DIRS[d][1];
+            if (!this.inside(nx, ny)) continue;
+            const ni = this.idx(nx, ny);
+            if (this.cand[ni] === 255) continue;
+            if (this.links[cur] & (1 << d)) continue;
+            if (this.isRungEdge(cur, d, candidate)) {
+              // 평행 차선을 가로지르는 간선. 이걸로만 닿을 수 있는 칸이 남으면
+              // 그때 아래에서 다시 꺼낸다.
+              if (!this.road[ni]) deferred.push([cur, ni, d]);
+              continue;
+            }
+            if (!this.acceptEdge(cur, ni, d)) continue;
+            if (this.road[ni]) continue;
+            this.road[ni] = 1;
+            const prio = this.cand[ni] === PRIO_ARTERIAL ? 0 : 1;
+            buckets[Math.max(prio, b)].push(ni);
+          }
         }
       }
+
+      // 다른 경로로 끝내 못 닿은 칸에만 rung 을 연다. 그 rung 은 사다리가
+      // 아니라 **그 골목의 유일한 입구** 이므로 열어야 한다.
+      const pending = deferred;
+      deferred = [];
+      let opened = false;
+      for (const [from, to, d] of pending) {
+        if (this.road[to] || !this.road[from]) continue;
+        if (!this.acceptEdge(from, to, d)) continue;
+        this.road[to] = 1;
+        const prio = this.cand[to] === PRIO_ARTERIAL ? 0 : 1;
+        buckets[prio].push(to);
+        opened = true;
+      }
+      if (!opened) break;
     }
 
     // 뼈대가 다 선 뒤에 남은 맞닿음을 한 번 더 이어 준다. 격자가 실제로
     // 격자가 되려면 교차로가 있어야 하는데, 위 통과는 "처음 닿은" 간선만 쓴다.
+    //
+    // 이 시점에는 도로 칸이 확정됐으므로 rung 판정을 **실제 도로 집합** 으로
+    // 정확히 할 수 있다. 여기서는 rung 을 하나도 열지 않는다 — 연결이 목적인
+    // 간선은 위에서 이미 열렸고, 여기 남은 rung 은 전부 사다리 발이다.
+    const isRoad = (i: number): boolean => this.road[i] === 1;
     for (let y = EDGE; y < SPAN - EDGE; y++) {
       for (let x = EDGE; x < SPAN - EDGE; x++) {
         const i = this.idx(x, y);
@@ -678,10 +724,56 @@ class CityBuilder {
           if (!this.inside(nx, ny)) continue;
           const ni = this.idx(nx, ny);
           if (!this.road[ni] || this.links[i] & (1 << d)) continue;
+          if (this.isRungEdge(i, d, isRoad)) continue;
           this.acceptEdge(i, ni, d);
         }
       }
     }
+  }
+
+  /**
+   * 이 간선이 **평행 차선을 가로지르는 가로대(rung)** 인가.
+   *
+   * ---------------------------------------------------------------
+   * 왜 필요한가
+   * ---------------------------------------------------------------
+   * 나란히 붙은 도로 두 줄을 가로로 전부 이어 버리면 사다리가 되고, 화면에는
+   * 두 줄짜리 차선이 아니라 **한 덩어리 넓은 아스팔트** 로 보인다. 게다가
+   * roadTileCapacity 는 사거리(연결 4방향)를 0.5 로 깎으므로 통행량까지 준다.
+   * 실제로 도시 한 개에 사방으로 이어진 2x2 블록이 280개쯤 생겼다.
+   *
+   * ---------------------------------------------------------------
+   * 왜 이렇게 판정하는가
+   * ---------------------------------------------------------------
+   * 예전 citySeed.ts 는 칸마다 앞뒤 7칸을 훑어 "이 도로의 주 진행축"을 추정하고,
+   * 양쪽이 모두 직각 축이면 평행 차선으로 보고 끊었다. 그 방식은 **짧은 구간에서
+   * 무너진다** — 두세 칸짜리 막다른 길이나 코너는 축을 정할 수가 없어서, 평행
+   * 차선인데 이어 버리거나 반대로 멀쩡한 연결을 끊어 도로망을 조각냈다.
+   *
+   * 여기서는 축을 추정하지 않는다. 간선 하나의 **양옆 2x2만** 본다.
+   *
+   *     A B      A-C 간선은 동쪽 옆칸 B,D 가 모두 도로이므로 가로대다
+   *     C D
+   *
+   * 사거리·T자·계단식 꺾임에는 2x2 가 생기지 않으므로 걸리지 않는다. 길이가
+   * 전혀 들어가지 않아서 두 칸짜리 평행 차선도 스무 칸짜리와 똑같이 잡힌다.
+   */
+  private isRungEdge(a: number, d: number, isRoad: (i: number) => boolean): boolean {
+    const ax = a % SPAN;
+    const ay = (a / SPAN) | 0;
+    const [dx, dy] = DIRS[d];
+    // 간선에 직각인 방향
+    const px = dy !== 0 ? 1 : 0;
+    const py = dx !== 0 ? 1 : 0;
+    for (const side of [1, -1]) {
+      const sx = ax + px * side;
+      const sy = ay + py * side;
+      const tx = sx + dx;
+      const ty = sy + dy;
+      if (!this.inside(sx, sy) || !this.inside(tx, ty)) continue;
+      if (isRoad(this.idx(sx, sy)) && isRoad(this.idx(tx, ty))) return true;
+    }
+    return false;
   }
 
   /** 간선 하나를 규칙에 맞으면 받아들인다. */
@@ -1196,6 +1288,7 @@ class CityBuilder {
     this.scatterFacility(FAC_SCHOOL, service(pop, 2_500, 30), ZONE_R);
     this.scatterFacility(FAC_POLICE, service(pop, 3_000, 34), -1);
     this.scatterFacility(FAC_FIRE, service(stats.buildings, 220, 40), -1);
+    this.fillServiceGaps([FAC_HOSPITAL, FAC_SCHOOL, FAC_POLICE, FAC_FIRE]);
 
     /*
      * 복지(공원·체육시설·소공원)는 **면적 적분** 으로 잡는다.
@@ -1217,6 +1310,80 @@ class CityBuilder {
     this.scatterFacility(FAC_SPORTS, sports, ZONE_R);
     this.scatterFacility(FAC_PARK, parks, ZONE_R);
     this.scatterFacility(FAC_MINIPARK, mini, ZONE_R);
+  }
+
+  /**
+   * 실제로 서비스가 안 닿는 동네에만 한 채씩 더 놓는다.
+   *
+   * 개수 공식(정원 x 면적)은 **평균** 이다. 서비스는 유클리드 원이 아니라 도로
+   * BFS 로 퍼지므로, 강이나 언덕이 길을 돌아가게 만든 쪽은 평균이 맞아도 비어
+   * 있다. 평행 차선을 가로로 꿰던 사다리를 걷어내자 도로 거리가 실제 거리대로
+   * 늘어나면서 이 편차가 드러났다 — 병원 커버율이 도시에 따라 0.72 까지 갔다.
+   *
+   * 상수를 올려 전부 촘촘하게 깔면 안 비는 동네까지 시설이 늘어 유지비만 는다.
+   * 그래서 **시뮬레이션이 쓰는 바로 그 ServiceField 로 재 보고**, 안 닿는 건물이
+   * 몰려 있는 칸에만 한 채씩 더한다. 생성기와 시뮬레이션의 커버리지 판정이
+   * 같은 코드라서 "생성기에서는 덮였는데 게임에서는 빈" 경우가 없다.
+   */
+  private fillServiceGaps(kinds: readonly number[]): void {
+    const anchors = this.buildingAnchors();
+    if (anchors.length === 0) return;
+    const field = new ServiceField();
+    const tolerance = Math.max(4, Math.round(anchors.length * SERVICE_GAP_TOLERANCE));
+
+    for (let round = 0; round < SERVICE_TOPUP_ROUNDS; round++) {
+      field.rebuild(this.world);
+      let added = false;
+      for (const kind of kinds) {
+        const gaps: number[] = [];
+        for (const [x, y, span] of anchors) {
+          if (field.ownerFor(this.ox + x, this.oy + y, span, kind) < 0) gaps.push(this.idx(x, y));
+        }
+        if (gaps.length <= tolerance) continue;
+        const spot = densestCell(gaps);
+        if (spot >= 0 && this.placeFacilityAt(kind, spot % SPAN, (spot / SPAN) | 0, 12)) {
+          added = true;
+        }
+      }
+      if (!added) break;
+    }
+  }
+
+  /** 도시 안의 건물 앵커. [x, y, span]. */
+  private buildingAnchors(): Array<[number, number, number]> {
+    const out: Array<[number, number, number]> = [];
+    for (let y = EDGE; y < SPAN - EDGE; y++) {
+      for (let x = EDGE; x < SPAN - EDGE; x++) {
+        const info = this.world.buildingCovering(this.ox + x, this.oy + y);
+        if (!info || info.kind !== null) continue;
+        if (info.tx !== this.ox + x || info.ty !== this.oy + y) continue;
+        out.push([x, y, info.span]);
+      }
+    }
+    return out;
+  }
+
+  /** (x, y) 에서 바깥으로 돌면서 시설 한 채가 들어갈 첫 자리를 찾는다. */
+  private placeFacilityAt(kind: number, x: number, y: number, limit: number): boolean {
+    const span = facilitySpan(kind);
+    for (let r = 0; r <= limit; r++) {
+      for (let dy = -r; dy <= r; dy++) {
+        for (let dx = -r; dx <= r; dx++) {
+          if (r > 0 && Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
+          const nx = x + dx;
+          const ny = y + dy;
+          if (!this.inside(nx, ny) || !this.inside(nx + span - 1, ny + span - 1)) continue;
+          if (this.roadDist[this.idx(nx, ny)] === 255) continue;
+          if (!this.clearFacilityPlot(nx, ny, span)) continue;
+          const tx = this.ox + nx;
+          const ty = this.oy + ny;
+          if (!canPlaceFacility(this.world, tx, ty, kind, 5).ok) continue;
+          this.world.placeFacility(tx, ty, kind, this.bornDay);
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
   /** 도로가 닿는 칸 수. 시설 밀도를 여기서 잡는다. */
@@ -1353,6 +1520,33 @@ class CityBuilder {
 /* ---------------------------------------------------------------- *
  * 작은 도우미
  * ---------------------------------------------------------------- */
+
+/**
+ * 빈 칸들이 가장 빽빽하게 모인 곳. 8x8 칸으로 묶어 가장 많은 칸의 한가운데를 준다.
+ * 평균 좌표(무게중심)를 쓰면 빈 곳이 도시 양 끝에 둘로 나뉘었을 때 그 사이의
+ * 멀쩡한 동네 한복판을 찍는다.
+ */
+function densestCell(tiles: readonly number[]): number {
+  if (tiles.length === 0) return -1;
+  const CELL = 8;
+  const cols = Math.ceil(SPAN / CELL);
+  const count = new Map<number, number>();
+  let bestKey = -1;
+  let bestCount = 0;
+  for (const i of tiles) {
+    const key = Math.floor(((i / SPAN) | 0) / CELL) * cols + Math.floor((i % SPAN) / CELL);
+    const n = (count.get(key) ?? 0) + 1;
+    count.set(key, n);
+    if (n > bestCount) {
+      bestCount = n;
+      bestKey = key;
+    }
+  }
+  if (bestKey < 0) return -1;
+  const cx = (bestKey % cols) * CELL + CELL / 2;
+  const cy = Math.floor(bestKey / cols) * CELL + CELL / 2;
+  return cy * SPAN + cx;
+}
 
 function smooth(t: number): number {
   return t * t * (3 - 2 * t);
