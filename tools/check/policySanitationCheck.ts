@@ -118,9 +118,19 @@ assert.equal(saved, 1);
 const restored = new MacroSim(world, JSON.parse(JSON.stringify(macro)));
 assert.deepEqual(restored.policies, sim.policies);
 assert.equal(restored.services.budget, 0.7);
+// "맵 초기화" 가 저장할 macro. Firestore 는 undefined 필드가 하나만 있어도 저장
+// 전체를 거부하므로, 초기화가 남긴 macro 에는 undefined 가 절대 없어야 한다.
+// 남으면 초기화가 서버에 안 실리고 새로고침 뒤 예전 도시가 그대로 돌아온다.
+macro.transport = { harbors: {} };
+macro.disasters = { seed: 1, active: [], nextAt: 0 } as unknown as typeof macro.disasters;
 sim.resetState(60000, 1);
 assert.deepEqual(sim.policies, DEFAULT_POLICIES);
 assert.equal(sim.services.budget, 1);
+for (const [key, value] of Object.entries(macro))
+  assert.notEqual(value, undefined, `초기화한 macro.${key} 가 undefined 입니다`);
+for (const key of ['transport', 'disasters', 'policies', 'prosperity'])
+  assert.equal(key in macro, false, `초기화가 macro.${key} 를 키째로 지우지 않았습니다`);
+assert.deepEqual(JSON.parse(JSON.stringify(macro)), macro, '저장 payload 에 손실이 있습니다');
 
 // New kinds use the same cross-chunk building save path and remain independently demolishable.
 const border = (world.baseCx + 1) * CHUNK_SIZE;

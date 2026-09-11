@@ -151,6 +151,25 @@ export interface SavePatch {
  * ConflictError 를 던지고 아무것도 쓰지 않는다. 두 기기가 서로의 도시를
  * 덮어쓰면서 왔다 갔다 하는 걸 막는 장치다.
  */
+/**
+ * undefined 값을 가진 키를 떨궈낸다.
+ *
+ * Firestore 는 `ignoreUndefinedProperties` 를 켜지 않으면 undefined 필드가 하나만
+ * 있어도 **저장 전체를 거부한다.** 실제로 `macro.transport = undefined` 하나 때문에
+ * "맵 초기화" 저장이 매번 실패했고, 호출부가 예외를 삼키고 새로고침해서 예전 도시가
+ * 그대로 돌아왔다 — 학생 눈에는 "초기화 버튼이 안 먹는다" 로만 보였다.
+ *
+ * 선택 필드는 `delete` 로 지우는 것이 원칙이지만(MacroSim.resetState), 한 군데라도
+ * 빠뜨리면 같은 증상이 조용히 다시 생긴다. 저장 경계에서 한 번 더 거른다.
+ */
+function withoutUndefined<T extends object>(value: T): T {
+  const out: Record<string, unknown> = {};
+  for (const [key, v] of Object.entries(value)) {
+    if (v !== undefined) out[key] = v;
+  }
+  return out as T;
+}
+
 export async function saveCity(
   uid: string,
   token: string,
@@ -180,7 +199,7 @@ export async function saveCity(
 
     tx.update(cityRef, {
       explored: patch.explored,
-      macro: patch.macro,
+      macro: withoutUndefined(patch.macro),
       cityName: patch.cityName,
       saveCount: (Number(data.saveCount) || 0) + 1,
       updatedAt: now,

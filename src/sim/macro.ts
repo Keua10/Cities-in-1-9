@@ -782,7 +782,9 @@ export class MacroSim {
    *
    * macro 객체는 CityDoc 의 것을 그대로 들고 있으므로, 여기서 고치면 다음
    * 저장에 그대로 실린다(saveManager 가 city.macro 를 복사해 보낸다).
-   * disasters 는 **키째로 지운다** — undefined 를 남기면 Firestore 가 거부한다.
+   * 선택 필드는 전부 **키째로 지운다** — `= undefined` 로 두면 Firestore 가
+   * 그 저장을 통째로 거부한다(ignoreUndefinedProperties 를 켜지 않았다).
+   * 그러면 초기화가 서버에 안 실리고, 새로고침하면 예전 도시가 그대로 돌아온다.
    */
   resetState(money: number, nowMs: number): void {
     this.macro.money = money;
@@ -795,6 +797,7 @@ export class MacroSim {
     delete this.macro.powerStartTick;
     delete this.macro.sanitationStartTick;
     delete this.macro.policies;
+    delete this.macro.transport;
     this.services.budget = 1;
     this.onMacroChange?.();
   }

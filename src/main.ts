@@ -84,9 +84,20 @@ async function boot(): Promise<void> {
   world.preserveTerrainChunks(macro.legacyTerrainChunks!);
   // 씨앗을 저장해 둔다. 같은 도시를 다시 열면 같은 도시가 나오고, "맵 초기화"
   // 는 새 씨앗을 적고 새로고침하므로 누를 때마다 다른 도시가 나온다.
-  const seededCenter = seedCityIfEmpty(world, Math.floor(macro.tick / 24), macro.genSeed);
+  //
+  // 저장이 없는 둘러보기 모드에서는 macro 가 새로고침마다 새로 만들어지므로
+  // 씨앗이 사라진다. 그래서 초기화가 넘겨준 씨앗을 sessionStorage 에서도 받는다.
+  const seededCenter = seedCityIfEmpty(
+    world,
+    Math.floor(macro.tick / 24),
+    macro.genSeed ?? takeResetSeed(),
+  );
+  let seedChanged = false;
   if (seededCenter) {
-    if (macro.genSeed !== seededCenter.seed) macro.genSeed = seededCenter.seed;
+    if (macro.genSeed !== seededCenter.seed) {
+      macro.genSeed = seededCenter.seed;
+      seedChanged = true;
+    }
     if (macro.money < SEEDED_CITY_MONEY) macro.money = SEEDED_CITY_MONEY;
   }
 
@@ -134,7 +145,7 @@ async function boot(): Promise<void> {
       : new OfflineSaveManager();
   saver.onStatus = (status, message) => badge.set(status, message);
   saver.start();
-  if (terrainMigrated) saver.noteMacroChange();
+  if (terrainMigrated || seedChanged) saver.noteMacroChange();
   if (loadFailed) badge.set('error', '불러오기 실패 — 저장되지 않습니다');
 
   const hud = new Hud();
@@ -217,14 +228,25 @@ async function boot(): Promise<void> {
       app.ticker.stop();
       transportPanel.hide();
       world.clearBuilt();
-      macro.transport = undefined;
       // 새 씨앗. 이게 없으면 초기화해도 똑같은 도시가 다시 만들어진다.
-      macro.genSeed = randomCitySeed();
+      // sessionStorage 에도 적어 둔다 — 둘러보기 모드에는 저장이 없다.
+      const seed = randomCitySeed();
+      macro.genSeed = seed;
+      rememberResetSeed(seed);
+      // transport 를 비우는 것까지 여기서 하지 않는다. resetState 가 선택 필드를
+      // 전부 **키째로** 지운다. `= undefined` 로 두면 Firestore 가 그 저장을
+      // 거부하고, 그러면 초기화가 서버에 안 실려서 새로고침 뒤에 예전 도시가
+      // 그대로 돌아온다.
       sim.resetState(SEEDED_CITY_MONEY, Date.now());
       try {
         await saver.saveNow();
       } catch (err) {
+        // 조용히 새로고침하면 학생은 "버튼이 안 먹는다" 로만 본다. 실제로
+        // 무슨 일이 있었는지 알려주고 나서 화면을 서버 상태에 맞춘다.
         console.error('초기화 저장 실패', err);
+        window.alert(
+          '새 도시를 서버에 저장하지 못했습니다. 예전 도시가 그대로 보이면 잠시 뒤 다시 시도해 주세요.',
+        );
       }
       location.reload();
     },
@@ -282,6 +304,37 @@ async function boot(): Promise<void> {
   });
 
   document.getElementById('loading')?.classList.add('done');
+}
+
+/**
+ * "맵 초기화" 가 뽑은 씨앗을 새로고침 너머로 넘긴다.
+ *
+ * 로그인한 학생은 씨앗이 `macro.genSeed` 로 서버에 저장되므로 이게 없어도 된다.
+ * 저장이 없는 둘러보기 모드에서는 macro 가 새로고침마다 새로 만들어져 씨앗이
+ * 사라지고, 그러면 초기화를 눌러도 기본 씨앗으로 **같은 도시** 가 다시 나온다.
+ *
+ * sessionStorage 는 탭을 닫으면 사라지고 쓸 수 없는 환경(사생활 보호 모드)도
+ * 있으므로, 실패해도 조용히 넘어간다. 값은 한 번만 쓰고 지운다.
+ */
+const RESET_SEED_KEY = 'cities19.resetSeed';
+
+function rememberResetSeed(seed: number): void {
+  try {
+    sessionStorage.setItem(RESET_SEED_KEY, String(seed));
+  } catch {
+    /* 저장할 수 없으면 그냥 기본 씨앗으로 간다 */
+  }
+}
+
+function takeResetSeed(): number | undefined {
+  try {
+    const raw = sessionStorage.getItem(RESET_SEED_KEY);
+    sessionStorage.removeItem(RESET_SEED_KEY);
+    const seed = Number(raw);
+    return raw !== null && Number.isFinite(seed) ? seed >>> 0 : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function revealBaseRing(world: World): void {
