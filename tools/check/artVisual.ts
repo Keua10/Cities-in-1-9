@@ -2,7 +2,6 @@ import { buildingArt, BUILDING_NAMES } from '../../src/render/buildingArt';
 import { facilityArt } from '../../src/render/facilityArt';
 import { FACILITY_SPECS } from '../../src/sim/facilities';
 import type { PixelArt } from '../../src/render/pixelArt';
-import { BUILDING_CANDIDATES } from '../../src/render/buildingCandidates';
 import {
   ATLAS_CELL_COUNT,
   CIVIC_CELL_BASE,
@@ -42,24 +41,33 @@ function card(a: PixelArt, name: string, description: string): void {
 }
 const legacyBuildings = new Image();
 legacyBuildings.src = '/sprites/buildings.png';
-legacyBuildings.onload = () => {
-  if (filter === 5) render();
-};
+const normalizedResidential = new Image();
+normalizedResidential.src = '/sprites/candidates/residential-l1-a.png?v=normalized-1';
+for (const image of [legacyBuildings, normalizedResidential])
+  image.onload = () => {
+    if (filter === 5) render();
+  };
 
-function legacyCard(): void {
+function rasterCard(
+  image: HTMLImageElement,
+  name: string,
+  description: string,
+  sourceX = 0,
+  sourceY = 0,
+): void {
   const article = document.createElement('article'),
     canvas = document.createElement('canvas'),
     ctx = canvas.getContext('2d')!;
   canvas.width = canvas.height = 64;
   canvas.style.width = canvas.style.height = `${64 * zoom}px`;
   ctx.imageSmoothingEnabled = false;
-  if (legacyBuildings.complete && legacyBuildings.naturalWidth)
-    ctx.drawImage(legacyBuildings, 0, 0, 64, 64, 0, 0, 64, 64);
+  if (image.complete && image.naturalWidth)
+    ctx.drawImage(image, sourceX, sourceY, 64, 64, 0, 0, 64, 64);
   const title = document.createElement('h2');
-  title.textContent = '원본 복원 후보 · 1단계 주거 A';
+  title.textContent = name;
   const meta = document.createElement('div');
   meta.className = 'meta';
-  meta.textContent = '승인 시 게임에 복원하고 이후 변형의 품질 기준으로 사용';
+  meta.textContent = description;
   article.append(canvas, title, meta);
   gallery.append(article);
 }
@@ -118,9 +126,16 @@ function surfaceGallery(): void {
 
 function candidateComparison(): void {
   card(buildingArt(1, 0, 0), '현재 게임 버전', '비교용 · 현재 적용 중');
-  legacyCard();
-  for (const candidate of BUILDING_CANDIDATES)
-    card(candidate.art(), candidate.name, `${candidate.description} · 아직 게임에는 미적용`);
+  rasterCard(
+    legacyBuildings,
+    '원본 시각 참고 · 규격 미적용',
+    '원본 범위 x=2..60, y=11..63 · 아래 투명 여백 없음',
+  );
+  rasterCard(
+    normalizedResidential,
+    '새 규격 후보 · 원본 주택 보존형',
+    '64×64 · 범위 x=2..60, y=10..62 · 이진 알파 · 중앙 바닥 기준점',
+  );
 }
 function render(): void {
   gallery.replaceChildren();
@@ -150,7 +165,7 @@ function render(): void {
   '공업 12종',
   '특수 시설 26종',
   '도로·지구 24종',
-  '주거 규격 후보 3종',
+  '주거 원본 규격화 1종',
 ].forEach((name, i) => {
   const b = document.createElement('button');
   b.textContent = name;
