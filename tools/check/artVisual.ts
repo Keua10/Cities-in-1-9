@@ -2,6 +2,7 @@ import { buildingArt, BUILDING_NAMES } from '../../src/render/buildingArt';
 import { facilityArt } from '../../src/render/facilityArt';
 import { FACILITY_SPECS } from '../../src/sim/facilities';
 import type { PixelArt } from '../../src/render/pixelArt';
+import { BUILDING_CANDIDATES } from '../../src/render/buildingCandidates';
 import {
   ATLAS_CELL_COUNT,
   CIVIC_CELL_BASE,
@@ -118,6 +119,8 @@ function surfaceGallery(): void {
 function candidateComparison(): void {
   card(buildingArt(1, 0, 0), '현재 게임 버전', '비교용 · 현재 적용 중');
   legacyCard();
+  for (const candidate of BUILDING_CANDIDATES)
+    card(candidate.art(), candidate.name, `${candidate.description} · 아직 게임에는 미적용`);
 }
 function render(): void {
   gallery.replaceChildren();
@@ -147,7 +150,7 @@ function render(): void {
   '공업 12종',
   '특수 시설 26종',
   '도로·지구 24종',
-  '주거 1개 복원 후보',
+  '주거 규격 후보 3종',
 ].forEach((name, i) => {
   const b = document.createElement('button');
   b.textContent = name;

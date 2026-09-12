@@ -5,6 +5,7 @@ import { createCanvas } from '@napi-rs/canvas';
 import { buildingArt, BUILDING_ART_VARIANTS, BUILDING_NAMES } from '../../src/render/buildingArt';
 import { facilityArt } from '../../src/render/facilityArt';
 import { PixelArt, PIXEL_PALETTE } from '../../src/render/pixelArt';
+import { BUILDING_CANDIDATES } from '../../src/render/buildingCandidates';
 import { FACILITY_SPECS } from '../../src/sim/facilities';
 import {
   BUILDING_ATLAS_W,
@@ -67,6 +68,11 @@ for (const spec of FACILITY_SPECS) {
   const a = facilityArt(spec.kind);
   verify(a, spec.name);
   assert.deepEqual(a.data, facilityArt(spec.kind).data);
+}
+for (const candidate of BUILDING_CANDIDATES) {
+  const art = candidate.art();
+  verify(art, candidate.name);
+  assert.deepEqual(art.data, candidate.art().data, `${candidate.name}: deterministic redraw`);
 }
 // The same prop is exactly the same pixels across parcel sizes; no scaled sprites.
 for (const size of [128, 192, 320, 448]) {
