@@ -1,0 +1,335 @@
+[
+  {
+    "id": "residential-l1-a",
+    "level": 1,
+    "zone": 0,
+    "variant": 0,
+    "mode": "source-preserved",
+    "colors": 125,
+    "bounds": [
+      2,
+      10,
+      60,
+      62
+    ],
+    "centerError": 0,
+    "shift": [
+      0,
+      -1
+    ]
+  },
+  {
+    "id": "residential-l1-b",
+    "level": 1,
+    "zone": 0,
+    "variant": 1,
+    "mode": "source-preserved",
+    "colors": 125,
+    "bounds": [
+      6,
+      18,
+      55,
+      62
+    ],
+    "centerError": 0,
+    "shift": [
+      -1,
+      -1
+    ]
+  },
+  {
+    "id": "commercial-l1-a",
+    "level": 1,
+    "zone": 1,
+    "variant": 0,
+    "mode": "source-preserved",
+    "colors": 126,
+    "bounds": [
+      7,
+      22,
+      53,
+      62
+    ],
+    "centerError": 0.5,
+    "shift": [
+      -1,
+      -1
+    ]
+  },
+  {
+    "id": "commercial-l1-b",
+    "level": 1,
+    "zone": 1,
+    "variant": 1,
+    "mode": "source-preserved",
+    "colors": 126,
+    "bounds": [
+      7,
+      20,
+      51,
+      62
+    ],
+    "centerError": 0.5,
+    "shift": [
+      0,
+      -1
+    ]
+  },
+  {
+    "id": "industrial-l1-a",
+    "level": 1,
+    "zone": 2,
+    "variant": 0,
+    "mode": "source-preserved",
+    "colors": 115,
+    "bounds": [
+      8,
+      25,
+      52,
+      62
+    ],
+    "centerError": 0,
+    "shift": [
+      -1,
+      -1
+    ]
+  },
+  {
+    "id": "industrial-l1-b",
+    "level": 1,
+    "zone": 2,
+    "variant": 1,
+    "mode": "source-preserved",
+    "colors": 123,
+    "bounds": [
+      9,
+      18,
+      53,
+      62
+    ],
+    "centerError": 0.5,
+    "shift": [
+      0,
+      -1
+    ]
+  },
+  {
+    "id": "residential-l2-a",
+    "level": 2,
+    "zone": 0,
+    "variant": 0,
+    "mode": "source-preserved",
+    "colors": 159,
+    "bounds": [
+      5,
+      45,
+      124,
+      126
+    ],
+    "centerError": 0.5,
+    "shift": [
+      1,
+      -1
+    ]
+  },
+  {
+    "id": "residential-l2-b",
+    "level": 2,
+    "zone": 0,
+    "variant": 1,
+    "mode": "source-preserved",
+    "colors": 159,
+    "bounds": [
+      4,
+      52,
+      124,
+      126
+    ],
+    "centerError": 0,
+    "shift": [
+      0,
+      -1
+    ]
+  },
+  {
+    "id": "commercial-l2-a",
+    "level": 2,
+    "zone": 1,
+    "variant": 0,
+    "mode": "source-preserved",
+    "colors": 160,
+    "bounds": [
+      8,
+      55,
+      113,
+      126
+    ],
+    "centerError": 0,
+    "shift": [
+      0,
+      -1
+    ]
+  },
+  {
+    "id": "commercial-l2-b",
+    "level": 2,
+    "zone": 1,
+    "variant": 1,
+    "mode": "source-preserved",
+    "colors": 159,
+    "bounds": [
+      3,
+      49,
+      105,
+      126
+    ],
+    "centerError": 0,
+    "shift": [
+      0,
+      -1
+    ]
+  },
+  {
+    "id": "industrial-l2-a",
+    "level": 2,
+    "zone": 2,
+    "variant": 0,
+    "mode": "source-preserved",
+    "colors": 157,
+    "bounds": [
+      7,
+      34,
+      97,
+      126
+    ],
+    "centerError": 0.5,
+    "shift": [
+      1,
+      -1
+    ]
+  },
+  {
+    "id": "industrial-l2-b",
+    "level": 2,
+    "zone": 2,
+    "variant": 1,
+    "mode": "source-preserved",
+    "colors": 159,
+    "bounds": [
+      9,
+      24,
+      116,
+      126
+    ],
+    "centerError": 0.5,
+    "shift": [
+      0,
+      -1
+    ]
+  },
+  {
+    "id": "residential-l3-a",
+    "level": 3,
+    "zone": 0,
+    "variant": 0,
+    "mode": "source-preserved",
+    "colors": 191,
+    "bounds": [
+      1,
+      32,
+      180,
+      190
+    ],
+    "centerError": 0,
+    "shift": [
+      0,
+      -1
+    ]
+  },
+  {
+    "id": "residential-l3-b",
+    "level": 3,
+    "zone": 0,
+    "variant": 1,
+    "mode": "restored",
+    "colors": 222,
+    "bounds": [
+      5,
+      32,
+      184,
+      190
+    ],
+    "centerError": 0,
+    "shift": null
+  },
+  {
+    "id": "commercial-l3-a",
+    "level": 3,
+    "zone": 1,
+    "variant": 0,
+    "mode": "restored",
+    "colors": 204,
+    "bounds": [
+      6,
+      27,
+      184,
+      190
+    ],
+    "centerError": 0.5,
+    "shift": null
+  },
+  {
+    "id": "commercial-l3-b",
+    "level": 3,
+    "zone": 1,
+    "variant": 1,
+    "mode": "source-preserved",
+    "colors": 192,
+    "bounds": [
+      15,
+      28,
+      156,
+      190
+    ],
+    "centerError": 0.5,
+    "shift": [
+      0,
+      -1
+    ]
+  },
+  {
+    "id": "industrial-l3-a",
+    "level": 3,
+    "zone": 2,
+    "variant": 0,
+    "mode": "restored",
+    "colors": 229,
+    "bounds": [
+      6,
+      48,
+      185,
+      190
+    ],
+    "centerError": 0,
+    "shift": null
+  },
+  {
+    "id": "industrial-l3-b",
+    "level": 3,
+    "zone": 2,
+    "variant": 1,
+    "mode": "source-preserved",
+    "colors": 191,
+    "bounds": [
+      9,
+      30,
+      176,
+      190
+    ],
+    "centerError": 0,
+    "shift": [
+      0,
+      -1
+    ]
+  }
+]

@@ -40,21 +40,32 @@ function card(a: PixelArt, name: string, description: string): void {
   gallery.append(article);
 }
 const CANDIDATE_INFO = [
-  ['residential-l1-a', 1, 0, '주거', 125, '0px'],
-  ['commercial-l1-a', 1, 1, '상업', 126, '0.5px'],
-  ['industrial-l1-a', 1, 2, '공업', 115, '0px'],
-  ['residential-l2-a', 2, 0, '주거', 159, '0.5px'],
-  ['commercial-l2-a', 2, 1, '상업', 160, '0px'],
-  ['industrial-l2-b', 2, 2, '공업', 159, '0.5px'],
-  ['residential-l3-a', 3, 0, '주거', 191, '0px'],
-  ['commercial-l3-a', 3, 1, '상업', 192, '0.5px'],
-  ['industrial-l3-a', 3, 2, '공업', 191, '0.5px'],
+  ['residential-l1-a', 1, 0, 0, '주거', 125, '0px', false],
+  ['residential-l1-b', 1, 0, 1, '주거', 125, '0px', false],
+  ['commercial-l1-a', 1, 1, 0, '상업', 126, '0.5px', false],
+  ['commercial-l1-b', 1, 1, 1, '상업', 126, '0.5px', false],
+  ['industrial-l1-a', 1, 2, 0, '공업', 115, '0px', false],
+  ['industrial-l1-b', 1, 2, 1, '공업', 123, '0.5px', false],
+  ['residential-l2-a', 2, 0, 0, '주거', 159, '0.5px', false],
+  ['residential-l2-b', 2, 0, 1, '주거', 159, '0px', false],
+  ['commercial-l2-a', 2, 1, 0, '상업', 160, '0px', false],
+  ['commercial-l2-b', 2, 1, 1, '상업', 159, '0px', false],
+  ['industrial-l2-a', 2, 2, 0, '공업', 157, '0.5px', false],
+  ['industrial-l2-b', 2, 2, 1, '공업', 159, '0.5px', false],
+  ['residential-l3-a', 3, 0, 0, '주거', 191, '0px', false],
+  ['residential-l3-b', 3, 0, 1, '주거', 222, '0px', true],
+  ['commercial-l3-a', 3, 1, 0, '상업', 204, '0.5px', true],
+  ['commercial-l3-b', 3, 1, 1, '상업', 192, '0.5px', false],
+  ['industrial-l3-a', 3, 2, 0, '공업', 229, '0px', true],
+  ['industrial-l3-b', 3, 2, 1, '공업', 191, '0px', false],
 ] as const;
-const normalizedCandidates = CANDIDATE_INFO.map(([id, level, zone, label, colors, error]) => {
-  const image = new Image();
-  image.src = `/sprites/candidates/${id}.png?v=normalized-2`;
-  return { id, level, zone, label, colors, error, image };
-});
+const normalizedCandidates = CANDIDATE_INFO.map(
+  ([id, level, zone, variant, label, colors, error, restored]) => {
+    const image = new Image();
+    image.src = `/sprites/candidates/${id}.png?v=normalized-3`;
+    return { id, level, zone, variant, label, colors, error, restored, image };
+  },
+);
 for (const { image } of normalizedCandidates)
   image.onload = () => {
     if (filter >= 5) render();
@@ -140,14 +151,14 @@ function surfaceGallery(): void {
 function candidateComparison(level: number): void {
   for (const candidate of normalizedCandidates.filter((item) => item.level === level)) {
     card(
-      buildingArt(level, candidate.zone, 0),
-      `현재 ${candidate.label} L${level}`,
+      buildingArt(level, candidate.zone, candidate.variant),
+      `현재 ${candidate.label} L${level}-${candidate.variant ? 'B' : 'A'}`,
       '현재 게임 적용본 · 단순 40색 코드 도형',
     );
     rasterCard(
       candidate.image,
-      `원본 규격화 ${candidate.label} L${level}`,
-      `${level * 64}×${level * 64} · 원본 ${candidate.colors}색 · 리스케일/재색칠 없음 · 바닥 중심 오차 ${candidate.error}`,
+      `${candidate.restored ? '절단 복원' : '원본 규격화'} ${candidate.label} L${level}-${candidate.variant ? 'B' : 'A'}`,
+      `${level * 64}×${level * 64} · ${candidate.colors}색 · ${candidate.restored ? '잘린 소품 복원·재규격화' : '리스케일/재색칠 없음'} · 바닥 중심 오차 ${candidate.error}`,
       level * 64,
     );
   }
@@ -190,9 +201,9 @@ function render(): void {
   '공업 12종',
   '특수 시설 26종',
   '도로·지구 24종',
-  '원본 규격화 L1',
-  '원본 규격화 L2',
-  '원본 규격화 L3',
+  '원본 규격화 L1 6종',
+  '원본 규격화 L2 6종',
+  '원본 규격화 L3 6종',
 ].forEach((name, i) => {
   const b = document.createElement('button');
   b.textContent = name;
