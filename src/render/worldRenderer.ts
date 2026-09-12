@@ -20,7 +20,6 @@ import {
 } from '../core/iso';
 import type { DisasterSim } from '../sim/disasters';
 import { FACILITY_SPECS } from '../sim/facilities';
-import { laneIsTurning } from '../sim/traffic/laneGeometry';
 import type { TrafficSim } from '../sim/traffic/trafficSim';
 import type { Vehicle } from '../sim/traffic/vehicles';
 import { Build, DIRS, makeTopResolver, type TopResolver } from '../world/build';
@@ -89,8 +88,6 @@ export class WorldRenderer {
   private waterLayer = new UtilityLayer();
   readonly root = new Container();
   private groundLayer = new Container();
-  /** 회전 차량은 큰 지형 청크 사이에 끼지 않도록 지형 합성 뒤에 그린다. */
-  private turningVehicleLayer = new Container();
   private fogLayer = new Container();
   private gridLayer = new Graphics();
   private cursorLayer = new Graphics();
@@ -110,10 +107,8 @@ export class WorldRenderer {
    */
   private structures: StructureLayer;
   private scene: TerrainStructureScene;
-  private vehicleMeshes = new Map<string, VehicleMesh>();
-  private turningVehicleMesh: VehicleMesh | null = null;
+  private vehicles: VehicleMesh | null = null;
   private traffic: TrafficSim | null = null;
-  private vehicleAtlas: VehicleAtlas | null = null;
   private fog = new Map<string, Graphics>();
 
   private lastRangeKey = '';
@@ -143,7 +138,6 @@ export class WorldRenderer {
     this.pedestrianLayer = new PedestrianLayer(buildingAtlas, facilityAtlas);
     this.root.addChild(
       this.groundLayer,
-      this.turningVehicleLayer,
       this.pedestrianLayer.graphics,
       this.fogLayer,
       this.signalLayer.graphics,
@@ -155,7 +149,6 @@ export class WorldRenderer {
       this.facilityFocusLayer,
     );
     this.groundLayer.interactiveChildren = false;
-    this.turningVehicleLayer.interactiveChildren = false;
     this.fogLayer.interactiveChildren = false;
     // 고도가 있으면 청크끼리도 겹친다. 뒤쪽 청크부터 그려야 한다.
     this.groundLayer.sortableChildren = true;
@@ -169,7 +162,9 @@ export class WorldRenderer {
 
   attachTraffic(traffic: TrafficSim, atlas: VehicleAtlas): void {
     this.traffic = traffic;
-    this.vehicleAtlas = atlas;
+    this.vehicles?.destroy();
+    this.vehicles = new VehicleMesh(this.world, atlas);
+    this.scene.setVehicleTexture(atlas.texture);
   }
   /** Finder highlight is separate from placement preview and hover selection. */
   setFacilityFocus(f: { tx: number; ty: number; span: number } | null): void {
@@ -298,8 +293,7 @@ export class WorldRenderer {
     let fogged = 0;
     let buildingsShown = 0;
     let facilitiesShown = 0;
-    const usedVehicleMeshes = new Set<string>();
-    const turningVehicles: Vehicle[] = [];
+    const visibleVehicles: Vehicle[] = [];
     const sceneGround: ChunkMesh[] = [];
     const sceneStructures: StructureMesh[] = [];
 
@@ -325,25 +319,16 @@ export class WorldRenderer {
         const counts = this.structures.counts(key);
         buildingsShown += counts.buildings;
         facilitiesShown += counts.facilities;
-        if (this.traffic && this.vehicleAtlas) {
-          const vehicles = this.traffic.vehiclesInChunk(cx, cy);
-          if (vehicles.length > 0 || this.vehicleMeshes.has(key)) {
-            const groundVehicles: Vehicle[] = [];
-            for (const vehicle of vehicles) {
-              if (laneIsTurning(vehicle.route, vehicle.routeIdx, vehicle.tileT)) {
-                turningVehicles.push(vehicle);
-              } else {
-                groundVehicles.push(vehicle);
-              }
-            }
-            this.ensureVehicles(key, cx, cy, groundVehicles);
-            usedVehicleMeshes.add(key);
-          }
-        }
+        if (this.traffic && this.vehicles)
+          visibleVehicles.push(...this.traffic.vehiclesInChunk(cx, cy));
       }
     }
 
     this.scene.update(sceneGround, sceneStructures);
+    if (this.vehicles) {
+      this.vehicles.update(visibleVehicles);
+      this.scene.updateVehicles(this.vehicles.sceneData());
+    }
     this.stats.sceneRebuilds = this.scene.rebuildCount;
     this.stats.sceneBuildMs = this.scene.lastBuildMs;
     if (rangeKey !== this.lastRangeKey || zoomChanged) {
@@ -354,9 +339,6 @@ export class WorldRenderer {
     }
 
     this.evict(now, range);
-    for (const key of [...this.vehicleMeshes.keys()])
-      if (!usedVehicleMeshes.has(key)) this.dropVehicles(key);
-    this.updateTurningVehicles(turningVehicles);
     this.pedestrianLayer.draw(this.world, this.traffic?.pedestrians ?? [], this.showFog, view);
 
     if (this.lastSignalDrawMs < 0 || now - this.lastSignalDrawMs >= 120) {
@@ -448,40 +430,6 @@ export class WorldRenderer {
       this.meshes.delete(key);
     }
     this.structures.drop(key);
-    this.dropVehicles(key);
-  }
-
-  private ensureVehicles(key: string, cx: number, cy: number, vehicles: readonly Vehicle[]): void {
-    if (!this.vehicleAtlas) return;
-    let vm = this.vehicleMeshes.get(key);
-    if (!vm) {
-      vm = new VehicleMesh(this.world, this.vehicleAtlas);
-      vm.mesh.zIndex = cx + cy + 0.75;
-      this.vehicleMeshes.set(key, vm);
-      this.groundLayer.addChild(vm.mesh);
-    }
-    vm.update(vehicles);
-  }
-
-  private dropVehicles(key: string): void {
-    const vm = this.vehicleMeshes.get(key);
-    if (!vm) return;
-    this.groundLayer.removeChild(vm.mesh);
-    vm.destroy();
-    this.vehicleMeshes.delete(key);
-  }
-
-  private updateTurningVehicles(vehicles: readonly Vehicle[]): void {
-    if (!this.vehicleAtlas) return;
-    if (vehicles.length === 0) {
-      if (this.turningVehicleMesh) this.turningVehicleMesh.update(vehicles);
-      return;
-    }
-    if (!this.turningVehicleMesh) {
-      this.turningVehicleMesh = new VehicleMesh(this.world, this.vehicleAtlas);
-      this.turningVehicleLayer.addChild(this.turningVehicleMesh.mesh);
-    }
-    this.turningVehicleMesh.update(vehicles);
   }
 
   private ensureFog(key: string, cx: number, cy: number): void {

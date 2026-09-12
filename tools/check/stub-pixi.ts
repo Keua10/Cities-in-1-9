@@ -5,6 +5,7 @@ export class Texture {
     texture.source.resource = resource;
     return texture;
   }
+  destroy() {}
   source = { scaleMode: '', autoGenerateMipmaps: false, resource: undefined as unknown };
 }
 export class Mesh {

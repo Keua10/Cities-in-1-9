@@ -1,6 +1,6 @@
 import { Mesh, MeshGeometry } from 'pixi.js';
 import { MAX_ACTIVE_VEHICLES, TILE_W, WORLD_SEED } from '../core/constants';
-import { tileToWorldX, tileToWorldY } from '../core/iso';
+import { tileToWorldX, tileToWorldY, worldToTileF } from '../core/iso';
 import { simHash } from '../sim/buildings';
 import { laneFacing, lanePosition } from '../sim/traffic/laneGeometry';
 import type { Vehicle } from '../sim/traffic/vehicles';
@@ -24,6 +24,12 @@ import {
  */
 const VEHICLE_RENDER_SIZE_PX = VEHICLE_CELL;
 
+export interface VehicleSceneData {
+  positions: Float32Array;
+  uvs: Float32Array;
+  depths: number[];
+}
+
 export class VehicleMesh {
   readonly mesh: Mesh;
   private geometry: MeshGeometry;
@@ -31,6 +37,8 @@ export class VehicleMesh {
   private uvs: Float32Array;
   private sorted: Vehicle[] = [];
   private laneSamples = new Map<Vehicle, [number, number]>();
+  private depths: number[] = [];
+  private frontiers = new Map<string, Array<[number, number]>>();
 
   constructor(
     private world: World,
@@ -46,6 +54,7 @@ export class VehicleMesh {
   }
 
   update(vehicles: readonly Vehicle[]): void {
+    this.depths.length = 0;
     // 정렬 기준은 도로 중앙선이 아니라 실제 차선 위치다. 중앙선으로 정렬하면
     // 마주 오는 두 차의 깊이가 같아져 매 프레임 앞뒤가 뒤바뀌며 깜빡인다.
     this.sorted.length = 0;
@@ -92,6 +101,12 @@ export class VehicleMesh {
         simHash(WORLD_SEED, vehicle.destTx, vehicle.destTy, vehicle.tier) % VEHICLE_VARIANTS;
       const [u0, v0, u1, v1] = this.atlas.uv(vehicle.kind, facing, variant);
       writeQuad(this.uvs, q, u0, v0, u1, v1);
+      // The nose/wheels cross a tile boundary before the center. Draw after all ground
+      // touched by the sprite's front edge, or that next road tile cuts the car in half.
+      const frontier = this.frontier(u0, v0, u1, v1);
+      this.depths.push(
+        Math.max(...frontier.map(([x, y]) => Math.round(laneTx + x) + Math.round(laneTy + y))),
+      );
       q++;
     }
 
@@ -101,11 +116,56 @@ export class VehicleMesh {
     this.geometry.getBuffer('aUV').update();
   }
 
+  /** Cache only the forward silhouette of each atlas cell; transparent padding has no depth. */
+  private frontier(u0: number, v0: number, u1: number, v1: number): Array<[number, number]> {
+    const key = `${u0},${v0},${u1},${v1}`;
+    const cached = this.frontiers.get(key);
+    if (cached) return cached;
+    const canvas = this.atlas.texture.source?.resource as HTMLCanvasElement | undefined;
+    const ctx = canvas?.getContext?.('2d');
+    if (!ctx || !canvas) return [[0.5, 0.5]];
+    const width = Math.round((u1 - u0) * canvas.width),
+      height = Math.round((v1 - v0) * canvas.height);
+    const alpha = ctx.getImageData(
+      Math.round(u0 * canvas.width),
+      Math.round(v0 * canvas.height),
+      width,
+      height,
+    ).data;
+    const points: Array<[number, number]> = [];
+    for (let y = 0; y < height; y++)
+      for (let x = 0; x < width; x++) {
+        if (alpha[(y * width + x) * 4 + 3] === 0) continue;
+        // Both bottom corners bound a raster pixel in the isometric ground plane.
+        for (const edge of [x, x + 1]) {
+          const wx = (edge * VEHICLE_CELL) / width - VEHICLE_CELL / 2;
+          const wy = ((y + 1) * VEHICLE_CELL) / height - VEHICLE_CELL / 2 - VEHICLE_GROUND_DROP_PX;
+          const p = worldToTileF(wx, wy);
+          // Guard only Float32 rounding at an exact tile boundary (well below one pixel).
+          points.push([p.tx + 0.0001, p.ty + 0.0001]);
+        }
+      }
+    points.sort((a, b) => b[0] - a[0] || b[1] - a[1]);
+    const frontier: Array<[number, number]> = [];
+    let maxY = -Infinity;
+    for (const p of points)
+      if (p[1] > maxY) {
+        frontier.push(p);
+        maxY = p[1];
+      }
+    if (frontier.length === 0) frontier.push([0, 0]);
+    this.frontiers.set(key, frontier);
+    return frontier;
+  }
+
   destroy(): void {
     this.mesh.destroy();
     try {
       this.geometry.destroy(true);
     } catch {}
+  }
+  sceneData(): VehicleSceneData {
+    return { positions: this.positions, uvs: this.uvs, depths: this.depths };
   }
 }
 

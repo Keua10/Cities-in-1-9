@@ -67,7 +67,11 @@ const parent: any = {
 };
 const scene = new TerrainStructureScene(parent, terrain.texture, atlas.texture);
 scene.update(ground, [structure]);
-assert.equal(children.length, 1, 'terrain and both structure types share one draw mesh');
+assert.ok(children.length > 1, 'tile bands allow traffic between terrain and structures');
+assert.ok(
+  children.every((m) => m.geometry.batchMode === 'batch' && m.texture === children[0].texture),
+  'bands share a batchable texture',
+);
 const commands: SceneCommand[] = [];
 for (const mesh of ground) {
   const d = mesh.sceneTiles();
@@ -93,7 +97,11 @@ sd.quads.forEach((q, i) =>
   }),
 );
 sortSceneCommands(commands);
-const g = children[0].geometry;
+const g = {
+  positions: new Float32Array(
+    [...children].sort((a, b) => a.zIndex - b.zIndex).flatMap((m) => [...m.geometry.positions]),
+  ),
+};
 let offset = 0;
 for (const command of commands) {
   const length = command.count * 8;
@@ -158,13 +166,12 @@ assert.ok(
 );
 scene.setOpacity(1);
 scene.update([ground[1]], []);
-assert.equal(children.length, 1, 'removing visible sources replaces old scene');
-scene.update([], []);
-assert.deepEqual(
-  [...children[0].geometry.indices],
-  [0, 0, 0, 0, 0, 0],
-  'empty/fogged view clears previous art',
+assert.ok(
+  children.every((m) => m.zIndex % 3 === 0),
+  'removing structures removes their bands',
 );
+scene.update([], []);
+assert.equal(children.length, 0, 'empty/fogged view clears previous art');
 delete (globalThis as any).document;
 console.log(
   'PASS terrain scene: global cross-chunk order, footprint and front-cliff occlusion, exact ramp/wall vertices, ramp continuity, gutter anchor, idle reuse, UV invalidation, utility alpha and empty-view cleanup',

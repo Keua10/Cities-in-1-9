@@ -4,6 +4,7 @@ import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const checks = {
+  vehicleScene: 'tools/check/vehicleSceneCheck.ts',
   terrainScene: 'tools/check/terrainSceneCheck.ts',
   pixel: 'tools/check/pixelArtCheck.ts',
   visual: 'tools/check/visualRegressionCheck.ts',
