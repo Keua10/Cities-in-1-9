@@ -2,6 +2,7 @@ import { pickTile } from '../core/pick';
 import type { WorldRenderer } from '../render/worldRenderer';
 import { FACILITY_COUNT, isWelfareKind } from '../sim/buildings';
 import { canPlaceFacility, FACILITY_SPECS } from '../sim/facilities';
+import { facilityArt } from '../render/facilityArt';
 import type { MacroSim } from '../sim/macro';
 import { PIPE_COST, PIPE_SEWER, PIPE_WATER, WATER_SPECS } from '../sim/config/water';
 import { POWER_SPECS, WIRE_COST, facilityPowerDemand } from '../sim/config/power';
@@ -128,7 +129,8 @@ export class Tools {
     if (!this.message || now - this.messageAt > MESSAGE_MS) {
       if (this.tool === 'road') return '클릭: 독립 도로 · 드래그: 지나간 방향으로 설치·연결';
       if (this.tool === 'runway') return '공항 활주로 · 일직선으로 길게 설치하세요';
-      if (this.tool === 'taxiway') return '공항 유도로 · 터미널과 활주로를 이어야 공항이 가동됩니다';
+      if (this.tool === 'taxiway')
+        return '공항 유도로 · 터미널과 활주로를 이어야 공항이 가동됩니다';
       return '';
     }
     return this.message;
@@ -281,11 +283,12 @@ export class Tools {
     if (value === undefined) return;
 
     const airfield = value === Build.Runway || value === Build.Taxiway;
-    const result: PlaceResult = value === Build.Road
-      ? canPlaceRoad(this.world, tx, ty)
-      : airfield
-        ? canPlaceAirfieldSurface(this.world, tx, ty, value)
-        : canPlaceZone(this.world, tx, ty, value);
+    const result: PlaceResult =
+      value === Build.Road
+        ? canPlaceRoad(this.world, tx, ty)
+        : airfield
+          ? canPlaceAirfieldSurface(this.world, tx, ty, value)
+          : canPlaceZone(this.world, tx, ty, value);
 
     if (!result.ok) {
       if (result.reason) this.note(result.reason);
@@ -417,6 +420,33 @@ function buildFacilitySheet(tools: Tools, onPick: () => void): FacilitySheet {
   const root = document.createElement('div');
   root.id = 'facility-sheet';
   root.hidden = true;
+  const search = document.createElement('input');
+  search.type = 'search';
+  search.placeholder = '시설 이름 검색';
+  search.setAttribute('aria-label', '시설 이름 검색');
+  search.className = 'fs-search';
+  const noResults = document.createElement('p');
+  noResults.className = 'fs-empty';
+  noResults.textContent = '일치하는 시설이 없습니다.';
+  noResults.hidden = true;
+  noResults.setAttribute('role', 'status');
+  root.append(search, noResults);
+  search.addEventListener('input', () => {
+    const query = search.value.trim().replaceAll(' ', '');
+    let matches = 0;
+    for (const row of root.querySelectorAll<HTMLElement>('.fs-row')) {
+      let visible = 0;
+      for (const button of row.querySelectorAll<HTMLButtonElement>('.fs-item')) {
+        button.hidden = !(button.querySelector('b')?.textContent ?? '')
+          .replaceAll(' ', '')
+          .includes(query);
+        if (!button.hidden) visible++;
+      }
+      row.hidden = visible === 0;
+      matches += visible;
+    }
+    noResults.hidden = matches > 0;
+  });
 
   const groups: Array<[string, number[]]> = [
     ['필수 시설', []],
@@ -484,7 +514,12 @@ function buildFacilitySheet(tools: Tools, onPick: () => void): FacilitySheet {
           btn.innerHTML += '<small>도로·전력 불필요 · 만족도/서비스/수요 영향 없음</small>';
         } else if (isHarborFacility(kind)) {
           const hs = HARBOR_SPECS[kind];
-          const mode = hs.mode === 'passenger' ? '여객 전용' : hs.mode === 'cargo' ? '화물 전용' : '여객+화물 배분 가능';
+          const mode =
+            hs.mode === 'passenger'
+              ? '여객 전용'
+              : hs.mode === 'cargo'
+                ? '화물 전용'
+                : '여객+화물 배분 가능';
           btn.innerHTML += `<small>${mode} · 최대 ${hs.maxShips}척 · 도로·수역 인접 필수 · 전력 수요 ${power}</small>`;
         } else if (kind === FAC_PRISON) {
           btn.innerHTML += `<small>경찰 서비스 반경 ${spec.range}칸 · 담당 정원 ${spec.capacity.toLocaleString('ko-KR')} · 전력 수요 ${power}</small>`;
@@ -494,10 +529,18 @@ function buildFacilitySheet(tools: Tools, onPick: () => void): FacilitySheet {
         }
       }
 
+      const art = facilityArt(kind);
+      const thumbnail = document.createElement('canvas');
+      thumbnail.className = 'fs-thumbnail';
+      thumbnail.width = thumbnail.height = art.size;
+      thumbnail.setAttribute('aria-hidden', 'true');
+      art.paint(thumbnail.getContext('2d')!);
+      btn.prepend(thumbnail);
       btn.addEventListener('click', () => {
         if (tools.cityLevel < spec.unlockLevel) return;
         tools.facilityKind = kind;
         tools.setTool('facility');
+        root.hidden = true;
         onPick();
       });
       list.appendChild(btn);

@@ -679,9 +679,17 @@ body.clean-view #minimap-shell {
 
 .cp-note {
   margin-top: 8px;
+  margin-bottom: 10px;
   font-size: 11px;
-  line-height: 1.35;
+  line-height: 1.55;
+  white-space: pre-line;
   color: var(--ink-dim);
+}
+.cp-note.attention {
+  padding: 8px;
+  border-left: 2px solid #e0bc6a;
+  background: rgba(224, 188, 106, 0.06);
+  color: #e4cf9c;
 }
 
 #btn-city-info {
@@ -756,6 +764,32 @@ body.clean-view #minimap-shell {
   align-items: center;
   gap: 10px;
 }
+#facility-sheet .fs-search {
+  width: 100%;
+  flex: 0 0 auto;
+  padding: 10px;
+  border: 1px solid #60766d;
+  border-radius: 6px;
+  background: #203430;
+  color: var(--ink);
+  font: inherit;
+}
+#facility-sheet .fs-empty {
+  margin: 8px;
+  color: var(--ink-dim);
+}
+#facility-sheet .fs-row[hidden],
+#facility-sheet .fs-item[hidden] {
+  display: none;
+}
+#facility-sheet canvas.fs-thumbnail {
+  position: static;
+  width: 88px;
+  height: 88px;
+  align-self: center;
+  flex: 0 0 auto;
+  image-rendering: pixelated;
+}
 
 /* author display:flex 가 브라우저의 기본 [hidden] 규칙을 덮지 않게 한다. */
 #facility-sheet[hidden] {
@@ -770,6 +804,7 @@ body.clean-view #minimap-shell {
 
 #facility-sheet .fs-list {
   display: flex;
+  flex: 1;
   flex-wrap: wrap;
   gap: 6px;
 }
@@ -786,7 +821,20 @@ body.clean-view #minimap-shell {
   color: var(--ink-dim);
   font: inherit;
   text-align: left;
+  width: 180px;
   cursor: pointer;
+}
+@media (max-width: 560px) {
+  #facility-sheet .fs-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  #facility-sheet .fs-label {
+    flex-basis: auto;
+  }
+  #facility-sheet .fs-item {
+    width: 100%;
+  }
 }
 
 #facility-sheet .fs-item b {

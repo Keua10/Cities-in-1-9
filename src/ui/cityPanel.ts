@@ -4,6 +4,7 @@ import { BUILDING_UNLOCK_LEVEL, CITY_LEVELS } from '../sim/progression';
 import { SERVICE_KIND_COUNT } from '../sim/services';
 import { FACILITY_NAMES, TICKS_PER_DAY } from '../sim/simConstants';
 import { DEFAULT_POLICIES, type CityPolicies } from '../sim/policies';
+import { cityAdvice } from './cityAdvice';
 
 /**
  * 학생이 보는 도시 상태판.
@@ -183,7 +184,27 @@ export class CityPanel {
         (sim.waterGraceDaysLeft > 0 ? `\n부족 감점 유예 ${sim.waterGraceDaysLeft}일 남음` : ''),
     );
     this.updateSafety(sim);
-    setText(this.noteEl, describe(sim));
+    const finance = sim.financeEstimate();
+    const advice = cityAdvice({
+      money: sim.money,
+      catchupLeft: sim.catchupLeft,
+      stats: sim.stats,
+      power,
+      water,
+      sanitation: sim.sanitation,
+      netIncome: finance.income - finance.upkeep,
+    });
+    setText(
+      this.noteEl,
+      [
+        advice.headline,
+        ...advice.issues.slice(0, 3).map((s) => `• ${s}`),
+        ...(advice.issues.length > 3
+          ? [`그 외 ${advice.issues.length - 3}건 · 아래 공급·서비스 지표 확인`]
+          : []),
+      ].join('\n'),
+    );
+    this.noteEl.classList.toggle('attention', advice.issues.length > 0);
   }
 
   private updatePolicies(): void {
@@ -255,28 +276,10 @@ function describeFacilities(sim: MacroSim): string {
     if (s.facilityCounts[5] === 0 && s.facilityCounts[6] === 0) {
       return '중산층 이상은 소공원만으로 부족합니다. 공원을 지어 보세요';
     }
-    return `공원이 부족합니다 (주민의 ${short}%가 부족한 동네에 삽니다)`;
+    return `공원이 부족합니다 (주거 건물 ${short}%가 복지 요구를 채우지 못합니다)`;
   }
 
   return '';
-}
-
-function describe(sim: MacroSim): string {
-  if (sim.catchupLeft > 0) {
-    return `도시 변화를 계산하는 중… (${sim.catchupLeft}시간 남음)`;
-  }
-  if (sim.money <= 0) return '도시 자금이 부족해 새 건설이 멈췄습니다';
-  if (sim.stats.buildings === 0) {
-    return '도로 주변에 주거·상업·공업 지구를 지정해 보세요';
-  }
-  if (sim.stats.strandedBuildings > 0) {
-    return `도로와 연결되지 않은 건물 ${sim.stats.strandedBuildings}채가 비어 있습니다`;
-  }
-  if (sim.stats.occupancy < 0.5) {
-    return '공실이 많아 도시 성장이 느려졌습니다';
-  }
-  if (sim.stats.occupancy < 0.75) return '공실이 늘고 있습니다. 도로 연결을 확인하세요';
-  return `건물 ${sim.stats.buildings}채 · 도시가 안정적으로 성장 중입니다`;
 }
 
 function formatMoney(v: number): string {
@@ -320,6 +323,7 @@ function template(): string {
         <button type="button" class="cp-policy-reset">기본 정책 복원</button>
       </details>
       <div class="cp-finance cp-water" aria-live="polite"></div>
+      <div class="cp-note" role="status"></div>
       <b class="cp-city-level" role="status">도시 Lv.1 · 마을</b>
       <div class="cp-prosperity">번영도 0 / 100</div>
       <div class="cp-unlock"></div>
@@ -351,7 +355,6 @@ function template(): string {
       <div class="cp-safety-counts" role="status" aria-live="polite">화재 0 · 범죄 0 · 질병 0</div>
       <div class="cp-safety-note"></div>
     </div>
-    <div class="cp-note"></div>
   `;
 }
 
