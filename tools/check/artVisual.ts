@@ -39,30 +39,43 @@ function card(a: PixelArt, name: string, description: string): void {
   article.append(canvas, title, meta);
   gallery.append(article);
 }
-const legacyBuildings = new Image();
-legacyBuildings.src = '/sprites/buildings.png';
-const normalizedResidential = new Image();
-normalizedResidential.src = '/sprites/candidates/residential-l1-a.png?v=normalized-1';
-for (const image of [legacyBuildings, normalizedResidential])
+const CANDIDATE_INFO = [
+  ['residential-l1-a', 1, 0, '주거', 125, '0px'],
+  ['commercial-l1-a', 1, 1, '상업', 126, '0.5px'],
+  ['industrial-l1-a', 1, 2, '공업', 115, '0px'],
+  ['residential-l2-a', 2, 0, '주거', 159, '0.5px'],
+  ['commercial-l2-a', 2, 1, '상업', 160, '0px'],
+  ['industrial-l2-b', 2, 2, '공업', 159, '0.5px'],
+  ['residential-l3-a', 3, 0, '주거', 191, '0px'],
+  ['commercial-l3-a', 3, 1, '상업', 192, '0.5px'],
+  ['industrial-l3-a', 3, 2, '공업', 191, '0.5px'],
+] as const;
+const normalizedCandidates = CANDIDATE_INFO.map(([id, level, zone, label, colors, error]) => {
+  const image = new Image();
+  image.src = `/sprites/candidates/${id}.png?v=normalized-2`;
+  return { id, level, zone, label, colors, error, image };
+});
+for (const { image } of normalizedCandidates)
   image.onload = () => {
-    if (filter === 5) render();
+    if (filter >= 5) render();
   };
 
 function rasterCard(
   image: HTMLImageElement,
   name: string,
   description: string,
+  size = 64,
   sourceX = 0,
   sourceY = 0,
 ): void {
   const article = document.createElement('article'),
     canvas = document.createElement('canvas'),
     ctx = canvas.getContext('2d')!;
-  canvas.width = canvas.height = 64;
-  canvas.style.width = canvas.style.height = `${64 * zoom}px`;
+  canvas.width = canvas.height = size;
+  canvas.style.width = canvas.style.height = `${size * zoom}px`;
   ctx.imageSmoothingEnabled = false;
   if (image.complete && image.naturalWidth)
-    ctx.drawImage(image, sourceX, sourceY, 64, 64, 0, 0, 64, 64);
+    ctx.drawImage(image, sourceX, sourceY, size, size, 0, 0, size, size);
   const title = document.createElement('h2');
   title.textContent = name;
   const meta = document.createElement('div');
@@ -124,21 +137,33 @@ function surfaceGallery(): void {
   surfaceCard(CIVIC_CELL_BASE + 1, '공공 바닥 · 도로 접함', '정상 운영 가능한 상태');
 }
 
-function candidateComparison(): void {
-  card(buildingArt(1, 0, 0), '현재 게임 버전', '비교용 · 현재 적용 중');
-  rasterCard(
-    legacyBuildings,
-    '원본 시각 참고 · 규격 미적용',
-    '원본 범위 x=2..60, y=11..63 · 아래 투명 여백 없음',
-  );
-  rasterCard(
-    normalizedResidential,
-    '새 규격 후보 · 원본 주택 보존형',
-    '64×64 · 범위 x=2..60, y=10..62 · 이진 알파 · 중앙 바닥 기준점',
-  );
+function candidateComparison(level: number): void {
+  for (const candidate of normalizedCandidates.filter((item) => item.level === level)) {
+    card(
+      buildingArt(level, candidate.zone, 0),
+      `현재 ${candidate.label} L${level}`,
+      '현재 게임 적용본 · 단순 40색 코드 도형',
+    );
+    rasterCard(
+      candidate.image,
+      `원본 규격화 ${candidate.label} L${level}`,
+      `${level * 64}×${level * 64} · 원본 ${candidate.colors}색 · 리스케일/재색칠 없음 · 바닥 중심 오차 ${candidate.error}`,
+      level * 64,
+    );
+  }
 }
 function render(): void {
   gallery.replaceChildren();
+  const maxNativeSize =
+    filter < 3
+      ? 192
+      : filter === 3
+        ? Math.max(...FACILITY_SPECS.map((spec) => spec.span * 64))
+        : filter === 4
+          ? 64
+          : (filter - 4) * 64;
+  const minimumCardWidth = Math.max(240, maxNativeSize * zoom + 32);
+  gallery.style.gridTemplateColumns = `repeat(auto-fit, minmax(min(100%, ${minimumCardWidth}px), 1fr))`;
   if (filter < 3)
     for (let level = 1; level <= 3; level++)
       for (let v = 0; v < 4; v++)
@@ -151,7 +176,7 @@ function render(): void {
     for (const s of FACILITY_SPECS)
       card(facilityArt(s.kind), s.name, `${s.span}×${s.span} 타일 · ${s.span * 64}px 셀`);
   else if (filter === 4) surfaceGallery();
-  else candidateComparison();
+  else candidateComparison(filter - 4);
   document
     .querySelectorAll<HTMLButtonElement>('[data-filter]')
     .forEach((b) => b.setAttribute('aria-pressed', String(Number(b.dataset.filter) === filter)));
@@ -165,7 +190,9 @@ function render(): void {
   '공업 12종',
   '특수 시설 26종',
   '도로·지구 24종',
-  '주거 원본 규격화 1종',
+  '원본 규격화 L1',
+  '원본 규격화 L2',
+  '원본 규격화 L3',
 ].forEach((name, i) => {
   const b = document.createElement('button');
   b.textContent = name;
