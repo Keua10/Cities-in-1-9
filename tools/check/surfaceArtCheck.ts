@@ -41,10 +41,18 @@ function hash(data: Uint8ClampedArray): string {
 }
 function palette(data: Uint8ClampedArray): Set<string> {
   const colors = new Set<string>();
-  for (let i = 0; i < data.length; i += 4) {
-    assert.equal(data[i + 3], 255, 'surface cells use opaque integer pixels');
-    colors.add(`${data[i]},${data[i + 1]},${data[i + 2]}`);
-  }
+  for (let y = 0; y < TILE_H; y++)
+    for (let x = 0; x < TILE_W; x++) {
+      const i = (y * TILE_W + x) * 4,
+        inset = y < TILE_H / 2 ? TILE_W / 2 - y * 2 - 1 : (y - TILE_H / 2) * 2 + 1,
+        inside = x >= inset && x < TILE_W - inset;
+      assert.equal(
+        data[i + 3],
+        inside ? 255 : 0,
+        `surface alpha follows the hard pixel diamond at ${x},${y}`,
+      );
+      if (inside) colors.add(`${data[i]},${data[i + 1]},${data[i + 2]}`);
+    }
   return colors;
 }
 function halfHash(index: number): string {
@@ -85,5 +93,5 @@ for (const [name, base, count] of groups) {
 }
 writeFileSync('.check/surfaces-pixel.png', canvas.toBuffer('image/png'));
 console.log(
-  'PASS surface pixel art: 16 road masks, 6 zone states and 2 civic states are opaque, distinct at 100/50%, and use restrained palettes',
+  'PASS surface pixel art: 16 road masks, 6 zone states and 2 civic states use hard transparent diamonds, remain distinct at 100/50%, and use restrained palettes',
 );

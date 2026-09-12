@@ -334,6 +334,19 @@ function drawPixelEdge(
     ctx.fillRect(ox + e[0] + sx * step * 2 + ix, oy + e[1] + sy * step + iy, 2, 1);
 }
 
+/**
+ * ChunkMesh draws every top as a rectangular quad. The sprite's transparent corners are
+ * therefore part of the rendering contract, not spare pixels. Keep a hard 2:1 pixel edge
+ * so adjacent tiles neither overlap as rectangles nor acquire antialiased seams.
+ */
+function clearOutsideDiamond(ctx: CanvasRenderingContext2D, ox: number, oy: number): void {
+  for (let y = 0; y < TILE_H; y++) {
+    const inset = y < TILE_HH ? TILE_HW - y * 2 - 1 : (y - TILE_HH) * 2 + 1;
+    ctx.clearRect(ox, oy + y, inset, 1);
+    ctx.clearRect(ox + TILE_W - inset, oy + y, inset, 1);
+  }
+}
+
 function drawLaneArm(
   ctx: CanvasRenderingContext2D,
   ox: number,
@@ -378,6 +391,7 @@ export function drawRoadCells(ctx: CanvasRenderingContext2D): void {
       ctx.fillStyle = '#343a3f';
       ctx.fillRect(ox + TILE_HW - 4, oy + TILE_HH - 2, 8, 4);
     }
+    clearOutsideDiamond(ctx, ox, oy);
   }
 }
 
@@ -462,6 +476,7 @@ export function drawZoneCells(ctx: CanvasRenderingContext2D): void {
       ])
         ctx.fillRect(ox + x, oy + y, 4, 2);
       drawZoneGlyph(ctx, ox, oy, zone, connected[zone], dark[zone]);
+      clearOutsideDiamond(ctx, ox, oy);
     }
   }
 }
@@ -485,6 +500,7 @@ export function drawCivicCells(ctx: CanvasRenderingContext2D): void {
     ctx.fillStyle = hasRoad ? '#d8dfd5' : '#858c87';
     ctx.fillRect(ox + 29, oy + 14, 7, 4);
     ctx.fillRect(ox + 31, oy + 12, 3, 8);
+    clearOutsideDiamond(ctx, ox, oy);
   }
 }
 
