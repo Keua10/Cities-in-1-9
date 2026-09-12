@@ -308,62 +308,127 @@ const EDGE_LINE: ReadonlyArray<readonly [number, number, number, number]> = [
   [TILE_HW, 0, TILE_W, TILE_HH],
 ];
 
-/**
- * 도로 16칸. 셀 번호의 아래 4비트가 곧 연결 마스크다.
- *
- * 진짜 그림이 들어오기 전까지 쓰는 코드 생성 타일이지만, 연결 모양이 눈에
- * 보여야 2단계를 검증할 수 있으므로 대충 그리지 않는다.
- */
-function drawRoadCells(ctx: CanvasRenderingContext2D): void {
+function drawPixelEdge(
+  ctx: CanvasRenderingContext2D,
+  ox: number,
+  oy: number,
+  direction: number,
+  dark: string,
+  light: string,
+): void {
+  const e = EDGE_LINE[direction],
+    sx = Math.sign(e[2] - e[0]),
+    sy = Math.sign(e[3] - e[1]),
+    inward: ReadonlyArray<readonly [number, number]> = [
+      [-1, -1],
+      [1, -1],
+      [1, 1],
+      [-1, 1],
+    ],
+    [ix, iy] = inward[direction];
+  ctx.fillStyle = dark;
+  for (let step = 0; step < 16; step++)
+    ctx.fillRect(ox + e[0] + sx * step * 2, oy + e[1] + sy * step, 2, 2);
+  ctx.fillStyle = light;
+  for (let step = 0; step < 16; step++)
+    ctx.fillRect(ox + e[0] + sx * step * 2 + ix, oy + e[1] + sy * step + iy, 2, 1);
+}
+
+function drawLaneArm(
+  ctx: CanvasRenderingContext2D,
+  ox: number,
+  oy: number,
+  direction: number,
+): void {
+  const [mx, my] = EDGE_MID[direction],
+    sx = Math.sign(mx - TILE_HW),
+    sy = Math.sign(my - TILE_HH);
+  ctx.fillStyle = '#d8c979';
+  for (let step = 2; step <= 8; step++) {
+    if ((step - 2) % 4 >= 2) continue;
+    ctx.fillRect(ox + TILE_HW + sx * step * 2 - 1, oy + TILE_HH + sy * step, 3, 1);
+  }
+}
+
+/** Road pixels are authored at 64x32; masks remain the existing saved connection contract. */
+export function drawRoadCells(ctx: CanvasRenderingContext2D): void {
   for (let mask = 0; mask < ROAD_CELL_COUNT; mask++) {
     const { ox, oy } = cellOrigin(ROAD_CELL_BASE + mask);
-
-    ctx.save();
-    diamondPath(ctx, ox, oy);
-    ctx.clip();
-
-    // 노면
-    ctx.fillStyle = '#3b4046';
+    ctx.fillStyle = '#474d52';
     ctx.fillRect(ox, oy, TILE_W, TILE_H);
-    const shade = ctx.createLinearGradient(ox, oy, ox, oy + TILE_H);
-    shade.addColorStop(0, 'rgba(255,255,255,0.06)');
-    shade.addColorStop(1, 'rgba(0,0,0,0.18)');
-    ctx.fillStyle = shade;
-    ctx.fillRect(ox, oy, TILE_W, TILE_H);
-
-    // 연결되지 않은 변에는 연석을 그린다. 도로가 어디서 끊겼는지 바로 보인다.
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = '#8d9199';
+    ctx.fillStyle = '#3c4247';
+    ctx.fillRect(ox, oy + TILE_HH, TILE_W, TILE_HH);
+    // Fixed 2x1 aggregate marks avoid a perfectly flat slab without adding noise.
+    ctx.fillStyle = '#555b60';
+    for (const [x, y] of [
+      [13, 12],
+      [44, 21],
+      [51, 10],
+      [25, 26],
+    ])
+      ctx.fillRect(ox + x, oy + y, 2, 1);
     for (let d = 0; d < 4; d++) {
-      if (mask & (1 << d)) continue;
-      const e = EDGE_LINE[d];
-      ctx.beginPath();
-      ctx.moveTo(ox + e[0], oy + e[1]);
-      ctx.lineTo(ox + e[2], oy + e[3]);
-      ctx.stroke();
+      if (mask & (1 << d)) drawLaneArm(ctx, ox, oy, d);
+      else drawPixelEdge(ctx, ox, oy, d, '#5c6266', '#aeb3ae');
     }
-
     if (mask === 0) {
-      // 외톨이 도로. 가운데에 점만 찍는다.
-      ctx.fillStyle = 'rgba(226,214,140,0.7)';
-      ctx.fillRect(ox + TILE_HW - 2, oy + TILE_HH - 1, 4, 2);
-    } else {
-      // 중앙선. 연결된 방향으로만 뻗는다.
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = 'rgba(226,214,140,0.75)';
-      ctx.setLineDash([4, 3]);
-      for (let d = 0; d < 4; d++) {
-        if (!(mask & (1 << d))) continue;
-        const m = EDGE_MID[d];
-        ctx.beginPath();
-        ctx.moveTo(ox + TILE_HW, oy + TILE_HH);
-        ctx.lineTo(ox + m[0], oy + m[1]);
-        ctx.stroke();
-      }
-      ctx.setLineDash([]);
+      ctx.fillStyle = '#d8c979';
+      ctx.fillRect(ox + TILE_HW - 3, oy + TILE_HH - 1, 6, 2);
+    } else if (bitCount(mask) >= 3) {
+      ctx.fillStyle = '#343a3f';
+      ctx.fillRect(ox + TILE_HW - 4, oy + TILE_HH - 2, 8, 4);
     }
+  }
+}
 
-    ctx.restore();
+function bitCount(value: number): number {
+  let count = 0;
+  for (; value; value >>= 1) count += value & 1;
+  return count;
+}
+
+function drawInsetDiamond(
+  ctx: CanvasRenderingContext2D,
+  ox: number,
+  oy: number,
+  color: string,
+): void {
+  const points = [
+    [32, 4, 1, 1],
+    [52, 14, -1, 1],
+    [32, 27, -1, -1],
+    [12, 17, 1, -1],
+  ] as const;
+  ctx.fillStyle = color;
+  for (const [x, y, sx, sy] of points)
+    for (let step = 0; step < 10; step++)
+      ctx.fillRect(ox + x + sx * step * 2, oy + y + sy * step, 2, 1);
+}
+
+function drawZoneGlyph(
+  ctx: CanvasRenderingContext2D,
+  ox: number,
+  oy: number,
+  zone: number,
+  color: string,
+  detailColor: string,
+): void {
+  ctx.fillStyle = color;
+  if (zone === 0) {
+    ctx.fillRect(ox + 27, oy + 14, 10, 6);
+    ctx.fillRect(ox + 29, oy + 12, 6, 2);
+    ctx.fillRect(ox + 31, oy + 18, 2, 2);
+  } else if (zone === 1) {
+    ctx.fillRect(ox + 26, oy + 13, 12, 7);
+    ctx.fillStyle = detailColor;
+    for (let x = 27; x < 38; x += 3) ctx.fillRect(ox + x, oy + 14, 2, 2);
+    ctx.fillStyle = color;
+    ctx.fillRect(ox + 25, oy + 12, 14, 2);
+  } else {
+    ctx.fillRect(ox + 26, oy + 15, 13, 5);
+    ctx.fillRect(ox + 28, oy + 12, 3, 4);
+    ctx.fillRect(ox + 34, oy + 10, 3, 6);
+    ctx.fillRect(ox + 38, oy + 13, 2, 3);
   }
 }
 
@@ -373,45 +438,30 @@ function drawRoadCells(ctx: CanvasRenderingContext2D): void {
  * 도로에 접하지 않은 지구는 어둡게 그린다. 3단계에서 "도로에 접한 지구만 개발"
  * 규칙이 붙을 자리라, 학생이 지금부터 그 차이를 눈으로 알 수 있어야 한다.
  */
-function drawZoneCells(ctx: CanvasRenderingContext2D): void {
+export function drawZoneCells(ctx: CanvasRenderingContext2D): void {
+  const light = ['#57935b', '#477ca2', '#a18442'],
+    dark = ['#396c40', '#315c7a', '#75602f'],
+    connected = ['#75a574', '#6b96b3', '#b19a61'],
+    disconnected = ['#2f5735', '#294c63', '#604f29'];
   for (let zone = 0; zone < ZONE_COLORS.length; zone++) {
     for (let r = 0; r < 2; r++) {
       const hasRoad = r === 1;
       const { ox, oy } = cellOrigin(zoneCell(zone, hasRoad));
 
-      ctx.save();
-      diamondPath(ctx, ox, oy);
-      ctx.clip();
-
-      ctx.fillStyle = ZONE_COLORS[zone];
+      ctx.fillStyle = light[zone];
       ctx.fillRect(ox, oy, TILE_W, TILE_H);
-
-      if (!hasRoad) {
-        // 아직 못 짓는 땅. 회색을 덮어 채도를 떨어뜨린다.
-        ctx.fillStyle = 'rgba(24,28,32,0.5)';
-        ctx.fillRect(ox, oy, TILE_W, TILE_H);
-      }
-
-      const shade = ctx.createLinearGradient(ox, oy, ox, oy + TILE_H);
-      shade.addColorStop(0, 'rgba(255,255,255,0.10)');
-      shade.addColorStop(1, 'rgba(0,0,0,0.20)');
-      ctx.fillStyle = shade;
-      ctx.fillRect(ox, oy, TILE_W, TILE_H);
-
-      // 안쪽 점선 테두리 — 지구는 "구획" 이라는 신호
-      ctx.setLineDash([5, 4]);
-      ctx.lineWidth = 1;
-      ctx.strokeStyle = hasRoad ? 'rgba(255,255,255,0.75)' : 'rgba(255,255,255,0.32)';
-      ctx.beginPath();
-      ctx.moveTo(ox + TILE_HW, oy + 5);
-      ctx.lineTo(ox + TILE_W - 10, oy + TILE_HH);
-      ctx.lineTo(ox + TILE_HW, oy + TILE_H - 5);
-      ctx.lineTo(ox + 10, oy + TILE_HH);
-      ctx.closePath();
-      ctx.stroke();
-      ctx.setLineDash([]);
-
-      ctx.restore();
+      ctx.fillStyle = dark[zone];
+      ctx.fillRect(ox, oy + TILE_HH, TILE_W, TILE_HH);
+      // Four short ticks carry access state without repeating a bright full-tile outline.
+      ctx.fillStyle = hasRoad ? connected[zone] : disconnected[zone];
+      for (const [x, y] of [
+        [30, 4],
+        [48, 15],
+        [30, 26],
+        [14, 15],
+      ])
+        ctx.fillRect(ox + x, oy + y, 4, 2);
+      drawZoneGlyph(ctx, ox, oy, zone, connected[zone], dark[zone]);
     }
   }
 }
@@ -422,36 +472,19 @@ function drawZoneCells(ctx: CanvasRenderingContext2D): void {
  * 시설 종류는 위에 서는 스프라이트가 말해주므로 지면까지 종류별로 나누면
  * 화면이 시끄러워지기만 한다.
  */
-function drawCivicCells(ctx: CanvasRenderingContext2D): void {
+export function drawCivicCells(ctx: CanvasRenderingContext2D): void {
   for (let r = 0; r < CIVIC_CELL_COUNT; r++) {
     const hasRoad = r === 1;
     const { ox, oy } = cellOrigin(civicCell(hasRoad));
 
-    ctx.save();
-    diamondPath(ctx, ox, oy);
-    ctx.clip();
-
-    ctx.fillStyle = hasRoad ? '#6d7379' : '#4a4f54';
+    ctx.fillStyle = hasRoad ? '#747a78' : '#505657';
     ctx.fillRect(ox, oy, TILE_W, TILE_H);
-
-    const shade = ctx.createLinearGradient(ox, oy, ox, oy + TILE_H);
-    shade.addColorStop(0, 'rgba(255,255,255,0.10)');
-    shade.addColorStop(1, 'rgba(0,0,0,0.22)');
-    ctx.fillStyle = shade;
-    ctx.fillRect(ox, oy, TILE_W, TILE_H);
-
-    // 포장 이음매. 지구의 점선 테두리와 달리 실선이라 "구획" 이 아니라 "바닥" 으로 읽힌다.
-    ctx.lineWidth = 1;
-    ctx.strokeStyle = hasRoad ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.10)';
-    ctx.beginPath();
-    ctx.moveTo(ox + TILE_HW, oy + 6);
-    ctx.lineTo(ox + TILE_W - 12, oy + TILE_HH);
-    ctx.lineTo(ox + TILE_HW, oy + TILE_H - 6);
-    ctx.lineTo(ox + 12, oy + TILE_HH);
-    ctx.closePath();
-    ctx.stroke();
-
-    ctx.restore();
+    ctx.fillStyle = hasRoad ? '#5f6665' : '#414747';
+    ctx.fillRect(ox, oy + TILE_HH, TILE_W, TILE_HH);
+    drawInsetDiamond(ctx, ox, oy, hasRoad ? '#a8afaa' : '#666d6b');
+    ctx.fillStyle = hasRoad ? '#d8dfd5' : '#858c87';
+    ctx.fillRect(ox + 29, oy + 14, 7, 4);
+    ctx.fillRect(ox + 31, oy + 12, 3, 8);
   }
 }
 

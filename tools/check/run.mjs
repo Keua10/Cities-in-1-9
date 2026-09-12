@@ -7,6 +7,7 @@ const checks = {
   pixel: 'tools/check/pixelArtCheck.ts',
   visual: 'tools/check/visualRegressionCheck.ts',
   advice: 'tools/check/cityAdviceCheck.ts',
+  surface: 'tools/check/surfaceArtCheck.ts',
   infrastructure: 'tools/check/terrainInfrastructureCheck.ts',
   policies: 'tools/check/policySanitationCheck.ts',
   power: 'tools/check/powerCheck.ts',
