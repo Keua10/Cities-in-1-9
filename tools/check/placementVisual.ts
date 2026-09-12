@@ -26,7 +26,7 @@ await app.init({ resizeTo: window, background: 0x203026, antialias: false });
 document.body.append(app.canvas);
 const [a, b, c, v] = await Promise.all([
   loadTileAtlas('/sprites/terrain.png'),
-  loadBuildingAtlas('/sprites/buildings.png'),
+  loadBuildingAtlas(),
   loadFacilityAtlas('/sprites/facilities.png'),
   loadVehicleAtlas(),
 ]);

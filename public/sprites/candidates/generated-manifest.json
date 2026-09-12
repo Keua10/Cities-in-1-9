@@ -1,0 +1,344 @@
+[
+  {
+    "id": "residential-l1-c",
+    "level": 1,
+    "zone": 0,
+    "variant": 2,
+    "mode": "new-pixel",
+    "colors": 149,
+    "bounds": [
+      2,
+      18,
+      61,
+      62
+    ],
+    "centerError": 0.5,
+    "sourceSize": [
+      64,
+      64
+    ]
+  },
+  {
+    "id": "residential-l1-d",
+    "level": 1,
+    "zone": 0,
+    "variant": 3,
+    "mode": "new-pixel",
+    "colors": 108,
+    "bounds": [
+      5,
+      9,
+      58,
+      62
+    ],
+    "centerError": 0,
+    "sourceSize": [
+      64,
+      64
+    ]
+  },
+  {
+    "id": "commercial-l1-c",
+    "level": 1,
+    "zone": 1,
+    "variant": 2,
+    "mode": "new-pixel",
+    "colors": 183,
+    "bounds": [
+      2,
+      9,
+      61,
+      62
+    ],
+    "centerError": 0,
+    "sourceSize": [
+      64,
+      64
+    ]
+  },
+  {
+    "id": "commercial-l1-d",
+    "level": 1,
+    "zone": 1,
+    "variant": 3,
+    "mode": "new-pixel",
+    "colors": 129,
+    "bounds": [
+      3,
+      14,
+      62,
+      62
+    ],
+    "centerError": 0.5,
+    "sourceSize": [
+      64,
+      64
+    ]
+  },
+  {
+    "id": "industrial-l1-c",
+    "level": 1,
+    "zone": 2,
+    "variant": 2,
+    "mode": "new-pixel",
+    "colors": 95,
+    "bounds": [
+      2,
+      17,
+      61,
+      62
+    ],
+    "centerError": 0,
+    "sourceSize": [
+      64,
+      64
+    ]
+  },
+  {
+    "id": "industrial-l1-d",
+    "level": 1,
+    "zone": 2,
+    "variant": 3,
+    "mode": "new-pixel",
+    "colors": 150,
+    "bounds": [
+      2,
+      19,
+      61,
+      62
+    ],
+    "centerError": 0,
+    "sourceSize": [
+      64,
+      64
+    ]
+  },
+  {
+    "id": "residential-l2-c",
+    "level": 2,
+    "zone": 0,
+    "variant": 2,
+    "mode": "new-pixel",
+    "colors": 230,
+    "bounds": [
+      7,
+      40,
+      116,
+      126
+    ],
+    "centerError": 0,
+    "sourceSize": [
+      128,
+      128
+    ]
+  },
+  {
+    "id": "residential-l2-d",
+    "level": 2,
+    "zone": 0,
+    "variant": 3,
+    "mode": "new-pixel",
+    "colors": 246,
+    "bounds": [
+      6,
+      42,
+      115,
+      126
+    ],
+    "centerError": 0.5,
+    "sourceSize": [
+      128,
+      128
+    ]
+  },
+  {
+    "id": "commercial-l2-c",
+    "level": 2,
+    "zone": 1,
+    "variant": 2,
+    "mode": "new-pixel",
+    "colors": 220,
+    "bounds": [
+      8,
+      50,
+      117,
+      126
+    ],
+    "centerError": 0,
+    "sourceSize": [
+      128,
+      128
+    ]
+  },
+  {
+    "id": "commercial-l2-d",
+    "level": 2,
+    "zone": 1,
+    "variant": 3,
+    "mode": "new-pixel",
+    "colors": 239,
+    "bounds": [
+      10,
+      27,
+      117,
+      126
+    ],
+    "centerError": 0.5,
+    "sourceSize": [
+      128,
+      128
+    ]
+  },
+  {
+    "id": "industrial-l2-c",
+    "level": 2,
+    "zone": 2,
+    "variant": 2,
+    "mode": "new-pixel",
+    "colors": 198,
+    "bounds": [
+      4,
+      48,
+      113,
+      126
+    ],
+    "centerError": 0,
+    "sourceSize": [
+      128,
+      128
+    ]
+  },
+  {
+    "id": "industrial-l2-d",
+    "level": 2,
+    "zone": 2,
+    "variant": 3,
+    "mode": "new-pixel",
+    "colors": 194,
+    "bounds": [
+      8,
+      47,
+      117,
+      126
+    ],
+    "centerError": 0.5,
+    "sourceSize": [
+      128,
+      128
+    ]
+  },
+  {
+    "id": "residential-l3-c",
+    "level": 3,
+    "zone": 0,
+    "variant": 2,
+    "mode": "new-pixel",
+    "colors": 333,
+    "bounds": [
+      15,
+      41,
+      184,
+      190
+    ],
+    "centerError": 0,
+    "sourceSize": [
+      192,
+      192
+    ]
+  },
+  {
+    "id": "residential-l3-d",
+    "level": 3,
+    "zone": 0,
+    "variant": 3,
+    "mode": "new-pixel",
+    "colors": 266,
+    "bounds": [
+      12,
+      67,
+      181,
+      190
+    ],
+    "centerError": 0.5,
+    "sourceSize": [
+      192,
+      192
+    ]
+  },
+  {
+    "id": "commercial-l3-c",
+    "level": 3,
+    "zone": 1,
+    "variant": 2,
+    "mode": "new-pixel",
+    "colors": 327,
+    "bounds": [
+      5,
+      54,
+      174,
+      190
+    ],
+    "centerError": 0,
+    "sourceSize": [
+      192,
+      192
+    ]
+  },
+  {
+    "id": "commercial-l3-d",
+    "level": 3,
+    "zone": 1,
+    "variant": 3,
+    "mode": "new-pixel",
+    "colors": 272,
+    "bounds": [
+      11,
+      36,
+      180,
+      190
+    ],
+    "centerError": 0,
+    "sourceSize": [
+      192,
+      192
+    ]
+  },
+  {
+    "id": "industrial-l3-c",
+    "level": 3,
+    "zone": 2,
+    "variant": 2,
+    "mode": "new-pixel",
+    "colors": 322,
+    "bounds": [
+      14,
+      57,
+      183,
+      190
+    ],
+    "centerError": 0.5,
+    "sourceSize": [
+      192,
+      192
+    ]
+  },
+  {
+    "id": "industrial-l3-d",
+    "level": 3,
+    "zone": 2,
+    "variant": 3,
+    "mode": "new-pixel",
+    "colors": 212,
+    "bounds": [
+      12,
+      86,
+      181,
+      190
+    ],
+    "centerError": 0,
+    "sourceSize": [
+      192,
+      192
+    ]
+  }
+]

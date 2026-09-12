@@ -39,36 +39,31 @@ function card(a: PixelArt, name: string, description: string): void {
   article.append(canvas, title, meta);
   gallery.append(article);
 }
-const CANDIDATE_INFO = [
-  ['residential-l1-a', 1, 0, 0, '주거', 125, '0px', false],
-  ['residential-l1-b', 1, 0, 1, '주거', 125, '0px', false],
-  ['commercial-l1-a', 1, 1, 0, '상업', 126, '0.5px', false],
-  ['commercial-l1-b', 1, 1, 1, '상업', 126, '0.5px', false],
-  ['industrial-l1-a', 1, 2, 0, '공업', 115, '0px', false],
-  ['industrial-l1-b', 1, 2, 1, '공업', 123, '0.5px', false],
-  ['residential-l2-a', 2, 0, 0, '주거', 159, '0.5px', false],
-  ['residential-l2-b', 2, 0, 1, '주거', 159, '0px', false],
-  ['commercial-l2-a', 2, 1, 0, '상업', 160, '0px', false],
-  ['commercial-l2-b', 2, 1, 1, '상업', 159, '0px', false],
-  ['industrial-l2-a', 2, 2, 0, '공업', 157, '0.5px', false],
-  ['industrial-l2-b', 2, 2, 1, '공업', 159, '0.5px', false],
-  ['residential-l3-a', 3, 0, 0, '주거', 191, '0px', false],
-  ['residential-l3-b', 3, 0, 1, '주거', 222, '0px', true],
-  ['commercial-l3-a', 3, 1, 0, '상업', 204, '0.5px', true],
-  ['commercial-l3-b', 3, 1, 1, '상업', 192, '0.5px', false],
-  ['industrial-l3-a', 3, 2, 0, '공업', 229, '0px', true],
-  ['industrial-l3-b', 3, 2, 1, '공업', 191, '0px', false],
-] as const;
-const normalizedCandidates = CANDIDATE_INFO.map(
-  ([id, level, zone, variant, label, colors, error, restored]) => {
-    const image = new Image();
-    image.src = `/sprites/candidates/${id}.png?v=normalized-3`;
-    return { id, level, zone, variant, label, colors, error, restored, image };
-  },
-);
+interface CandidateInfo {
+  id: string;
+  level: number;
+  zone: number;
+  variant: number;
+  mode: 'source-preserved' | 'restored' | 'new-pixel';
+  colors: number;
+  centerError: number;
+}
+const candidateManifests = await Promise.all(
+    ['/sprites/candidates/manifest.json', '/sprites/candidates/generated-manifest.json'].map(
+      async (path) => (await (await fetch(path)).json()) as CandidateInfo[],
+    ),
+  ),
+  normalizedCandidates = candidateManifests
+    .flat()
+    .sort((a, b) => a.level - b.level || a.zone - b.zone || a.variant - b.variant)
+    .map((candidate) => {
+      const image = new Image();
+      image.src = `/sprites/candidates/${candidate.id}.png?v=complete-36`;
+      return { ...candidate, label: ['주거', '상업', '공업'][candidate.zone], image };
+    });
 for (const { image } of normalizedCandidates)
   image.onload = () => {
-    if (filter >= 5) render();
+    render();
   };
 
 function rasterCard(
@@ -150,15 +145,22 @@ function surfaceGallery(): void {
 
 function candidateComparison(level: number): void {
   for (const candidate of normalizedCandidates.filter((item) => item.level === level)) {
+    const variantLabel = String.fromCharCode(65 + candidate.variant),
+      modeLabel =
+        candidate.mode === 'restored'
+          ? '절단 복원'
+          : candidate.mode === 'source-preserved'
+            ? '원본 규격화'
+            : '신규 도트';
     card(
       buildingArt(level, candidate.zone, candidate.variant),
-      `현재 ${candidate.label} L${level}-${candidate.variant ? 'B' : 'A'}`,
-      '현재 게임 적용본 · 단순 40색 코드 도형',
+      `이전 코드 도형 ${candidate.label} L${level}-${variantLabel}`,
+      '교체 전 코드 생성 그래픽 · 비교용',
     );
     rasterCard(
       candidate.image,
-      `${candidate.restored ? '절단 복원' : '원본 규격화'} ${candidate.label} L${level}-${candidate.variant ? 'B' : 'A'}`,
-      `${level * 64}×${level * 64} · ${candidate.colors}색 · ${candidate.restored ? '잘린 소품 복원·재규격화' : '리스케일/재색칠 없음'} · 바닥 중심 오차 ${candidate.error}`,
+      `${modeLabel} ${candidate.label} L${level}-${variantLabel}`,
+      `${level * 64}×${level * 64} · ${candidate.colors}색 · 픽셀 보간 없음 · 바닥 중심 오차 ${candidate.centerError}px`,
       level * 64,
     );
   }
@@ -178,10 +180,14 @@ function render(): void {
   if (filter < 3)
     for (let level = 1; level <= 3; level++)
       for (let v = 0; v < 4; v++)
-        card(
-          buildingArt(level, filter, v),
+        rasterCard(
+          normalizedCandidates.find(
+            (candidate) =>
+              candidate.level === level && candidate.zone === filter && candidate.variant === v,
+          )!.image,
           BUILDING_NAMES[filter][level - 1][v],
           `L${level} · ${level}×${level} 타일 · ${level * 64}px 셀`,
+          level * 64,
         );
   else if (filter === 3)
     for (const s of FACILITY_SPECS)
@@ -201,9 +207,9 @@ function render(): void {
   '공업 12종',
   '특수 시설 26종',
   '도로·지구 24종',
-  '원본 규격화 L1 6종',
-  '원본 규격화 L2 6종',
-  '원본 규격화 L3 6종',
+  '완성 픽셀 비교 L1 12종',
+  '완성 픽셀 비교 L2 12종',
+  '완성 픽셀 비교 L3 12종',
 ].forEach((name, i) => {
   const b = document.createElement('button');
   b.textContent = name;

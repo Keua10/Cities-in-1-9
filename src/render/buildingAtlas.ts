@@ -3,7 +3,7 @@ import { TILE_W } from '../core/constants';
 import { LEVEL_COUNT, ZONE_COUNT } from '../sim/buildings';
 import { buildingArt, BUILDING_ART_VARIANTS } from './buildingArt';
 
-/** Native pixel recipes: no resampling across tiers; variants are derived, not saved.
+/** Native raster cells use no resampling across tiers.
  * Bands L1 y=0, L2 y=64, L3 y=192. Each has 3 zones x 4 variants. */
 export const BUILDING_VARIANTS = BUILDING_ART_VARIANTS;
 export function buildingCellSize(level: number): number {
@@ -31,13 +31,26 @@ export function drawBuildingAtlas(ctx: CanvasRenderingContext2D): void {
           buildingBandY(level),
         );
 }
-export async function loadBuildingAtlas(): Promise<BuildingAtlas> {
+export async function loadBuildingAtlas(
+  source = '/sprites/buildings-v2.png?v=36',
+): Promise<BuildingAtlas> {
   const canvas = document.createElement('canvas');
   canvas.width = BUILDING_ATLAS_W;
   canvas.height = BUILDING_ATLAS_H;
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('2D 캔버스를 만들 수 없습니다');
-  drawBuildingAtlas(ctx);
+  ctx.imageSmoothingEnabled = false;
+  const image = new Image();
+  image.src = source;
+  try {
+    await image.decode();
+    if (image.naturalWidth !== BUILDING_ATLAS_W || image.naturalHeight !== BUILDING_ATLAS_H)
+      throw new Error(`건물 아틀라스 규격 오류: ${image.naturalWidth}x${image.naturalHeight}`);
+    ctx.drawImage(image, 0, 0);
+  } catch (error) {
+    console.warn('건물 픽셀 아틀라스를 읽지 못해 코드 도형으로 대체합니다.', error);
+    drawBuildingAtlas(ctx);
+  }
   const texture = Texture.from(canvas);
   texture.source.scaleMode = 'nearest';
   texture.source.autoGenerateMipmaps = false;

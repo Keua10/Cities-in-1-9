@@ -14,7 +14,8 @@
     "check:parity": "node tools/check/meshParity.mjs && node tools/check/refactorParity.mjs",
     "format": "prettier --write \"src/**/*.{ts,css}\" \"tools/**/*.{ts,mjs}\" \"*.ts\" index.html tsconfig.json package.json .prettierrc.json",
     "format:check": "prettier --check \"src/**/*.{ts,css}\" \"tools/**/*.{ts,mjs}\" \"*.ts\" index.html tsconfig.json package.json .prettierrc.json",
-    "art:facilities": "node tools/buildFacilityAtlas.mjs"
+    "art:facilities": "node tools/buildFacilityAtlas.mjs",
+    "art:buildings": "node tools/buildNewBuildingVariants.mjs && node tools/buildBuildingAtlas.mjs"
   },
   "dependencies": {
     "firebase": "^11.10.0",
