@@ -18,6 +18,9 @@ export class MeshGeometry {
     Object.assign(this, options);
   }
   destroy() {}
+  getBuffer() {
+    return { update() {} };
+  }
 }
 export class Container {}
 export class Graphics {}

@@ -89,6 +89,7 @@ export function collectStructures(parcel: Parcel): StructureQuad[] {
   return sortStructures(list);
 }
 export class StructureMesh {
+  readonly quads: StructureQuad[];
   readonly mesh: Mesh;
   readonly count: number;
   readonly counts: { buildings: number; facilities: number };
@@ -100,6 +101,7 @@ export class StructureMesh {
     height: (x: number, y: number) => number,
     quads = collectStructures(parcel),
   ) {
+    this.quads = quads;
     this.count = quads.length;
     const facilities = quads.filter((q) => q.kind !== null).length;
     this.counts = { buildings: this.count - facilities, facilities };
@@ -112,7 +114,7 @@ export class StructureMesh {
         fx = q.tx + q.span - 1,
         fy = q.ty + q.span - 1,
         x = tileToWorldX(fx, fy),
-        y = tileToWorldY(fx, fy, height(q.tx, q.ty)) + TILE_HH;
+        y = tileToWorldY(fx, fy, height(q.tx, q.ty)) + TILE_HH + (q.kind === null ? 1 : 0);
       writeQuad(positions, i, x - size / 2, y - size, x + size / 2, y);
       writeQuad(
         uvs,
@@ -128,6 +130,9 @@ export class StructureMesh {
   }
   needsRebuild(parcel: Parcel): boolean {
     return parcel !== this.parcel || parcel.bldRevision !== this.revision;
+  }
+  sceneData() {
+    return { positions: this.geometry.positions, uvs: this.geometry.uvs, quads: this.quads };
   }
   destroy(): void {
     this.mesh.destroy();

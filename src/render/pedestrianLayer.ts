@@ -107,7 +107,8 @@ export class PedestrianLayer {
             y:
               tileToWorldY(tx + span - 1, ty + span - 1, world.sampleHeight(tx, ty)) +
               TILE_HH -
-              size,
+              size +
+              (facility ? 0 : 1),
             size,
             pixels,
             u: Math.round(uv[0] * pixels.width),

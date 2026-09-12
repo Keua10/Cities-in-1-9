@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <title>경계·경사 건물 회귀 검수</title>
+    <style>
+      body {
+        margin: 0;
+        background: #203026;
+        color: white;
+        font: 14px system-ui;
+      }
+      header {
+        position: fixed;
+        top: 0;
+        left: 0;
+        z-index: 3;
+        background: #152328ed;
+        padding: 12px;
+      }
+      a {
+        color: #a6ecdf;
+        margin: 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      실제 렌더러 · 경계 건물/고도/경사도로 재현 <a href="?case=flat">평지 경계</a
+      ><a href="?case=slope">경사 경계</a><a href="?case=front">앞쪽 높은 지형</a>
+      <span id="result"></span>
+    </header>
+    <script type="module" src="./terrainBuildingsVisual.ts"></script>
+  </body>
+</html>

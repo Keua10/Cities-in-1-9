@@ -41,6 +41,9 @@ export class StructureLayer {
   counts(key: string): { buildings: number; facilities: number } {
     return this.entries.get(key)?.mesh?.counts ?? { buildings: 0, facilities: 0 };
   }
+  sourceMesh(key: string): StructureMesh | null {
+    return this.entries.get(key)?.mesh ?? null;
+  }
   ensure(key: string, cx: number, cy: number): void {
     // Every footprint is smaller than a chunk. Only these four anchor parcels can contribute.
     const coords = [

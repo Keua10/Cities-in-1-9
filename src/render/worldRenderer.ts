@@ -30,6 +30,8 @@ import type { TileAtlas } from './atlas';
 import type { BuildingAtlas } from './buildingAtlas';
 import { combineStructureAtlas } from './structureMesh';
 import { StructureLayer } from './structureLayer';
+import { TerrainStructureScene } from './terrainStructureScene';
+import type { StructureMesh } from './structureMesh';
 import { ChunkMesh } from './chunkMesh';
 import type { FacilityAtlas } from './facilityAtlas';
 import { IncidentLayer } from './incidentLayer';
@@ -42,6 +44,8 @@ import type { PowerField } from '../sim/power';
 import type { WaterField } from '../sim/water';
 
 export interface RenderStats {
+  sceneRebuilds: number;
+  sceneBuildMs: number;
   visibleChunks: number;
   loadedMeshes: number;
   foggedChunks: number;
@@ -105,6 +109,7 @@ export class WorldRenderer {
    * 앞쪽 모서리의 청크에 묶어, 그 부지의 모든 지면보다 뒤에 그린다.
    */
   private structures: StructureLayer;
+  private scene: TerrainStructureScene;
   private vehicleMeshes = new Map<string, VehicleMesh>();
   private turningVehicleMesh: VehicleMesh | null = null;
   private traffic: TrafficSim | null = null;
@@ -120,6 +125,8 @@ export class WorldRenderer {
   showGrid = false;
 
   stats: RenderStats = {
+    sceneRebuilds: 0,
+    sceneBuildMs: 0,
     visibleChunks: 0,
     loadedMeshes: 0,
     foggedChunks: 0,
@@ -154,7 +161,9 @@ export class WorldRenderer {
     this.groundLayer.sortableChildren = true;
     this.resolveTop = makeTopResolver(world);
     const structureAtlas = combineStructureAtlas(buildingAtlas, facilityAtlas);
-    this.structures = new StructureLayer(this.groundLayer, world, structureAtlas);
+    // Source meshes are cached here, but only the globally ordered scene is displayed.
+    this.structures = new StructureLayer(new Container(), world, structureAtlas);
+    this.scene = new TerrainStructureScene(this.groundLayer, atlas.texture, structureAtlas.texture);
     this.slope = makeSlopeSampler(world);
   }
 
@@ -281,7 +290,7 @@ export class WorldRenderer {
     view.maxY += MAX_HEIGHT * HEIGHT_UNIT;
     const range = visibleChunkRange(view);
     this.waterLayer.update(this.world, this.waterField, this.powerField, this.utilityMode, range);
-    this.structures.setOpacity(this.utilityMode === 'off' ? 1 : 0.22);
+    this.scene.setOpacity(this.utilityMode === 'off' ? 1 : 0.22);
     const rangeKey = `${range.cx0},${range.cy0},${range.cx1},${range.cy1}`;
     const zoomChanged = Math.abs(camera.zoom - this.lastZoom) > 0.001;
 
@@ -291,6 +300,8 @@ export class WorldRenderer {
     let facilitiesShown = 0;
     const usedVehicleMeshes = new Set<string>();
     const turningVehicles: Vehicle[] = [];
+    const sceneGround: ChunkMesh[] = [];
+    const sceneStructures: StructureMesh[] = [];
 
     for (let cy = range.cy0; cy <= range.cy1; cy++) {
       for (let cx = range.cx0; cx <= range.cx1; cx++) {
@@ -308,6 +319,9 @@ export class WorldRenderer {
         const mesh = this.ensureMesh(key, cx, cy);
         mesh.lastUsed = now;
         this.structures.ensure(key, cx, cy);
+        sceneGround.push(mesh);
+        const structureSource = this.structures.sourceMesh(key);
+        if (structureSource) sceneStructures.push(structureSource);
         const counts = this.structures.counts(key);
         buildingsShown += counts.buildings;
         facilitiesShown += counts.facilities;
@@ -329,6 +343,9 @@ export class WorldRenderer {
       }
     }
 
+    this.scene.update(sceneGround, sceneStructures);
+    this.stats.sceneRebuilds = this.scene.rebuildCount;
+    this.stats.sceneBuildMs = this.scene.lastBuildMs;
     if (rangeKey !== this.lastRangeKey || zoomChanged) {
       this.lastRangeKey = rangeKey;
       this.lastZoom = camera.zoom;
@@ -418,7 +435,6 @@ export class WorldRenderer {
       mesh = new ChunkMesh(chunk, this.atlas, this.resolveTop, this.slope);
       mesh.mesh.zIndex = cx + cy;
       this.meshes.set(key, mesh);
-      this.groundLayer.addChild(mesh.mesh);
     } else {
       mesh.syncIfStale(chunk);
     }
@@ -428,7 +444,6 @@ export class WorldRenderer {
   private dropMesh(key: string): void {
     const mesh = this.meshes.get(key);
     if (mesh) {
-      this.groundLayer.removeChild(mesh.mesh);
       mesh.destroy();
       this.meshes.delete(key);
     }
@@ -498,7 +513,6 @@ export class WorldRenderer {
     let over = this.meshes.size - CHUNK_MESH_BUDGET;
     for (const [key, mesh] of stale) {
       if (over <= 0) break;
-      this.groundLayer.removeChild(mesh.mesh);
       mesh.destroy();
       this.meshes.delete(key);
       this.structures.drop(key);

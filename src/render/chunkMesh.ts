@@ -36,6 +36,8 @@ export type HeightSampler = (tx: number, ty: number) => number;
  * 가로지르던 증상이 사라진다.
  */
 export class ChunkMesh {
+  /** Changes even when only one road UV is edited, before the chunk revision is synced. */
+  visualRevision = 0;
   readonly mesh: Mesh;
   private geometry: MeshGeometry;
   private uvs: Float32Array;
@@ -220,6 +222,7 @@ export class ChunkMesh {
    * cell 은 지형 ID 일 수도 있고 도로·지구 셀 번호일 수도 있다.
    */
   setTile(localX: number, localY: number, cell: number): void {
+    this.visualRevision++;
     const i = localY * CHUNK_SIZE + localX;
     this.writeTopUV(this.quadStart[i] + this.wallCount[i], cell);
   }
@@ -228,6 +231,22 @@ export class ChunkMesh {
     const [u0, v0, u1, v1] = this.atlas.uv(tileId);
     writeQuad(this.uvs, quad, [u0, v0, u1, v0, u1, v1, u0, v1]);
     this.uvDirty = true;
+  }
+
+  /** Existing tile geometry, grouped by tile rather than by storage chunk. */
+  sceneTiles() {
+    const result = [];
+    for (let i = 0; i < CHUNK_TILES; i++) {
+      const start = this.quadStart[i];
+      const end = i + 1 < CHUNK_TILES ? this.quadStart[i + 1] : this.uvs.length / 8;
+      result.push({
+        tx: this.baseX + (i % CHUNK_SIZE),
+        ty: this.baseY + Math.floor(i / CHUNK_SIZE),
+        start,
+        count: end - start,
+      });
+    }
+    return { positions: this.geometry.positions, uvs: this.uvs, tiles: result };
   }
 
   private writeWallUV(quad: number, cell: number, isRight: boolean): void {
