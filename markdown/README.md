@@ -2,7 +2,11 @@
 
 2026-09-09 코드 정리: 파일별 역할은 [ARCHITECTURE.md](ARCHITECTURE.md), 변경 내용과 기능 보존 검증은 [REFACTOR_2026_09_09.md](REFACTOR_2026_09_09.md)를 참고한다. `npm run format:check`, `npm run build`, `npm run check`, `npm run check:parity`로 형식·타입·기능·이전 버전과의 동등성을 검사한다.
 
-## 현재 상태 (2026-09-11)
+## 현재 상태 (2026-09-12)
+
+도시 완성도 개선의 첫 묶음으로 주거·상업·공업 36종과 시설 26종을 공통 도트 규격으로 다시 만들었다. 시설 찾기, 화면 정리, 좁은 화면 도시 정보판을 추가하고, 건물/시설의 겹침 및 청크 경계 시설 가림, 5×5·7×7 시설의 끝부분 선택·철거 오류를 수정했다. 제작 기준은 [PIXEL_ART_GUIDE.md](PIXEL_ART_GUIDE.md), 검증 결과와 남은 작업은 [CITY_POLISH_PROGRESS.md](CITY_POLISH_PROGRESS.md)를 참고한다. 현재 그림 검수 화면은 개발 서버 `/tools/check/artVisual.html`이다.
+
+## 이전 상태 (2026-09-11)
 
 대도시 생성 로직을 다시 만들었다. 도로망이 갈라지고(최대 5조각), 용도 비율이
 무너지고(일자리/필요 0.21~2.45), 첫날부터 적자가 나고, 초기화해도 매번 같은

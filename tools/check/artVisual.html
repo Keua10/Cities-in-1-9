@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>도시 건물 도트 검수</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #1c2c32;
+        color: #e5e9dc;
+        font:
+          14px system-ui,
+          sans-serif;
+      }
+      header {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        background: #152328ee;
+        padding: 18px 24px;
+        border-bottom: 1px solid #536663;
+      }
+      h1 {
+        font-size: 20px;
+        margin: 0 0 6px;
+      }
+      p {
+        color: #aebeb8;
+        margin: 6px 0 12px;
+      }
+      button {
+        padding: 8px 14px;
+        margin: 3px;
+        border: 1px solid #627b70;
+        background: #253d3c;
+        color: #dce6d1;
+        border-radius: 5px;
+        cursor: pointer;
+      }
+      button[aria-pressed='true'] {
+        background: #507c61;
+        color: #fff;
+      }
+      main {
+        padding: 20px;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 12px;
+      }
+      article {
+        min-height: 230px;
+        background: #263c3b;
+        border: 1px solid #476254;
+        border-radius: 8px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: end;
+        padding: 12px;
+        overflow: auto;
+      }
+      canvas {
+        image-rendering: pixelated;
+        flex-shrink: 0;
+      }
+      h2 {
+        font-size: 13px;
+        margin: 12px 0 4px;
+      }
+      .meta {
+        color: #a8bab0;
+        font-size: 12px;
+      }
+      a {
+        color: #b6d8bc;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>도시 건물 도트 검수</h1>
+      <p>
+        타일 64×32 · 공통 팔레트 · 창문·문·나무의 도트 크기 유지 · 외형 이름은 경제 기능 세분화를
+        뜻하지 않습니다.
+      </p>
+      <nav id="filters"></nav>
+      <div id="zoom"></div>
+      <a href="/">게임으로</a>
+    </header>
+    <main id="gallery"></main>
+    <script type="module" src="./artVisual.ts"></script>
+  </body>
+</html>

@@ -1,7 +1,9 @@
 import type { Camera } from '../core/camera';
+import { WORLD_SEED } from '../core/constants';
+import { BUILDING_NAMES, BUILDING_ART_VARIANTS } from '../render/buildingArt';
 import { chunkIndexOf } from '../core/iso';
 import type { WorldRenderer } from '../render/worldRenderer';
-import { TIER_NAMES, ZONE_NAMES } from '../sim/buildings';
+import { TIER_NAMES, ZONE_NAMES, simHash } from '../sim/buildings';
 import type { CongestionMap } from '../sim/congestion';
 import { DISASTER_NAMES } from '../sim/disasters';
 import type { MacroSim } from '../sim/macro';
@@ -55,12 +57,14 @@ export function createHudUpdater(deps: GameHudDeps): (now: number, fps: number) 
         building: here
           ? here.kind !== null
             ? describeFacility(sim, here.tx, here.ty, here.kind)
-            : `${ZONE_NAMES[here.zone]} ${here.level}단계 (${TIER_NAMES[here.level - 1]}) · ` +
+            : `${BUILDING_NAMES[here.zone][here.level - 1][simHash(WORLD_SEED, here.tx, here.ty, here.level) % BUILDING_ART_VARIANTS]} · ${ZONE_NAMES[here.zone]} L${here.level} (${TIER_NAMES[here.level - 1]}) · ` +
               `${occupancy === null || occupancy <= 0 ? '공실' : `입주 ${Math.round(occupancy * 100)}%`} · ` +
               `${sim.day - here.born}일 됨 · 전력 ${Math.round(sim.power.supplyAt(here.tx, here.ty) * 100)}% · 급수 ${Math.round(sim.water.statusAt(here.tx, here.ty).supply * 100)}% · 하수 ${Math.round(sim.water.statusAt(here.tx, here.ty).drainage * 100)}%${sim.water.contaminationAt(here.tx, here.ty) > 0 ? ' · 수질 오염' : ''}`
           : null,
-        service: cursor ? describeService(sim, cursor.tx, cursor.ty, here) : null,
-        amenity: cursor ? describeAmenity(sim, cursor.tx, cursor.ty, here) : null,
+        service:
+          cursor && here?.kind == null ? describeService(sim, cursor.tx, cursor.ty, here) : null,
+        amenity:
+          cursor && here?.kind == null ? describeAmenity(sim, cursor.tx, cursor.ty, here) : null,
         incident: incident
           ? `${DISASTER_NAMES[incident.kind]} · 발생 후 ${sim.tick - incident.startedTick}시간`
           : null,

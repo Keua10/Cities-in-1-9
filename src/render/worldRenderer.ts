@@ -28,12 +28,11 @@ import { makeSlopeSampler, surfaceAt, type SlopeSampler } from '../world/slope';
 import type { World } from '../world/world';
 import type { TileAtlas } from './atlas';
 import type { BuildingAtlas } from './buildingAtlas';
-import { BuildingMesh } from './buildingMesh';
+import { combineStructureAtlas } from './structureMesh';
+import { StructureLayer } from './structureLayer';
 import { ChunkMesh } from './chunkMesh';
 import type { FacilityAtlas } from './facilityAtlas';
-import { FacilityMesh } from './facilityMesh';
 import { IncidentLayer } from './incidentLayer';
-import { ParcelMeshLayer } from './parcelMeshLayer';
 import { PedestrianLayer } from './pedestrianLayer';
 import { SignalLayer } from './signalLayer';
 import type { VehicleAtlas } from './vehicleAtlas';
@@ -93,6 +92,7 @@ export class WorldRenderer {
   private cursorLayer = new Graphics();
   /** 시설 배치 미리보기 사각형. 커서 레이어와 따로 둬야 서로 지우지 않는다. */
   private previewLayer = new Graphics();
+  private facilityFocusLayer = new Graphics();
   private signalLayer = new SignalLayer();
   private incidentLayer = new IncidentLayer();
   private pedestrianLayer: PedestrianLayer;
@@ -101,16 +101,10 @@ export class WorldRenderer {
 
   private meshes = new Map<string, ChunkMesh>();
   /**
-   * 건물 메시. 지형 메시와 같은 groundLayer 에 넣되 zIndex 를 0.5 올린다.
-   * 그러면 자기 청크 지형 위, 다음 청크 지형 아래에 그려져서 앞쪽 청크의 언덕이
-   * 뒤쪽 청크의 건물을 제대로 가린다.
+   * 일반 건물과 시설을 실제 깊이순으로 함께 굽는다. 경계에 걸친 부지는
+   * 앞쪽 모서리의 청크에 묶어, 그 부지의 모든 지면보다 뒤에 그린다.
    */
-  private buildings: ParcelMeshLayer;
-  /**
-   * 시설 메시. 건물과 텍스처가 달라 합칠 수 없으므로 메시가 하나 늘어난다.
-   * 시설이 하나도 없는 청크에는 아예 만들지 않으므로 대부분의 청크는 그대로다.
-   */
-  private facilities: ParcelMeshLayer;
+  private structures: StructureLayer;
   private vehicleMeshes = new Map<string, VehicleMesh>();
   private turningVehicleMesh: VehicleMesh | null = null;
   private traffic: TrafficSim | null = null;
@@ -136,8 +130,8 @@ export class WorldRenderer {
   constructor(
     private world: World,
     private atlas: TileAtlas,
-    private buildingAtlas: BuildingAtlas,
-    private facilityAtlas: FacilityAtlas,
+    buildingAtlas: BuildingAtlas,
+    facilityAtlas: FacilityAtlas,
   ) {
     this.pedestrianLayer = new PedestrianLayer(buildingAtlas, facilityAtlas);
     this.root.addChild(
@@ -151,25 +145,16 @@ export class WorldRenderer {
       this.waterLayer.graphics,
       this.cursorLayer,
       this.previewLayer,
+      this.facilityFocusLayer,
     );
     this.groundLayer.interactiveChildren = false;
     this.turningVehicleLayer.interactiveChildren = false;
     this.fogLayer.interactiveChildren = false;
     // 고도가 있으면 청크끼리도 겹친다. 뒤쪽 청크부터 그려야 한다.
     this.groundLayer.sortableChildren = true;
-    this.sampleHeight = (tx, ty) => this.world.sampleHeight(tx, ty);
     this.resolveTop = makeTopResolver(world);
-    this.buildings = new ParcelMeshLayer(
-      this.groundLayer,
-      (p) => new BuildingMesh(p, this.buildingAtlas, this.sampleHeight),
-      0.5,
-    );
-    this.facilities = new ParcelMeshLayer(
-      this.groundLayer,
-      (p) => new FacilityMesh(p, this.facilityAtlas, this.sampleHeight),
-      0.6,
-      true,
-    );
+    const structureAtlas = combineStructureAtlas(buildingAtlas, facilityAtlas);
+    this.structures = new StructureLayer(this.groundLayer, world, structureAtlas);
     this.slope = makeSlopeSampler(world);
   }
 
@@ -177,11 +162,33 @@ export class WorldRenderer {
     this.traffic = traffic;
     this.vehicleAtlas = atlas;
   }
+  /** Finder highlight is separate from placement preview and hover selection. */
+  setFacilityFocus(f: { tx: number; ty: number; span: number } | null): void {
+    const g = this.facilityFocusLayer;
+    g.clear();
+    if (!f) return;
+    const { tx, ty, span } = f,
+      end = span - 1,
+      h = this.world.sampleHeight(tx, ty);
+    const x = (x: number, y: number) => tileToWorldX(x, y),
+      y = (x: number, y: number) => tileToWorldY(x, y, h);
+    const points = [
+      x(tx, ty),
+      y(tx, ty) - TILE_HH,
+      x(tx + end, ty) + TILE_HW,
+      y(tx + end, ty),
+      x(tx + end, ty + end),
+      y(tx + end, ty + end) + TILE_HH,
+      x(tx, ty + end) - TILE_HW,
+      y(tx, ty + end),
+    ];
+    g.poly(points).stroke({ color: 0x17282c, width: 5 });
+    g.poly(points).stroke({ color: 0xf1d185, width: 2 });
+  }
   attachDisasters(sim: DisasterSim): void {
     this.disasters = sim;
   }
 
-  private sampleHeight: (tx: number, ty: number) => number;
   private resolveTop: TopResolver;
   /** 경사 도로의 지면 평면·절벽 판정. 청크 메시가 정점을 만들 때 쓴다. */
   private slope: SlopeSampler;
@@ -274,8 +281,7 @@ export class WorldRenderer {
     view.maxY += MAX_HEIGHT * HEIGHT_UNIT;
     const range = visibleChunkRange(view);
     this.waterLayer.update(this.world, this.waterField, this.powerField, this.utilityMode, range);
-    this.buildings.setOpacity(this.utilityMode === 'off' ? 1 : 0.2);
-    this.facilities.setOpacity(this.utilityMode === 'off' ? 1 : 0.25);
+    this.structures.setOpacity(this.utilityMode === 'off' ? 1 : 0.22);
     const rangeKey = `${range.cx0},${range.cy0},${range.cx1},${range.cy1}`;
     const zoomChanged = Math.abs(camera.zoom - this.lastZoom) > 0.001;
 
@@ -301,8 +307,10 @@ export class WorldRenderer {
         this.dropFog(key);
         const mesh = this.ensureMesh(key, cx, cy);
         mesh.lastUsed = now;
-        buildingsShown += this.ensureBuildings(key, cx, cy);
-        facilitiesShown += this.ensureFacilities(key, cx, cy);
+        this.structures.ensure(key, cx, cy);
+        const counts = this.structures.counts(key);
+        buildingsShown += counts.buildings;
+        facilitiesShown += counts.facilities;
         if (this.traffic && this.vehicleAtlas) {
           const vehicles = this.traffic.vehiclesInChunk(cx, cy);
           if (vehicles.length > 0 || this.vehicleMeshes.has(key)) {
@@ -424,33 +432,8 @@ export class WorldRenderer {
       mesh.destroy();
       this.meshes.delete(key);
     }
-    this.dropBuildings(key);
-    this.dropFacilities(key);
+    this.structures.drop(key);
     this.dropVehicles(key);
-  }
-
-  /**
-   * 건물 메시를 필지 상태에 맞춘다.
-   *
-   * 필지의 bldRevision 이 바뀌었을 때만 다시 굽는다. 건물은 매크로 틱이 가끔
-   * 짓고 허무는 것이라 이 값이 자주 오르지 않는다. 드래그 건설과 달리 통째로
-   * 다시 구워도 부담이 없다.
-   */
-  private ensureBuildings(key: string, cx: number, cy: number): number {
-    return this.buildings.ensure(key, this.world.peekParcel(cx, cy));
-  }
-
-  /**
-   * 시설 메시를 필지 상태에 맞춘다. 건물과 같은 규칙(bldRevision)으로 다시 굽되,
-   * **시설이 하나도 없으면 메시를 아예 만들지 않는다.** 대부분의 청크에는 시설이
-   * 없으므로 드로우콜이 그대로 유지된다.
-   */
-  private ensureFacilities(key: string, cx: number, cy: number): number {
-    return this.facilities.ensure(key, this.world.peekParcel(cx, cy));
-  }
-
-  private dropFacilities(key: string): void {
-    this.facilities.drop(key);
   }
 
   private ensureVehicles(key: string, cx: number, cy: number, vehicles: readonly Vehicle[]): void {
@@ -486,10 +469,6 @@ export class WorldRenderer {
     this.turningVehicleMesh.update(vehicles);
   }
 
-  private dropBuildings(key: string): void {
-    this.buildings.drop(key);
-  }
-
   private ensureFog(key: string, cx: number, cy: number): void {
     if (this.fog.has(key)) return;
     const g = new Graphics();
@@ -522,8 +501,7 @@ export class WorldRenderer {
       this.groundLayer.removeChild(mesh.mesh);
       mesh.destroy();
       this.meshes.delete(key);
-      this.dropBuildings(key);
-      this.dropFacilities(key);
+      this.structures.drop(key);
       over--;
     }
 

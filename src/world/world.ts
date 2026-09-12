@@ -548,12 +548,12 @@ export class World {
    * 이 칸을 덮고 있는 건물을 찾는다. 없으면 null.
    *
    * 덮인 칸에 앵커 위치를 따로 저장하지 않는다. 대신 왼쪽 위로 최대
-   * MAX_FOOTPRINT 칸까지 거슬러 올라가며 앵커를 찾는다. 최악 9번 조회라
+   * MAX_FOOTPRINT 칸까지 거슬러 올라가며 앵커를 찾는다. 최대 7x7 시설까지
    * 배열을 하나 더 저장하는 것보다 싸다.
    *
    * 3.3단계: **여기만 isAnyAnchor 를 쓴다.** 시설 칸에서도 앵커를 찾아야 하기
    * 때문이다. 다른 곳은 전부 isAnchor 그대로여야 시설이 인구·일자리·통행·재건축에
-   * 섞이지 않는다. 시설이 3x3 까지라 탐색 범위 MAX_FOOTPRINT = 3 이 그대로 맞는다.
+   * 섞이지 않는다. 탐색 범위는 현재 시설 규격의 최대값을 따른다.
    */
   buildingCovering(tx: number, ty: number): BuildingInfo | null {
     const v = this.getBld(tx, ty);

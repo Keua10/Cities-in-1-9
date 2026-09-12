@@ -1,5 +1,7 @@
 # 시설 아틀라스 원본과 재생성
 
+> 2026-09-12: 아래는 과거 7종 PNG 제작 기록이다. 현재 게임은 공통 규격의 코드 기반 도트 26종을 사용한다. 현재 원본과 검수 명령은 [PIXEL_ART_GUIDE.md](../../PIXEL_ART_GUIDE.md)를 참고한다.
+
 `facilities-source.png`는 이 작업에서 ImageGen으로 생성한 시설 7종의 원본이다. 기존 buildings.png의 상세 아이소메트릭 픽셀 아트와 맞춰 소방서, 경찰서, 병원, 학교, 소공원, 공원, 체육시설을 요청했다.
 
 최종 편집 요청의 의도: “Keep the seven distinct isometric pixel-art facilities, crisp detailed pixels, matching the existing city building art. Remove all black background, glow, shadows outside the buildings and checkerboard; use a truly transparent background. Keep each facility separate and completely visible.” 도구가 실제 알파 대신 체크무늬를 반환하여 사용자의 승인에 따라 스크립트로 후처리했다.

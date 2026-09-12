@@ -59,7 +59,14 @@ function check(name: string, actual: unknown, expected: unknown) {
   check('필지 제거 시 메시 정리', children.size, 0);
 }
 {
-  const element = { innerHTML: '' };
+  const fields = new Map<string, { innerHTML: string; textContent: string }>();
+  const element = {
+    innerHTML: '',
+    querySelector: (selector: string) => {
+      if (!fields.has(selector)) fields.set(selector, { innerHTML: '', textContent: '' });
+      return fields.get(selector);
+    },
+  };
   (globalThis as any).document = { querySelector: () => element };
   const hud = new Hud();
   let reads = 0;
@@ -88,7 +95,8 @@ function check(name: string, actual: unknown, expected: unknown) {
     reads++;
     return data;
   });
-  const first = element.innerHTML;
+  const snapshot = () => JSON.stringify([...fields.values()]);
+  const first = snapshot();
   check('표시 시점에만 자료 계산', reads, 1);
   hud.update(399, () => {
     reads++;
@@ -96,7 +104,13 @@ function check(name: string, actual: unknown, expected: unknown) {
   });
   check('기존 200ms 표시 주기 유지', reads, 1);
   hud.update(400, data);
-  check('객체 입력과 지연 입력의 표시가 동일', element.innerHTML, first);
+  check('객체 입력과 지연 입력의 표시가 동일', snapshot(), first);
+  hud.update(600, { ...data, building: '<img src=x onerror=alert(1)> · 입주 100%' });
+  check(
+    '건물 설명은 HTML로 실행되지 않음',
+    fields.get('.hud-context')!.innerHTML.includes('&lt;img'),
+    true,
+  );
   delete (globalThis as any).document;
 }
 {

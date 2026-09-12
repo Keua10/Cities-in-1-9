@@ -4,7 +4,9 @@ import { strict as assert } from 'node:assert';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve, relative, dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
-const baseline = '16b0b7c';
+// Pin the completed STEP 4.8 + city generator baseline for the visual-polish change.
+// An explicit override can still inspect historical references.
+const baseline = process.env.PARITY_BASELINE ?? 'a73d9d4';
 mkdirSync('.check', { recursive: true });
 async function run(original) {
   const output = resolve('.check', `refactor-parity-${original ? 'baseline' : 'current'}.mjs`);
@@ -47,5 +49,5 @@ async function run(original) {
 }
 assert.deepEqual(await run(false), await run(true));
 console.log(
-  'PASS all configuration exports, two generated cities, 60-day macro history, assignments and saved tile layers match baseline',
+  `PASS configuration exports, 60-day macro history, assignments and saved tile layers match ${baseline}`,
 );

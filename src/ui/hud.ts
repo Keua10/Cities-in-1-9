@@ -50,15 +50,23 @@ export interface HudData {
   gametimeHour: number;
 }
 
-/** 개발용 상태 표시. 학생용 UI 는 2단계에서 따로 만든다. */
+/** Compact player context with stable, keyboard-accessible diagnostic disclosure. */
 export class Hud {
-  private el: HTMLElement;
+  private summary: HTMLElement;
+  private context: HTMLElement;
+  private debug: HTMLElement;
+  private message: HTMLElement;
   private lastPaint = 0;
 
   constructor(selector = '#hud') {
     const el = document.querySelector<HTMLElement>(selector);
     if (!el) throw new Error(`HUD 컨테이너를 찾을 수 없습니다: ${selector}`);
-    this.el = el;
+    el.innerHTML =
+      '<div class="hud-summary"></div><div class="hud-context"></div><div class="hud-message" role="status"></div><details class="hud-diagnostics"><summary>진단 정보</summary><div class="hud-debug"></div></details>';
+    this.summary = el.querySelector('.hud-summary')!;
+    this.context = el.querySelector('.hud-context')!;
+    this.debug = el.querySelector('.hud-debug')!;
+    this.message = el.querySelector('.hud-message')!;
   }
 
   update(now: number, source: HudData | (() => HudData)): void {
@@ -74,8 +82,32 @@ export class Hud {
     const build =
       data.build === null || data.build === undefined ? '—' : (BUILD_LABELS[data.build] ?? '빈 땅');
 
+    this.summary.innerHTML = `<b>1–9 도시</b><span>${escapeHtml(data.weekday)}요일 · ${escapeHtml(data.season)} ${formatHour(data.daytimeHour)}</span><small>${escapeHtml(data.tool)} · 확대 ${Math.round(data.zoom * 100)}%</small>`;
+    const context = [];
+    if (data.building)
+      context.push(
+        `<b>${escapeHtml(data.building.split(' · ')[0])}</b>`,
+        escapeHtml(data.building.split(' · ').slice(1).join(' · ')),
+      );
+    else if (data.tile)
+      context.push(
+        `<b>${escapeHtml(build)}</b>`,
+        `고도 ${data.height ?? '—'}${data.roadAccess === null ? '' : data.roadAccess ? ' · 도로 연결' : ' · 도로 미연결'}`,
+      );
+    else
+      context.push(
+        '<span class="hud-hint">건물을 가리키거나 선택하면 상태를 볼 수 있습니다.</span>',
+      );
+    if (data.service && data.building) context.push(escapeHtml(data.service));
+    if (data.amenity && data.building) context.push(escapeHtml(data.amenity));
+    if (data.incident) context.push(`<strong class="warn">${escapeHtml(data.incident)}</strong>`);
+    this.context.innerHTML = context
+      .filter(Boolean)
+      .map((s) => `<div>${s}</div>`)
+      .join('');
+    this.message.textContent = data.message ?? '';
     const lines = [
-      `<b>${data.fps.toFixed(0)} fps</b>   확대 ${data.zoom.toFixed(2)}x`,
+      `${data.fps.toFixed(0)} fps · 확대 ${data.zoom.toFixed(2)}x`,
       `도시 ID ${data.city}`,
       `선택 도구 ${data.tool}`,
       `타일 좌표 ${tile}`,
@@ -93,10 +125,15 @@ export class Hud {
       `gametime ${data.gametimeDay}일 ${String(data.gametimeHour).padStart(2, '0')}:00`,
     ];
     if (data.placeholderArt) lines.push('그림: 임시 타일 사용 중');
-    if (data.message) lines.push(`<b class="warn">${data.message}</b>`);
-
-    this.el.innerHTML = lines.join('\n');
+    this.debug.textContent = lines.join('\n');
   }
+}
+
+function escapeHtml(value: unknown): string {
+  return String(value ?? '').replace(
+    /[&<>"']/g,
+    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!,
+  );
 }
 
 function formatHour(hour: number): string {

@@ -91,3 +91,9 @@
     bottom: calc(118px + env(safe-area-inset-bottom, 0px));
   }
 }
+@media (max-width: 560px) {
+  #minimap-shell {
+    width: 100px;
+    bottom: calc(165px + env(safe-area-inset-bottom, 0px));
+  }
+}

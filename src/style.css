@@ -63,7 +63,10 @@ canvas {
   left: 10px;
   z-index: 5;
   padding: 8px 11px;
-  min-width: 168px;
+  width: 300px;
+  max-width: calc(100vw - 24px);
+  max-height: calc(100dvh - 240px);
+  overflow-y: auto;
   border: 1px solid var(--edge);
   border-radius: 10px;
   background: var(--panel);
@@ -71,8 +74,108 @@ canvas {
   font-variant-numeric: tabular-nums;
   font-size: 12px;
   color: var(--ink-dim);
-  pointer-events: none;
-  white-space: pre;
+  pointer-events: auto;
+  white-space: normal;
+}
+
+.hud-summary {
+  display: grid;
+  gap: 3px;
+}
+.hud-summary > b {
+  font-size: 16px;
+  letter-spacing: 0.03em;
+}
+.hud-summary > span {
+  color: #c5d7c9;
+}
+.hud-summary small {
+  color: var(--accent);
+}
+.hud-context {
+  margin-top: 10px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+.hud-context > div + div {
+  margin-top: 4px;
+}
+.hud-hint {
+  font-size: 11px;
+}
+.hud-message:empty {
+  display: none;
+}
+.hud-message {
+  color: #ffd083;
+  margin-top: 8px;
+}
+.hud-diagnostics {
+  margin-top: 10px;
+  border-top: 1px solid var(--edge);
+  padding-top: 6px;
+}
+.hud-diagnostics summary,
+.facility-finder summary {
+  cursor: pointer;
+  color: #b3c3bd;
+}
+.hud-debug {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding-top: 6px;
+  font-size: 10px;
+}
+.facility-finder {
+  margin-top: 8px;
+  border-top: 1px solid var(--edge);
+  padding-top: 7px;
+}
+.facility-finder select {
+  width: 100%;
+  margin: 8px 0;
+  padding: 8px;
+  border: 1px solid #60766d;
+  border-radius: 5px;
+  background: #203430;
+  color: var(--ink);
+  font: inherit;
+}
+.facility-finder button {
+  min-height: 34px;
+  padding: 4px 12px;
+  margin-right: 5px;
+  background: #35564a;
+  color: var(--ink);
+  border: 1px solid #59776a;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.facility-finder button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.facility-finder p {
+  margin: 8px 0 0;
+}
+body.clean-view #hud,
+body.clean-view #city-panel,
+body.clean-view #minimap-shell {
+  display: none;
+}
+@media (max-width: 700px) {
+  #hud {
+    width: 190px;
+    max-height: calc(100dvh - 230px);
+    font-size: 11px;
+  }
+  .hud-context {
+    max-height: 150px;
+    overflow-y: auto;
+  }
+  .hud-summary > b {
+    font-size: 13px;
+  }
 }
 
 #hud b {
@@ -581,11 +684,43 @@ canvas {
   color: var(--ink-dim);
 }
 
-/* 화면이 좁으면 상태판이 지도를 너무 가린다. */
+#btn-city-info {
+  display: none;
+}
+/* 좁은 화면에서는 도시 정보가 열릴 때만 상태판을 표시한다. */
 @media (max-width: 560px) {
+  #toolbar #btn-city-info {
+    display: block;
+  }
+  #save-status {
+    max-width: calc(100vw - 20px);
+    font-size: 10px;
+  }
+  #hud {
+    top: calc(46px + var(--safe-top));
+    width: 180px;
+    padding: 8px;
+    max-height: calc(100dvh - 320px);
+  }
   #city-panel {
-    width: 168px;
-    padding: 8px 10px;
+    display: none;
+    width: calc(100vw - 20px);
+    max-height: calc(100dvh - 210px - var(--safe-top));
+    padding: 12px;
+  }
+  body.city-info-open #city-panel {
+    display: block;
+  }
+  body.city-info-open #hud,
+  body.city-info-open #minimap-shell {
+    display: none;
+  }
+  #tools {
+    bottom: calc(80px + var(--safe-bottom));
+  }
+  .facility-finder button {
+    width: 100%;
+    margin: 0 0 5px;
   }
 
   .cp-money {

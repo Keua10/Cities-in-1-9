@@ -1,5 +1,6 @@
 import { OVERRIDE_NONE } from '../core/constants';
 import { Build } from '../world/build';
+import { FACILITY_SPAN } from './config/facilities';
 
 export const ZONE_R = 0;
 export const ZONE_C = 1;
@@ -10,7 +11,8 @@ export const LEVEL_COUNT = 3;
 export function footprintOf(level: number): number {
   return level;
 }
-export const MAX_FOOTPRINT = LEVEL_COUNT;
+/** Anchor lookup includes expanded 5x5/7x7 facilities as well as zoned buildings. */
+export const MAX_FOOTPRINT = Math.max(LEVEL_COUNT, ...FACILITY_SPAN);
 
 /**
  * bld 저장 코드:

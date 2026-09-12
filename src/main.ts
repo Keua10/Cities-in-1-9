@@ -28,6 +28,7 @@ import './style.css';
 import { CityPanel } from './ui/cityPanel';
 import { createHudUpdater } from './ui/gameHud';
 import { Hud } from './ui/hud';
+import { FacilityFinder } from './ui/facilityFinder';
 import { requireSession } from './ui/loginScreen';
 import { Minimap } from './ui/minimap';
 import { SaveBadge } from './ui/saveBadge';
@@ -171,6 +172,17 @@ async function boot(): Promise<void> {
   renderer.attachDisasters(sim.disasters);
 
   const cityPanel = new CityPanel();
+  const facilityFinder = new FacilityFinder(world, sim, (f) => {
+    renderer.setFacilityFocus(f);
+    if (!f) return;
+    cursor = { tx: f.tx, ty: f.ty };
+    renderer.setCursorTile(cursor);
+    const center = (f.span - 1) / 2;
+    camera.centerOnWorld(
+      tileToWorldX(f.tx + center, f.ty + center),
+      tileToWorldY(f.tx + center, f.ty + center, world.sampleHeight(f.tx, f.ty)),
+    );
+  });
   let incidentFocusIndex = 0;
   cityPanel.onIncidentFocus = () => {
     const events = sim.disasters.active.filter((e) => sim.disasters.at(e.tx, e.ty, world));
@@ -300,6 +312,7 @@ async function boot(): Promise<void> {
 
     transportPanel.update();
     cityPanel.update(now, sim);
+    facilityFinder.update(now);
     updateHud(now, ticker.FPS);
   });
 
