@@ -1,0 +1,34 @@
+{
+  "tool": "built-in image_gen",
+  "status": "one mansion review candidate, not in live atlas",
+  "reference": "public/sprites/candidates/residential-l3-a.png",
+  "geometry": {
+    "tile": [
+      64,
+      32
+    ],
+    "lot": [
+      192,
+      96
+    ],
+    "sprite": [
+      192,
+      192
+    ]
+  },
+  "prompts": [
+    null,
+    null,
+    null
+  ],
+  "preparation": "Generated art used a solid magenta matte after transparent-background requests returned painted checkerboards. Matte removed; foreground uniformly nearest-neighbor reduced to 186x139, placed in 192x192; RGB channels quantized in 8-step increments; original candidate translated upward 2px; flat 2:1 grass perimeter redrawn behind the entire uncropped foreground. The house itself was not nonuniformly stretched. This is a resampled generated candidate, not an image natively emitted at 192px.",
+  "verified": {
+    "frontEdgeSlopes": [
+      0.5,
+      -0.5
+    ],
+    "nonBinaryAlpha": 0,
+    "opaqueCanvasBorder": 0
+  },
+  "referenceGuide": "https://forum.theotown.com/viewtopic.php?t=18498"
+}
