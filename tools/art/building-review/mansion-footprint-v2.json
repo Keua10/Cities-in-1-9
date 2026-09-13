@@ -1,0 +1,107 @@
+{
+  "reference": "public/sprites/candidates/residential-l3-a.png",
+  "geometrySource": "public/sprites/review/residential-l3-a-footprint-v1.png",
+  "output": "public/sprites/review/residential-l3-a-footprint-v2.png",
+  "method": "Material-group palette mapping weighted by original color frequencies and luminance quantile. No resize, crop, geometry edits or new colors.",
+  "materials": {
+    "stone": {
+      "originalMeanRGB": [
+        118,
+        102,
+        83
+      ],
+      "v1MeanRGB": [
+        171,
+        150,
+        132
+      ],
+      "v2MeanRGB": [
+        125,
+        109,
+        94
+      ]
+    },
+    "brick": {
+      "originalMeanRGB": [
+        144,
+        72,
+        47
+      ],
+      "v1MeanRGB": [
+        173,
+        68,
+        35
+      ],
+      "v2MeanRGB": [
+        148,
+        71,
+        46
+      ]
+    },
+    "roof": {
+      "originalMeanRGB": [
+        41,
+        59,
+        79
+      ],
+      "v1MeanRGB": [
+        41,
+        79,
+        127
+      ],
+      "v2MeanRGB": [
+        41,
+        60,
+        80
+      ]
+    },
+    "flower": {
+      "originalMeanRGB": [
+        148,
+        50,
+        74
+      ],
+      "v1MeanRGB": [
+        178,
+        50,
+        107
+      ],
+      "v2MeanRGB": [
+        151,
+        51,
+        76
+      ]
+    },
+    "green": {
+      "originalMeanRGB": [
+        54,
+        79,
+        14
+      ],
+      "v1MeanRGB": [
+        52,
+        114,
+        12
+      ],
+      "v2MeanRGB": [
+        53,
+        80,
+        15
+      ]
+    }
+  },
+  "verification": {
+    "outsideOriginalPalette": 0,
+    "alphaMaskChangesFromV1": 0,
+    "size": [
+      192,
+      192
+    ],
+    "inheritedFrontSlopes": [
+      0.5,
+      -0.5
+    ]
+  },
+  "materialClassification": "RGB-based approximate material groups, not hand-segmented semantic masks. Means are diagnostic values, not a perceptual color identity guarantee.",
+  "imagegenAttempt": "An additional built-in image edit was inspected but not selected because its ground angles drifted. Final v2 uses v1 geometry and a deterministic reference-palette correction."
+}

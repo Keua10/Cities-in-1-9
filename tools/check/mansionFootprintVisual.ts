@@ -3,15 +3,13 @@ import { tileToWorldX, tileToWorldY } from '../../src/core/iso';
 
 const ids = [
   { name: '기존 저택', path: '/sprites/candidates/residential-l3-a.png' },
-  { name: '바닥 수정 후보 v1', path: '/sprites/review/residential-l3-a-footprint-v1.png' },
+  { name: '원본 팔레트 후보 v2', path: '/sprites/review/residential-l3-a-footprint-v2.png' },
 ];
 let showGrid = true,
-  zoom = 2;
+  zoom = 2,
+  repeated = false;
 const cards = await Promise.all(
   ids.map(async ({ name, path }) => {
-    const image = new Image();
-    image.src = path;
-    await image.decode();
     const article = document.createElement('article'),
       title = document.createElement('h2'),
       canvas = document.createElement('canvas'),
@@ -20,6 +18,9 @@ const cards = await Promise.all(
     meta.className = 'meta';
     article.append(title, canvas, meta);
     document.querySelector('main')!.append(article);
+    const image = new Image();
+    image.src = path;
+    await image.decode();
     const source = document.createElement('canvas');
     source.width = source.height = 192;
     const c = source.getContext('2d')!;
@@ -44,19 +45,21 @@ const cards = await Promise.all(
 );
 function render() {
   for (const { image, canvas } of cards) {
-    canvas.width = 256 * zoom;
-    canvas.height = 240 * zoom;
+    const width = repeated ? 512 : 256,
+      height = repeated ? 336 : 240;
+    canvas.width = width * zoom;
+    canvas.height = height * zoom;
     const ctx = canvas.getContext('2d')!;
     ctx.imageSmoothingEnabled = false;
     ctx.scale(zoom, zoom);
     ctx.fillStyle = '#294638';
-    ctx.fillRect(0, 0, 256, 240);
-    const ox = 128,
-      oy = 111;
-    for (let sum = -4; sum <= 12; sum++)
-      for (let tx = -3; tx <= 6; tx++) {
+    ctx.fillRect(0, 0, width, height);
+    const ox = repeated ? 208 : 128,
+      oy = repeated ? 90 : 111;
+    for (let sum = -6; sum <= 20; sum++)
+      for (let tx = -3; tx <= 11; tx++) {
         const ty = sum - tx;
-        if (ty < -3 || ty > 6) continue;
+        if (ty < -3 || ty > 8) continue;
         const x = ox + tileToWorldX(tx, ty),
           y = oy + tileToWorldY(tx, ty);
         ctx.beginPath();
@@ -71,20 +74,38 @@ function render() {
         ctx.lineWidth = 0.5;
         ctx.stroke();
       }
-    // Same 192px cell placement as StructureMesh: front tile + TILE_HH + 1px gutter.
-    const bottom = oy + tileToWorldY(2, 2) + TILE_HH + 1;
-    ctx.drawImage(image, ox - 96, bottom - 192);
-    if (showGrid) {
-      ctx.beginPath();
-      ctx.moveTo(ox, oy - TILE_HH);
-      ctx.lineTo(ox + 96, oy + 32);
-      ctx.lineTo(ox, oy + 80);
-      ctx.lineTo(ox - 96, oy + 32);
-      ctx.closePath();
-      ctx.strokeStyle = '#74ffe5';
-      ctx.lineWidth = 0.6;
-      ctx.stroke();
+    const anchors = repeated
+      ? [
+          [0, 0],
+          [3, 0],
+          [6, 0],
+          [0, 3],
+          [3, 3],
+          [6, 3],
+        ]
+      : [[0, 0]];
+    anchors.sort((a, b) => a[0] + a[1] - b[0] - b[1]);
+    for (const [tx, ty] of anchors) {
+      // Same placement as StructureMesh, including the 1px bottom gutter.
+      const x = ox + tileToWorldX(tx, ty),
+        y = oy + tileToWorldY(tx, ty);
+      const bottom = y + tileToWorldY(2, 2) + TILE_HH + 1;
+      ctx.drawImage(image, x - 96, bottom - 192);
     }
+    if (showGrid)
+      for (const [tx, ty] of anchors) {
+        const x = ox + tileToWorldX(tx, ty),
+          y = oy + tileToWorldY(tx, ty);
+        ctx.beginPath();
+        ctx.moveTo(x, y - TILE_HH);
+        ctx.lineTo(x + 96, y + 32);
+        ctx.lineTo(x, y + 80);
+        ctx.lineTo(x - 96, y + 32);
+        ctx.closePath();
+        ctx.strokeStyle = '#74ffe5';
+        ctx.lineWidth = 0.6;
+        ctx.stroke();
+      }
   }
 }
 document.querySelector<HTMLButtonElement>('#grid')!.onclick = () => {
@@ -94,6 +115,13 @@ document.querySelector<HTMLButtonElement>('#grid')!.onclick = () => {
 };
 document.querySelector<HTMLSelectElement>('#zoom')!.onchange = (e) => {
   zoom = Number((e.target as HTMLSelectElement).value);
+  render();
+};
+document.querySelector<HTMLButtonElement>('#layout')!.onclick = () => {
+  repeated = !repeated;
+  zoom = repeated ? 1 : 2;
+  document.querySelector<HTMLSelectElement>('#zoom')!.value = String(zoom);
+  document.querySelector('#layout')!.textContent = repeated ? '한 채 보기' : '연속 배치 6채 보기';
   render();
 };
 render();
