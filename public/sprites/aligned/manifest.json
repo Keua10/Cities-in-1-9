@@ -1,0 +1,1497 @@
+[
+  {
+    "id": "residential-l1-a",
+    "level": 1,
+    "zone": 0,
+    "variant": 0,
+    "mode": "original-pixel-projection",
+    "reference": "public/sprites/candidates/residential-l1-a.png",
+    "output": "public/sprites/aligned/residential-l1-a.png",
+    "sourceHash": "02dd0863350f8f789601255be660b7edc534b2fcf91b487159d0eeee259d1a75",
+    "projection": {
+      "scaleY": 0.8261224489795919,
+      "shearY": 0.0028571428571428914,
+      "dx": 0,
+      "shiftY": 8.824489795918367,
+      "sourceFront": {
+        "left": {
+          "m": 0.6017786561264822,
+          "b": 43.023715415019765,
+          "inliers": 23,
+          "residual": 0.7460474308300391
+        },
+        "right": {
+          "m": -0.6086956521739131,
+          "b": 80.86956521739131,
+          "inliers": 23,
+          "residual": 0.6086956521739211
+        },
+        "cx": 31.265306122448983,
+        "cy": 61.838509316770185
+      },
+      "outsideSourceSamples": 0
+    },
+    "bounds": [
+      2,
+      17,
+      61,
+      62
+    ],
+    "paletteOutsideOriginal": 0,
+    "opaque": 1458,
+    "colors": 124
+  },
+  {
+    "id": "residential-l1-b",
+    "level": 1,
+    "zone": 0,
+    "variant": 1,
+    "mode": "original-pixel-projection",
+    "reference": "public/sprites/candidates/residential-l1-b.png",
+    "output": "public/sprites/aligned/residential-l1-b.png",
+    "sourceHash": "9ee9886527ff824a4aa38028c36dcf73c3ebf2f4ea330a6152fd2a6e7e715b33",
+    "projection": {
+      "scaleY": 0.7932848153937189,
+      "shearY": 0.01354753838646039,
+      "dx": 0,
+      "shiftY": 9.804551444811432,
+      "sourceFront": {
+        "left": {
+          "m": 0.6132128740824393,
+          "b": 43.24562394127612,
+          "inliers": 22,
+          "residual": 0.5759457933371053
+        },
+        "right": {
+          "m": -0.6473684210526318,
+          "b": 83.30526315789476,
+          "inliers": 19,
+          "residual": 0.5842105263158004
+        },
+        "cx": 31.778703500694295,
+        "cy": 62.732734049550544
+      },
+      "outsideSourceSamples": 0
+    },
+    "bounds": [
+      6,
+      25,
+      57,
+      62
+    ],
+    "paletteOutsideOriginal": 0,
+    "opaque": 1079,
+    "colors": 123
+  },
+  {
+    "id": "commercial-l1-a",
+    "level": 1,
+    "zone": 1,
+    "variant": 0,
+    "mode": "original-pixel-projection",
+    "reference": "public/sprites/candidates/commercial-l1-a.png",
+    "output": "public/sprites/aligned/commercial-l1-a.png",
+    "sourceHash": "232c170df506d6e2ab9efa1f3d2d53468ddde75ba22c2c3df8e5e7b101a27c9d",
+    "projection": {
+      "scaleY": 0.8276210899013156,
+      "shearY": -0.003021649446514063,
+      "dx": 0,
+      "shiftY": 8.065983656222176,
+      "sourceFront": {
+        "left": {
+          "m": 0.607792207792208,
+          "b": 43.71515151515152,
+          "inliers": 21,
+          "residual": 0.7367965367965326
+        },
+        "right": {
+          "m": -0.6004901960784313,
+          "b": 81.78676470588235,
+          "inliers": 17,
+          "residual": 0.6348039215686327
+        },
+        "cx": 31.50887000321395,
+        "cy": 62.8659971794426
+      },
+      "outsideSourceSamples": 0
+    },
+    "bounds": [
+      7,
+      26,
+      56,
+      62
+    ],
+    "paletteOutsideOriginal": 0,
+    "opaque": 1059,
+    "colors": 124
+  },
+  {
+    "id": "commercial-l1-b",
+    "level": 1,
+    "zone": 1,
+    "variant": 1,
+    "mode": "original-pixel-projection",
+    "reference": "public/sprites/candidates/commercial-l1-b.png",
+    "output": "public/sprites/aligned/commercial-l1-b.png",
+    "sourceHash": "16f393b3811bd303af42003de0caa43b0dff66a31ef62476f8a42947f645ce03",
+    "projection": {
+      "scaleY": 0.8531855955678672,
+      "shearY": 0.03019390581717446,
+      "dx": -1,
+      "shiftY": 6.224561403508762,
+      "sourceFront": {
+        "left": {
+          "m": 0.5506493506493506,
+          "b": 44.11515151515151,
+          "inliers": 21,
+          "residual": 0.5238095238095326
+        },
+        "right": {
+          "m": -0.6214285714285713,
+          "b": 81.94285714285714,
+          "inliers": 15,
+          "residual": 0.642857142857153
+        },
+        "cx": 32.27405355493999,
+        "cy": 61.88683814800158
+      },
+      "outsideSourceSamples": 0
+    },
+    "bounds": [
+      6,
+      24,
+      57,
+      62
+    ],
+    "paletteOutsideOriginal": 0,
+    "opaque": 1136,
+    "colors": 125
+  },
+  {
+    "id": "industrial-l1-a",
+    "level": 1,
+    "zone": 2,
+    "variant": 0,
+    "mode": "original-pixel-projection",
+    "reference": "public/sprites/candidates/industrial-l1-a.png",
+    "output": "public/sprites/aligned/industrial-l1-a.png",
+    "sourceHash": "71012d3eae1dcc9c45cb26d0da567490d85720bd865228b560bb5f82a3d4f919",
+    "projection": {
+      "scaleY": 0.8388676585166772,
+      "shearY": 0.018124142025006507,
+      "dx": -1,
+      "shiftY": 6.65528883612214,
+      "sourceFront": {
+        "left": {
+          "m": 0.5744360902255639,
+          "b": 44.44736842105263,
+          "inliers": 20,
+          "residual": 0.4894736842105303
+        },
+        "right": {
+          "m": -0.6176470588235294,
+          "b": 82.73529411764706,
+          "inliers": 16,
+          "residual": 0.470588235294116
+        },
+        "cx": 32.11850257856268,
+        "cy": 62.89739546618187
+      },
+      "outsideSourceSamples": 0
+    },
+    "bounds": [
+      7,
+      28,
+      56,
+      62
+    ],
+    "paletteOutsideOriginal": 0,
+    "opaque": 1045,
+    "colors": 115
+  },
+  {
+    "id": "industrial-l1-b",
+    "level": 1,
+    "zone": 2,
+    "variant": 1,
+    "mode": "original-pixel-projection",
+    "reference": "public/sprites/candidates/industrial-l1-b.png",
+    "output": "public/sprites/aligned/industrial-l1-b.png",
+    "sourceHash": "ee3a8b2062d8f97eaa04999c8b1653ec5a8405e355e3abcb859589fddad7e753",
+    "projection": {
+      "scaleY": 0.8539325842696629,
+      "shearY": -0.001872659176029856,
+      "dx": 0,
+      "shiftY": 6.813284864507604,
+      "sourceFront": {
+        "left": {
+          "m": 0.587719298245614,
+          "b": 43.789473684210535,
+          "inliers": 19,
+          "residual": 0.4824561403508838
+        },
+        "right": {
+          "m": -0.5833333333333334,
+          "b": 80.77941176470588,
+          "inliers": 17,
+          "residual": 0.470588235294116
+        },
+        "cx": 31.58691341705221,
+        "cy": 62.35371227142542
+      },
+      "outsideSourceSamples": 0
+    },
+    "bounds": [
+      9,
+      22,
+      54,
+      62
+    ],
+    "paletteOutsideOriginal": 0,
+    "opaque": 984,
+    "colors": 122
+  },
+  {
+    "id": "residential-l2-a",
+    "level": 2,
+    "zone": 0,
+    "variant": 0,
+    "mode": "restored-clipped-source",
+    "reference": "public/sprites/candidates/residential-l2-a.png",
+    "output": "public/sprites/aligned/residential-l2-a.png",
+    "sourceHash": "82aeec128eb8acc6ea1c871c774759ae3cd38bde35d9c83094c2efda755a4d3e",
+    "repairSource": "tools/art/footprint-repairs/residential-l2-a.png",
+    "projection": {
+      "scaleY": 0.8008890535284314,
+      "shearY": -0.004537877384700795,
+      "dx": 0,
+      "shiftY": 24.12039266530836,
+      "sourceFront": {
+        "left": {
+          "m": 0.6299722479185936,
+          "b": 85.03237742830713,
+          "inliers": 47,
+          "residual": 0.6808510638297776
+        },
+        "right": {
+          "m": -0.6186401480111008,
+          "b": 164.38945420906566,
+          "inliers": 47,
+          "residual": 0.8644773358001885
+        },
+        "cx": 63.556214113724764,
+        "cy": 125.07102850272577
+      },
+      "outsideSourceSamples": 0
+    },
+    "bounds": [
+      4,
+      49,
+      123,
+      126
+    ],
+    "paletteOutsideOriginal": 0,
+    "opaque": 5103,
+    "colors": 154
+  },
+  {
+    "id": "residential-l2-b",
+    "level": 2,
+    "zone": 0,
+    "variant": 1,
+    "mode": "restored-clipped-source",
+    "reference": "public/sprites/candidates/residential-l2-b.png",
+    "output": "public/sprites/aligned/residential-l2-b.png",
+    "sourceHash": "e98493bcb62d57221554c234a31af1bc71c1de31a28dd7f350ed9b0a1515ae89",
+    "repairSource": "tools/art/footprint-repairs/residential-l2-b.png",
+    "projection": {
+      "scaleY": 0.9012088370154228,
+      "shearY": -0.001146310962901187,
+      "dx": 0,
+      "shiftY": 11.16465193830767,
+      "sourceFront": {
+        "left": {
+          "m": 0.5560823311748383,
+          "b": 90.01387604070305,
+          "inliers": 47,
+          "residual": 0.6354070305272899
+        },
+        "right": {
+          "m": -0.5535383903792785,
+          "b": 160.3950046253469,
+          "inliers": 47,
+          "residual": 0.655758556891783
+        },
+        "cx": 63.42809503959981,
+        "cy": 125.28511899230291
+      },
+      "outsideSourceSamples": 0
+    },
+    "bounds": [
+      4,
+      45,
+      123,
+      126
+    ],
+    "paletteOutsideOriginal": 0,
+    "opaque": 5885,
+    "colors": 154
+  },
+  {
+    "id": "commercial-l2-a",
+    "level": 2,
+    "zone": 1,
+    "variant": 0,
+    "mode": "restored-clipped-source",
+    "reference": "public/sprites/candidates/commercial-l2-a.png",
+    "output": "public/sprites/aligned/commercial-l2-a.png",
+    "sourceHash": "5ae4fa602a4b7db987ad981e1fd6fc9931a002df31bf412424ff5aeaac593b75",
+    "repairSource": "tools/art/footprint-repairs/commercial-l2-a.png",
+    "projection": {
+      "scaleY": 0.933405288720993,
+      "shearY": -0.01160280626011867,
+      "dx": 0,
+      "shiftY": 7.190070156502962,
+      "sourceFront": {
+        "left": {
+          "m": 0.5481036077705828,
+          "b": 91.35430157261794,
+          "inliers": 47,
+          "residual": 0.7127659574468197
+        },
+        "right": {
+          "m": -0.5232423681776133,
+          "b": 158.93339500462534,
+          "inliers": 47,
+          "residual": 0.8675994449583584
+        },
+        "cx": 63.07868321640583,
+        "cy": 125.92795541694768
+      },
+      "outsideSourceSamples": 0
+    },
+    "bounds": [
+      4,
+      39,
+      123,
+      126
+    ],
+    "paletteOutsideOriginal": 0,
+    "opaque": 6235,
+    "colors": 157
+  },
+  {
+    "id": "commercial-l2-b",
+    "level": 2,
+    "zone": 1,
+    "variant": 1,
+    "mode": "restored-clipped-source",
+    "reference": "public/sprites/candidates/commercial-l2-b.png",
+    "output": "public/sprites/aligned/commercial-l2-b.png",
+    "sourceHash": "e9d2e00b9f3b8a2d2806c7b68397f83d84425d14a1da20893e2014448389c688",
+    "repairSource": "tools/art/footprint-repairs/commercial-l2-b.png",
+    "projection": {
+      "scaleY": 0.9073549470150036,
+      "shearY": 0.003934529430280276,
+      "dx": 0,
+      "shiftY": 10.381282131990341,
+      "sourceFront": {
+        "left": {
+          "m": 0.5467160037002774,
+          "b": 90.12210915818687,
+          "inliers": 47,
+          "residual": 0.6355226641998115
+        },
+        "right": {
+          "m": -0.5553885291396855,
+          "b": 160.31729879740982,
+          "inliers": 47,
+          "residual": 0.5583950046253392
+        },
+        "cx": 63.69195257580527,
+        "cy": 124.94351893829872
+      },
+      "outsideSourceSamples": 0
+    },
+    "bounds": [
+      4,
+      41,
+      123,
+      126
+    ],
+    "paletteOutsideOriginal": 0,
+    "opaque": 6183,
+    "colors": 138
+  },
+  {
+    "id": "industrial-l2-a",
+    "level": 2,
+    "zone": 2,
+    "variant": 0,
+    "mode": "restored-clipped-source",
+    "reference": "public/sprites/candidates/industrial-l2-a.png",
+    "output": "public/sprites/aligned/industrial-l2-a.png",
+    "sourceHash": "5c0bbba8c6a854ef6d5802a0710e66da9d3909bb3781dc0f415b158a5b72dc42",
+    "repairSource": "tools/art/footprint-repairs/industrial-l2-a.png",
+    "projection": {
+      "scaleY": 0.9791841058131371,
+      "shearY": 0.009892211197816414,
+      "dx": -1,
+      "shiftY": 10.25875064962888,
+      "sourceFront": {
+        "left": {
+          "m": 0.5005266996191556,
+          "b": 83.23182886313913,
+          "inliers": 42,
+          "residual": 1.257110444858597
+        },
+        "right": {
+          "m": -0.5207317073170731,
+          "b": 149.08658536585364,
+          "inliers": 41,
+          "residual": 1.1341463414634347
+        },
+        "cx": 64.48393085965238,
+        "cy": 115.50775795479075
+      },
+      "outsideSourceSamples": 0
+    },
+    "bounds": [
+      12,
+      28,
+      115,
+      126
+    ],
+    "paletteOutsideOriginal": 0,
+    "opaque": 4404,
+    "colors": 148
+  },
+  {
+    "id": "industrial-l2-b",
+    "level": 2,
+    "zone": 2,
+    "variant": 1,
+    "mode": "original-pixel-projection",
+    "reference": "public/sprites/candidates/industrial-l2-b.png",
+    "output": "public/sprites/aligned/industrial-l2-b.png",
+    "sourceHash": "e3fbd9f078332019ab1571d512cf754eb91d9e14f104e7adf27f3bba1193a09c",
+    "projection": {
+      "scaleY": 0.8762002607342085,
+      "shearY": 0.00799855849614739,
+      "dx": -1,
+      "shiftY": 12.550323884255404,
+      "sourceFront": {
+        "left": {
+          "m": 0.5615171137835339,
+          "b": 90.62719703977798,
+          "inliers": 47,
+          "residual": 0.611470860314526
+        },
+        "right": {
+          "m": -0.5797744890768145,
+          "b": 163.7659619450317,
+          "inliers": 44,
+          "residual": 0.6317124735729465
+        },
+        "cx": 64.08420487976129,
+        "cy": 126.61157480297419
+      },
+      "outsideSourceSamples": 0
+    },
+    "bounds": [
+      8,
+      34,
+      119,
+      126
+    ],
+    "paletteOutsideOriginal": 0,
+    "opaque": 4901,
+    "colors": 159
+  },
+  {
+    "id": "residential-l3-a",
+    "level": 3,
+    "zone": 0,
+    "variant": 0,
+    "mode": "approved-mansion-v2",
+    "reference": "public/sprites/candidates/residential-l3-a.png",
+    "output": "public/sprites/aligned/residential-l3-a.png",
+    "sourceHash": "24479899fbb726aa552bfacc1802291e009e42d3a0dc1fa82e7601201a44d30a",
+    "projection": null,
+    "bounds": [
+      3,
+      50,
+      188,
+      190
+    ],
+    "paletteOutsideOriginal": 0,
+    "opaque": 14155,
+    "colors": 177
+  },
+  {
+    "id": "residential-l3-b",
+    "level": 3,
+    "zone": 0,
+    "variant": 1,
+    "mode": "original-pixel-projection",
+    "reference": "public/sprites/candidates/residential-l3-b.png",
+    "output": "public/sprites/aligned/residential-l3-b.png",
+    "sourceHash": "a5e287ee9b19071a3cbe078ef5b838a8082eca8da28e97a64f8d2b8a5e11c00d",
+    "projection": {
+      "scaleY": 0.827013143979453,
+      "shearY": -0.02373470312736059,
+      "dx": 2,
+      "shiftY": 31.511346124792283,
+      "sourceFront": {
+        "left": {
+          "m": 0.6332846181951042,
+          "b": 132.95016441359152,
+          "inliers": 69,
+          "residual": 0.8795031055900608
+        },
+        "right": {
+          "m": -0.5758860065765437,
+          "b": 245.4928023383266,
+          "inliers": 69,
+          "residual": 0.7695286810376558
+        },
+        "cx": 93.0742408218764,
+        "cy": 191.8926494762727
+      },
+      "outsideSourceSamples": 0
+    },
+    "bounds": [
+      5,
+      56,
+      186,
+      190
+    ],
+    "paletteOutsideOriginal": 0,
+    "opaque": 15349,
+    "colors": 214
+  },
+  {
+    "id": "commercial-l3-a",
+    "level": 3,
+    "zone": 1,
+    "variant": 0,
+    "mode": "original-pixel-projection",
+    "reference": "public/sprites/candidates/commercial-l3-a.png",
+    "output": "public/sprites/aligned/commercial-l3-a.png",
+    "sourceHash": "a008caa53cc06117f9b425ed7b098c94212db7718d73ede488bc56e54f65a2d3",
+    "projection": {
+      "scaleY": 0.8288915808600849,
+      "shearY": -0.0003634161114476342,
+      "dx": -1,
+      "shiftY": 29.99471027660003,
+      "sourceFront": {
+        "left": {
+          "m": 0.6036536353671903,
+          "b": 132.31448057483865,
+          "inliers": 69,
+          "residual": 0.7284131043721516
+        },
+        "right": {
+          "m": -0.6027767628790647,
+          "b": 248.930288637194,
+          "inliers": 69,
+          "residual": 1.047131896236749
+        },
+        "cx": 96.66186149808195,
+        "cy": 190.66476466951565
+      },
+      "outsideSourceSamples": 0
+    },
+    "bounds": [
+      5,
+      52,
+      186,
+      190
+    ],
+    "paletteOutsideOriginal": 0,
+    "opaque": 15801,
+    "colors": 202
+  },
+  {
+    "id": "commercial-l3-b",
+    "level": 3,
+    "zone": 1,
+    "variant": 1,
+    "mode": "original-pixel-projection",
+    "reference": "public/sprites/candidates/commercial-l3-b.png",
+    "output": "public/sprites/aligned/commercial-l3-b.png",
+    "sourceHash": "867bc5422c42f9c409d9906e665b10d4aa300e9aff9055caa69507936c03e920",
+    "projection": {
+      "scaleY": 0.8240687902499233,
+      "shearY": 0.002655280824277073,
+      "dx": -1,
+      "shiftY": 30.65301373139557,
+      "sourceFront": {
+        "left": {
+          "m": 0.6035233041951369,
+          "b": 132.39088445241822,
+          "inliers": 68,
+          "residual": 0.7036301866625934
+        },
+        "right": {
+          "m": -0.6099676225716931,
+          "b": 249.48739592969477,
+          "inliers": 47,
+          "residual": 0.701896392229429
+        },
+        "cx": 96.49558055556555,
+        "cy": 190.62821606954114
+      },
+      "outsideSourceSamples": 0
+    },
+    "bounds": [
+      14,
+      54,
+      177,
+      190
+    ],
+    "paletteOutsideOriginal": 0,
+    "opaque": 13080,
+    "colors": 192
+  },
+  {
+    "id": "industrial-l3-a",
+    "level": 3,
+    "zone": 2,
+    "variant": 0,
+    "mode": "original-pixel-projection",
+    "reference": "public/sprites/candidates/industrial-l3-a.png",
+    "output": "public/sprites/aligned/industrial-l3-a.png",
+    "sourceHash": "53a6ad15f0e94185904d96fb2b3221357fa964dac22b03b71a8c4b830c775455",
+    "projection": {
+      "scaleY": 0.87421745240833,
+      "shearY": 0.010891784847323449,
+      "dx": 0,
+      "shiftY": 20.178207912780564,
+      "sourceFront": {
+        "left": {
+          "m": 0.5594811837778589,
+          "b": 137.57968578735841,
+          "inliers": 69,
+          "residual": 0.6841797588600684
+        },
+        "right": {
+          "m": -0.5843989769820972,
+          "b": 246.35635123614662,
+          "inliers": 69,
+          "residual": 0.7446717817562103
+        },
+        "cx": 95.09445935011284,
+        "cy": 190.78324647527504
+      },
+      "outsideSourceSamples": 0
+    },
+    "bounds": [
+      6,
+      63,
+      185,
+      190
+    ],
+    "paletteOutsideOriginal": 0,
+    "opaque": 13880,
+    "colors": 226
+  },
+  {
+    "id": "industrial-l3-b",
+    "level": 3,
+    "zone": 2,
+    "variant": 1,
+    "mode": "original-pixel-projection",
+    "reference": "public/sprites/candidates/industrial-l3-b.png",
+    "output": "public/sprites/aligned/industrial-l3-b.png",
+    "sourceHash": "2f588349e66fc7da22d0460878f03eb9259b4f6fdf5374d6cde2bb112a60034d",
+    "projection": {
+      "scaleY": 0.8714257850005065,
+      "shearY": 0.008569346310456083,
+      "dx": 0,
+      "shiftY": 21.21156520288471,
+      "sourceFront": {
+        "left": {
+          "m": 0.5639386189258312,
+          "b": 136.77152600170504,
+          "inliers": 69,
+          "residual": 0.7421142369991571
+        },
+        "right": {
+          "m": -0.5836060340011174,
+          "b": 246.0228270412643,
+          "inliers": 67,
+          "residual": 0.7705323649133788
+        },
+        "cx": 95.20440077072458,
+        "cy": 190.4609642880088
+      },
+      "outsideSourceSamples": 0
+    },
+    "bounds": [
+      9,
+      48,
+      182,
+      190
+    ],
+    "paletteOutsideOriginal": 0,
+    "opaque": 11533,
+    "colors": 191
+  },
+  {
+    "id": "residential-l1-c",
+    "level": 1,
+    "zone": 0,
+    "variant": 2,
+    "mode": "original-pixel-projection",
+    "reference": "public/sprites/candidates/residential-l1-c.png",
+    "output": "public/sprites/aligned/residential-l1-c.png",
+    "sourceHash": "c1e95f3c06a43909e37637b7d1ae21b5ed6ffaf9b5b37222850a298e08ec46fe",
+    "projection": {
+      "scaleY": 0.919164396003633,
+      "shearY": 0.008628519527702105,
+      "dx": -1,
+      "shiftY": 2.1089918256130846,
+      "sourceFront": {
+        "left": {
+          "m": 0.5345849802371542,
+          "b": 45.490118577075094,
+          "inliers": 23,
+          "residual": 0.4911067193675933
+        },
+        "right": {
+          "m": -0.5533596837944664,
+          "b": 80.47430830039525,
+          "inliers": 23,
+          "residual": 0.5335968379446712
+        },
+        "cx": 32.156221616712074,
+        "cy": 62.68035167454667
+      },
+      "outsideSourceSamples": 0
+    },
+    "bounds": [
+      1,
+      19,
+      61,
+      62
+    ],
+    "paletteOutsideOriginal": 0,
+    "opaque": 1684,
+    "colors": 144
+  },
+  {
+    "id": "residential-l1-d",
+    "level": 1,
+    "zone": 0,
+    "variant": 3,
+    "mode": "original-pixel-projection",
+    "reference": "public/sprites/candidates/residential-l1-d.png",
+    "output": "public/sprites/aligned/residential-l1-d.png",
+    "sourceHash": "ccb74b9779f1cf4f4d4bc8bb7848025f790c6a1dd637970c251c95bc2089e6f9",
+    "projection": {
+      "scaleY": 0.8576271186440678,
+      "shearY": -0.015254237288135575,
+      "dx": 0,
+      "shiftY": 7.099999999999994,
+      "sourceFront": {
+        "left": {
+          "m": 0.6007905138339921,
+          "b": 43.56126482213438,
+          "inliers": 23,
+          "residual": 0.5731225296442659
+        },
+        "right": {
+          "m": -0.5652173913043478,
+          "b": 79.80237154150197,
+          "inliers": 22,
+          "residual": 0.6324110671936864
+        },
+        "cx": 31.08135593220339,
+        "cy": 62.23464862330006
+      },
+      "outsideSourceSamples": 0
+    },
+    "bounds": [
+      5,
+      14,
+      58,
+      62
+    ],
+    "paletteOutsideOriginal": 0,
+    "opaque": 1530,
+    "colors": 102
+  },
+  {
+    "id": "commercial-l1-c",
+    "level": 1,
+    "zone": 1,
+    "variant": 2,
+    "mode": "original-pixel-projection",
+    "reference": "public/sprites/candidates/commercial-l1-c.png",
+    "output": "public/sprites/aligned/commercial-l1-c.png",
+    "sourceHash": "ba156bccb266946d956e59b3dcdc43777d349dd9afcf714ed145833950dc45c0",
+    "projection": {
+      "scaleY": 0.9208371246587804,
+      "shearY": -0.009554140127388533,
+      "dx": 0,
+      "shiftY": 3.201091901728863,
+      "sourceFront": {
+        "left": {
+          "m": 0.5533596837944665,
+          "b": 44.40711462450592,
+          "inliers": 23,
+          "residual": 0.7391304347826093
+        },
+        "right": {
+          "m": -0.532608695652174,
+          "b": 78.95652173913044,
+          "inliers": 23,
+          "residual": 0.6086956521739069
+        },
+        "cx": 31.81437670609645,
+        "cy": 62.011908058709494
+      },
+      "outsideSourceSamples": 0
+    },
+    "bounds": [
+      2,
+      11,
+      61,
+      62
+    ],
+    "paletteOutsideOriginal": 0,
+    "opaque": 1932,
+    "colors": 178
+  },
+  {
+    "id": "commercial-l1-d",
+    "level": 1,
+    "zone": 1,
+    "variant": 3,
+    "mode": "original-pixel-projection",
+    "reference": "public/sprites/candidates/commercial-l1-d.png",
+    "output": "public/sprites/aligned/commercial-l1-d.png",
+    "sourceHash": "763e81746139dae7417a9f3f963f63bb2ce19bd5b514b0082af231065d5a5f46",
+    "projection": {
+      "scaleY": 0.9684210526315791,
+      "shearY": 0.008133971291866104,
+      "dx": -1,
+      "shiftY": -0.38660287081340583,
+      "sourceFront": {
+        "left": {
+          "m": 0.5079051383399208,
+          "b": 45.56916996047431,
+          "inliers": 23,
+          "residual": 0.6324110671936793
+        },
+        "right": {
+          "m": -0.5247035573122529,
+          "b": 79.14229249011858,
+          "inliers": 23,
+          "residual": 0.6294466403162033
+        },
+        "cx": 32.512918660287085,
+        "cy": 62.08264841046201
+      },
+      "outsideSourceSamples": 0
+    },
+    "bounds": [
+      2,
+      13,
+      61,
+      62
+    ],
+    "paletteOutsideOriginal": 0,
+    "opaque": 1845,
+    "colors": 125
+  },
+  {
+    "id": "industrial-l1-c",
+    "level": 1,
+    "zone": 2,
+    "variant": 2,
+    "mode": "original-pixel-projection",
+    "reference": "public/sprites/candidates/industrial-l1-c.png",
+    "output": "public/sprites/aligned/industrial-l1-c.png",
+    "sourceHash": "0b9ca2ab0993787da798b2faa8ad7ca26cead341079abaae12e20c69bd926962",
+    "projection": {
+      "scaleY": 0.9051878354203937,
+      "shearY": -0.009838998211091243,
+      "dx": 0,
+      "shiftY": 3.7298747763863975,
+      "sourceFront": {
+        "left": {
+          "m": 0.5632411067193676,
+          "b": 45.03162055335968,
+          "inliers": 23,
+          "residual": 0.4802371541501955
+        },
+        "right": {
+          "m": -0.5415019762845849,
+          "b": 79.29644268774703,
+          "inliers": 23,
+          "residual": 0.5533596837944685
+        },
+        "cx": 31.01610017889088,
+        "cy": 62.501163144236955
+      },
+      "outsideSourceSamples": 0
+    },
+    "bounds": [
+      2,
+      19,
+      61,
+      62
+    ],
+    "paletteOutsideOriginal": 0,
+    "opaque": 1593,
+    "colors": 89
+  },
+  {
+    "id": "industrial-l1-d",
+    "level": 1,
+    "zone": 2,
+    "variant": 3,
+    "mode": "original-pixel-projection",
+    "reference": "public/sprites/candidates/industrial-l1-d.png",
+    "output": "public/sprites/aligned/industrial-l1-d.png",
+    "sourceHash": "85c71efb0a8908c12fa3fcb4a8f0fe29c0758a4e1b89d812cae86419ae49b93d",
+    "projection": {
+      "scaleY": 1.0242914979757085,
+      "shearY": 0.012145748987854144,
+      "dx": -1,
+      "shiftY": -4.123481781376521,
+      "sourceFront": {
+        "left": {
+          "m": 0.47628458498023724,
+          "b": 46.944664031620555,
+          "inliers": 23,
+          "residual": 0.5652173913043512
+        },
+        "right": {
+          "m": -0.49999999999999994,
+          "b": 78.26086956521739,
+          "inliers": 23,
+          "residual": 0.2608695652173907
+        },
+        "cx": 32.07692307692307,
+        "cy": 62.22240802675586
+      },
+      "outsideSourceSamples": 0
+    },
+    "bounds": [
+      1,
+      16,
+      61,
+      62
+    ],
+    "paletteOutsideOriginal": 0,
+    "opaque": 1685,
+    "colors": 150
+  },
+  {
+    "id": "residential-l2-c",
+    "level": 2,
+    "zone": 0,
+    "variant": 2,
+    "mode": "original-pixel-projection",
+    "reference": "public/sprites/candidates/residential-l2-c.png",
+    "output": "public/sprites/aligned/residential-l2-c.png",
+    "sourceHash": "1ee68085ab6a252f0e9fa07559d41bec623bb9fd3f7741d7cee81350505dd135",
+    "projection": {
+      "scaleY": 1.0038890467390127,
+      "shearY": -0.00031935608755140343,
+      "dx": 0,
+      "shiftY": -2.6619682812765624,
+      "sourceFront": {
+        "left": {
+          "m": 0.49838112858464384,
+          "b": 94.32839962997224,
+          "inliers": 47,
+          "residual": 0.7007400555041698
+        },
+        "right": {
+          "m": -0.49774489076814654,
+          "b": 158.01416490486258,
+          "inliers": 44,
+          "residual": 0.6787878787878867
+        },
+        "cx": 63.933442192654184,
+        "cy": 126.19162070424832
+      },
+      "outsideSourceSamples": 0
+    },
+    "bounds": [
+      7,
+      37,
+      120,
+      126
+    ],
+    "paletteOutsideOriginal": 0,
+    "opaque": 5964,
+    "colors": 230
+  },
+  {
+    "id": "residential-l2-d",
+    "level": 2,
+    "zone": 0,
+    "variant": 3,
+    "mode": "original-pixel-projection",
+    "reference": "public/sprites/candidates/residential-l2-d.png",
+    "output": "public/sprites/aligned/residential-l2-d.png",
+    "sourceHash": "c3b575699ac0e792aa877a509f780d4d43a5b8e5bb8588582cb0ca9b29cf82ab",
+    "projection": {
+      "scaleY": 0.9043469042411295,
+      "shearY": 0.0016487484977709133,
+      "dx": 3,
+      "shiftY": 9.100372389805216,
+      "sourceFront": {
+        "left": {
+          "m": 0.5510620417509073,
+          "b": 92.30674372153071,
+          "inliers": 42,
+          "residual": 1.182635860960218
+        },
+        "right": {
+          "m": -0.5547083161839569,
+          "b": 159.58692026081494,
+          "inliers": 40,
+          "residual": 1.336828195741191
+        },
+        "cx": 60.84461937009836,
+        "cy": 125.83590390117391
+      },
+      "outsideSourceSamples": 0
+    },
+    "bounds": [
+      9,
+      47,
+      118,
+      126
+    ],
+    "paletteOutsideOriginal": 0,
+    "opaque": 5341,
+    "colors": 241
+  },
+  {
+    "id": "commercial-l2-c",
+    "level": 2,
+    "zone": 1,
+    "variant": 2,
+    "mode": "original-pixel-projection",
+    "reference": "public/sprites/candidates/commercial-l2-c.png",
+    "output": "public/sprites/aligned/commercial-l2-c.png",
+    "sourceHash": "99865bdaf4da5f9752b1fb5683224e226e56ddd13db6a77b1078e4c38e5186b7",
+    "projection": {
+      "scaleY": 0.942050085372078,
+      "shearY": -0.00381378871945659,
+      "dx": 0,
+      "shiftY": 5.356964326156923,
+      "sourceFront": {
+        "left": {
+          "m": 0.5348057354301572,
+          "b": 92.2904717853839,
+          "inliers": 47,
+          "residual": 0.4959528214616
+        },
+        "right": {
+          "m": -0.5267089499647639,
+          "b": 159.59217758985199,
+          "inliers": 44,
+          "residual": 0.6082452431289482
+        },
+        "cx": 63.40157769878564,
+        "cy": 126.19799917401521
+      },
+      "outsideSourceSamples": 0
+    },
+    "bounds": [
+      8,
+      52,
+      119,
+      126
+    ],
+    "paletteOutsideOriginal": 0,
+    "opaque": 5016,
+    "colors": 217
+  },
+  {
+    "id": "commercial-l2-d",
+    "level": 2,
+    "zone": 1,
+    "variant": 3,
+    "mode": "original-pixel-projection",
+    "reference": "public/sprites/candidates/commercial-l2-d.png",
+    "output": "public/sprites/aligned/commercial-l2-d.png",
+    "sourceHash": "0c90ca98816431db7d54a86a06effd4acf5f6146fe7aa0784321a84e0363e561",
+    "projection": {
+      "scaleY": 1.0658087917782189,
+      "shearY": -0.012565851973399988,
+      "dx": 0,
+      "shiftY": -13.902121657022747,
+      "sourceFront": {
+        "left": {
+          "m": 0.48091726764443726,
+          "b": 99.54630905113038,
+          "inliers": 42,
+          "residual": 1.0261729195365064
+        },
+        "right": {
+          "m": -0.4573373308483917,
+          "b": 159.2282905221079,
+          "inliers": 42,
+          "residual": 0.7068038786700015
+        },
+        "cx": 63.6095805625126,
+        "cy": 130.13725473126266
+      },
+      "outsideSourceSamples": 0
+    },
+    "bounds": [
+      10,
+      14,
+      117,
+      126
+    ],
+    "paletteOutsideOriginal": 0,
+    "opaque": 7369,
+    "colors": 239
+  },
+  {
+    "id": "industrial-l2-c",
+    "level": 2,
+    "zone": 2,
+    "variant": 2,
+    "mode": "original-pixel-projection",
+    "reference": "public/sprites/candidates/industrial-l2-c.png",
+    "output": "public/sprites/aligned/industrial-l2-c.png",
+    "sourceHash": "00f86af53a1b9995b8378f107bde49cc6f079443fba17b71e6f8b7983bbe8103",
+    "projection": {
+      "scaleY": 0.8056731485486094,
+      "shearY": -0.004673011021418816,
+      "dx": 3,
+      "shiftY": 21.334297422391927,
+      "sourceFront": {
+        "left": {
+          "m": 0.6263991941776498,
+          "b": 87.39578929447984,
+          "inliers": 44,
+          "residual": 1.208222792855409
+        },
+        "right": {
+          "m": -0.6147989291574312,
+          "b": 162.4963729525893,
+          "inliers": 34,
+          "residual": 1.3839488759031724
+        },
+        "cx": 60.50652369366729,
+        "cy": 125.2970269786839
+      },
+      "outsideSourceSamples": 0
+    },
+    "bounds": [
+      7,
+      60,
+      120,
+      126
+    ],
+    "paletteOutsideOriginal": 0,
+    "opaque": 4279,
+    "colors": 194
+  },
+  {
+    "id": "industrial-l2-d",
+    "level": 2,
+    "zone": 2,
+    "variant": 3,
+    "mode": "original-pixel-projection",
+    "reference": "public/sprites/candidates/industrial-l2-d.png",
+    "output": "public/sprites/aligned/industrial-l2-d.png",
+    "sourceHash": "07a96ef455ef070fee2699e71b4dc7e0f8cf29ba82db589cdd65b88c4118207d",
+    "projection": {
+      "scaleY": 0.9251439801880212,
+      "shearY": -0.01670275489224593,
+      "dx": -1,
+      "shiftY": 6.618210035712178,
+      "sourceFront": {
+        "left": {
+          "m": 0.5585106382978724,
+          "b": 91.1063829787234,
+          "inliers": 47,
+          "residual": 1.292553191489361
+        },
+        "right": {
+          "m": -0.522402194099054,
+          "b": 160.49075748072167,
+          "inliers": 43,
+          "residual": 1.1822553468865635
+        },
+        "cx": 64.19053638963493,
+        "cy": 126.95748043038121
+      },
+      "outsideSourceSamples": 0
+    },
+    "bounds": [
+      7,
+      49,
+      120,
+      126
+    ],
+    "paletteOutsideOriginal": 0,
+    "opaque": 4833,
+    "colors": 189
+  },
+  {
+    "id": "residential-l3-c",
+    "level": 3,
+    "zone": 0,
+    "variant": 2,
+    "mode": "original-pixel-projection",
+    "reference": "public/sprites/candidates/residential-l3-c.png",
+    "output": "public/sprites/aligned/residential-l3-c.png",
+    "sourceHash": "ccffac61c7b5c7807adcdfd770cadc2b466293f2ca1f687c64e822007afd2114",
+    "projection": {
+      "scaleY": 0.9137627822440255,
+      "shearY": -0.0241831924099406,
+      "dx": -4,
+      "shiftY": 14.701649778530014,
+      "sourceFront": {
+        "left": {
+          "m": 0.5736534717715769,
+          "b": 135.3836889720197,
+          "inliers": 68,
+          "residual": 0.6400160323701414
+        },
+        "right": {
+          "m": -0.5207224641186905,
+          "b": 243.92339945170136,
+          "inliers": 53,
+          "residual": 1.3123689727463557
+        },
+        "cx": 99.17954783187491,
+        "cy": 192.2783809145099
+      },
+      "outsideSourceSamples": 0
+    },
+    "bounds": [
+      11,
+      50,
+      180,
+      190
+    ],
+    "paletteOutsideOriginal": 0,
+    "opaque": 15486,
+    "colors": 325
+  },
+  {
+    "id": "residential-l3-d",
+    "level": 3,
+    "zone": 0,
+    "variant": 3,
+    "mode": "original-pixel-projection",
+    "reference": "public/sprites/candidates/residential-l3-d.png",
+    "output": "public/sprites/aligned/residential-l3-d.png",
+    "sourceHash": "7fac6d89ca32c5520618b7cc4d1ad65e732f8b65cce1d429d99eb79ccb7687e7",
+    "projection": {
+      "scaleY": 0.9171329960124646,
+      "shearY": -0.004171832590557312,
+      "dx": 0,
+      "shiftY": 14.017268147751157,
+      "sourceFront": {
+        "left": {
+          "m": 0.5497259773474612,
+          "b": 137.49721105833635,
+          "inliers": 69,
+          "residual": 0.527755450006083
+        },
+        "right": {
+          "m": -0.5406284252831569,
+          "b": 241.90846425526735,
+          "inliers": 69,
+          "residual": 0.5606625258799056
+        },
+        "cx": 95.75900546191735,
+        "cy": 190.13842392570973
+      },
+      "outsideSourceSamples": 0
+    },
+    "bounds": [
+      10,
+      75,
+      181,
+      190
+    ],
+    "paletteOutsideOriginal": 0,
+    "opaque": 12246,
+    "colors": 261
+  },
+  {
+    "id": "commercial-l3-c",
+    "level": 3,
+    "zone": 1,
+    "variant": 2,
+    "mode": "original-pixel-projection",
+    "reference": "public/sprites/candidates/commercial-l3-c.png",
+    "output": "public/sprites/aligned/commercial-l3-c.png",
+    "sourceHash": "3f90be3643692cefd81aa7ed3e4b258e765d0b81ef3a06a6ecb1ed634f3e120b",
+    "projection": {
+      "scaleY": 0.7725545558265541,
+      "shearY": 0.03612855058627734,
+      "dx": 0,
+      "shiftY": 37.27724575566148,
+      "sourceFront": {
+        "left": {
+          "m": 0.6004384362440628,
+          "b": 133.2804043356473,
+          "inliers": 69,
+          "residual": 0.7106564364876249
+        },
+        "right": {
+          "m": -0.6939685314685314,
+          "b": 256.91276223776225,
+          "inliers": 65,
+          "residual": 0.7342657342657049
+        },
+        "cx": 95.51274134485799,
+        "cy": 190.62992539013746
+      },
+      "outsideSourceSamples": 0
+    },
+    "bounds": [
+      5,
+      81,
+      186,
+      190
+    ],
+    "paletteOutsideOriginal": 0,
+    "opaque": 11704,
+    "colors": 314
+  },
+  {
+    "id": "commercial-l3-d",
+    "level": 3,
+    "zone": 1,
+    "variant": 3,
+    "mode": "original-pixel-projection",
+    "reference": "public/sprites/candidates/commercial-l3-d.png",
+    "output": "public/sprites/aligned/commercial-l3-d.png",
+    "sourceHash": "deaf3b41e2987c4c657efb71fa5a2f7ab8d62a77e57cc9cc907eb831d0263021",
+    "projection": {
+      "scaleY": 0.9785484447622452,
+      "shearY": 0.0066142295316410915,
+      "dx": -1,
+      "shiftY": 1.3443570492193793,
+      "sourceFront": {
+        "left": {
+          "m": 0.5042016806722689,
+          "b": 141.58092802338328,
+          "inliers": 69,
+          "residual": 0.6649616368286502
+        },
+        "right": {
+          "m": -0.5177201315308733,
+          "b": 239.91401778102545,
+          "inliers": 69,
+          "residual": 0.5668006332967934
+        },
+        "cx": 96.223692051007,
+        "cy": 190.09707527599187
+      },
+      "outsideSourceSamples": 0
+    },
+    "bounds": [
+      10,
+      37,
+      181,
+      190
+    ],
+    "paletteOutsideOriginal": 0,
+    "opaque": 13614,
+    "colors": 272
+  },
+  {
+    "id": "industrial-l3-c",
+    "level": 3,
+    "zone": 2,
+    "variant": 2,
+    "mode": "original-pixel-projection",
+    "reference": "public/sprites/candidates/industrial-l3-c.png",
+    "output": "public/sprites/aligned/industrial-l3-c.png",
+    "sourceHash": "732b3181cf95df260e7b5122e09603d88493268157fc05f787e561f9438adf3f",
+    "projection": {
+      "scaleY": 0.8593946244662143,
+      "shearY": -0.02392614920874181,
+      "dx": 0,
+      "shiftY": 27.18707611152982,
+      "sourceFront": {
+        "left": {
+          "m": 0.6096455973693831,
+          "b": 131.62106929728412,
+          "inliers": 69,
+          "residual": 0.6383875289246248
+        },
+        "right": {
+          "m": -0.5539641943734014,
+          "b": 242.6259164535379,
+          "inliers": 69,
+          "residual": 0.9200341005967516
+        },
+        "cx": 95.39696893577825,
+        "cy": 189.77941141136512
+      },
+      "outsideSourceSamples": 0
+    },
+    "bounds": [
+      8,
+      74,
+      183,
+      190
+    ],
+    "paletteOutsideOriginal": 0,
+    "opaque": 11616,
+    "colors": 318
+  },
+  {
+    "id": "industrial-l3-d",
+    "level": 3,
+    "zone": 2,
+    "variant": 3,
+    "mode": "original-pixel-projection",
+    "reference": "public/sprites/candidates/industrial-l3-d.png",
+    "output": "public/sprites/aligned/industrial-l3-d.png",
+    "sourceHash": "f5635521d73bbc22baeed6f30ce46e44689477aa041d8e2c82c8b2cb0d30d318",
+    "projection": {
+      "scaleY": 0.933906575220937,
+      "shearY": -0.03222779540724052,
+      "dx": 0,
+      "shiftY": 13.79107380489301,
+      "sourceFront": {
+        "left": {
+          "m": 0.5698940445743514,
+          "b": 135.21030325173547,
+          "inliers": 69,
+          "residual": 0.5544757033247834
+        },
+        "right": {
+          "m": -0.5008768724881257,
+          "b": 237.8654000730727,
+          "inliers": 69,
+          "residual": 0.7180854950675553
+        },
+        "cx": 95.87026990138875,
+        "cy": 189.84619912027262
+      },
+      "outsideSourceSamples": 0
+    },
+    "bounds": [
+      10,
+      91,
+      181,
+      190
+    ],
+    "paletteOutsideOriginal": 0,
+    "opaque": 9338,
+    "colors": 212
+  }
+]

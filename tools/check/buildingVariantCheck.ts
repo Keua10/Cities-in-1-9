@@ -44,8 +44,7 @@ function imagePixels(image: Awaited<ReturnType<typeof loadImage>>): {
 }
 
 const slots = new Set<string>(),
-  hashes = new Set<string>(),
-  loaded = new Map<string, Uint8ClampedArray>();
+  hashes = new Set<string>();
 for (const candidate of candidates) {
   const { id, level, zone, variant, colors, bounds, centerError } = candidate,
     size = level * 64,
@@ -94,7 +93,6 @@ for (const candidate of candidates) {
   const hash = createHash('sha256').update(pixels).digest('hex');
   assert.ok(!hashes.has(hash), `${id}: visually distinct raster`);
   hashes.add(hash);
-  loaded.set(id, pixels);
 
   if (candidate.mode === 'new-pixel') {
     assert.deepEqual(candidate.sourceSize, [size, size], `${id}: canonical source is native size`);
@@ -117,7 +115,7 @@ for (const candidate of candidates) {
     size = level * 64,
     x0 = (zone * 4 + variant) * size,
     y0 = level === 1 ? 0 : level === 2 ? 64 : 192,
-    pixels = loaded.get(id)!;
+    pixels = imagePixels(await loadImage(`public/sprites/aligned/${id}.png`)).pixels;
   for (let y = 0; y < size; y++)
     for (let x = 0; x < size; x++) {
       const candidateIndex = (y * size + x) * 4,

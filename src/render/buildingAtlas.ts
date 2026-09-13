@@ -32,7 +32,7 @@ export function drawBuildingAtlas(ctx: CanvasRenderingContext2D): void {
         );
 }
 export async function loadBuildingAtlas(
-  source = '/sprites/buildings-v2.png?v=36',
+  source = '/sprites/buildings-v2.png?v=37',
 ): Promise<BuildingAtlas> {
   const canvas = document.createElement('canvas');
   canvas.width = BUILDING_ATLAS_W;

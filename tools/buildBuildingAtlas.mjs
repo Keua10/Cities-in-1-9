@@ -1,11 +1,9 @@
 import { strict as assert } from 'node:assert';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { createCanvas, loadImage } from '@napi-rs/canvas';
+import './buildAlignedBuildings.mjs';
 
-const candidates = [
-  ...JSON.parse(readFileSync('public/sprites/candidates/manifest.json', 'utf8')),
-  ...JSON.parse(readFileSync('public/sprites/candidates/generated-manifest.json', 'utf8')),
-];
+const candidates = JSON.parse(readFileSync('public/sprites/aligned/manifest.json', 'utf8'));
 assert.equal(candidates.length, 36, 'building atlas needs all 36 R/C/I variants');
 
 const atlas = createCanvas(2304, 384),
@@ -18,7 +16,7 @@ for (const candidate of candidates) {
     key = `${level}:${zone}:${variant}`,
     size = level * 64,
     bandY = level === 1 ? 0 : level === 2 ? 64 : 192,
-    image = await loadImage(`public/sprites/candidates/${id}.png`);
+    image = await loadImage(candidate.output);
   assert.ok(!seen.has(key), `${id}: unique level/zone/variant slot`);
   assert.equal(image.width, size, `${id}: native width`);
   assert.equal(image.height, size, `${id}: native height`);
