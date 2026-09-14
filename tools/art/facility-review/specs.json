@@ -1,0 +1,184 @@
+[
+  {
+    "id": "fire-station",
+    "kind": 0,
+    "span": 2,
+    "name": "소방서",
+    "subject": "Compact red-brown brick fire station with two large open garage bays, two tiny red fire engines parked inside the aprons, hose drying tower with dark slate cap, equipment lockers, a hydrant, white garage trim, subdued red service sign. Small native trees and iron fence at rear only."
+  },
+  {
+    "id": "police-station",
+    "kind": 1,
+    "span": 2,
+    "name": "경찰서",
+    "subject": "Compact civic police station in warm brick and cream stone, blue-gray mansard roof with small blue dome, a gold shield badge fixed on facade, radio antenna, two tiny blue-white patrol cars in parking bays, entrance steps, bollards, restrained hedges."
+  },
+  {
+    "id": "hospital",
+    "kind": 2,
+    "span": 3,
+    "name": "병원",
+    "subject": "District hospital, cream stone wings around a blue glass emergency canopy, red medical cross signs on facade and roof, compact roof helipad marked H, tiny ambulance in drop-off lane, rooftop ventilation, accessible ramp, landscaped frontage. Clearly medical architecture."
+  },
+  {
+    "id": "school",
+    "kind": 3,
+    "span": 3,
+    "name": "학교",
+    "subject": "Brick school with red-brown pitched roof, clock tower, classroom wings, fenced playground with slide and swings, small sports court and tiny yellow school bus. Garden beds, entrance stone steps."
+  },
+  {
+    "id": "pocket-park",
+    "kind": 4,
+    "span": 1,
+    "name": "소공원",
+    "subject": "Tiny square pocket park with two compact leafy trees, a wood bench, flower beds, short dirt and stone paths, litter bin and a lamppost. Clearly a small single-tile park, low canopy, not a building."
+  },
+  {
+    "id": "park",
+    "kind": 5,
+    "span": 2,
+    "name": "공원",
+    "subject": "Neighborhood park with green copper gazebo, small stone fountain, pond and little footbridge, curving stone paths, wood benches, clipped bushes, a few leafy trees and restrained pink flower beds. All entirely inside square lot."
+  },
+  {
+    "id": "sports-center",
+    "kind": 6,
+    "span": 3,
+    "name": "체육시설",
+    "subject": "Sports center: low brick gymnasium with curved dark teal roof, small basketball emblem on facade, outdoor basketball court with correct lines and two hoops, mesh fence, bleachers, equipment shed and entrance benches."
+  },
+  {
+    "id": "groundwater-pump",
+    "kind": 7,
+    "span": 2,
+    "name": "지하수 펌프",
+    "subject": "Groundwater pumping station with blue cylindrical pressure tank, compact cream-and-brick pump house, exposed thick blue pipe elbows, well-head valve cluster, maintenance hatch, pressure gauges, low security fence. Dry paved land, no river."
+  },
+  {
+    "id": "river-intake",
+    "kind": 8,
+    "span": 2,
+    "name": "하천 취수장",
+    "subject": "River intake waterworks on a square contained lot: small teal-roof pump house, grated intake basin of clean muted blue water along right side, thick blue extraction pipes, screened intake racks, valve wheels, maintenance gantry and low railing. No water outside the diamond."
+  },
+  {
+    "id": "sewage-outfall",
+    "kind": 9,
+    "span": 2,
+    "name": "직접 방류구",
+    "subject": "Direct sewage outfall utility: small weathered gray control hut, two large concrete outfall pipe mouths and brown-gray discharge into a narrow contained channel on right side, maintenance catwalk, rusty valve wheel, warning post, chainlink enclosure. Unmistakably unprocessed wastewater outlet, no blue clean-water tanks."
+  },
+  {
+    "id": "sewage-treatment",
+    "kind": 10,
+    "span": 3,
+    "name": "하수처리장",
+    "subject": "Wastewater treatment plant with two circular settling tanks of muted brown-green water, radial scraper bridges, rectangular aeration basin, thick teal pipes, low brick control building, railings and service walkway. Detailed functional treatment machinery."
+  },
+  {
+    "id": "wind-power",
+    "kind": 11,
+    "span": 2,
+    "name": "풍력 발전소",
+    "subject": "Wind power facility with ONE complete white wind turbine, all three blades fully visible and safely within canvas, slim tower and nacelle, small gray transformer hut, cable boxes and gravel maintenance track. Sparse low shrubs, low square grassy lot. No blade cuts."
+  },
+  {
+    "id": "gas-power",
+    "kind": 12,
+    "span": 3,
+    "name": "가스 발전소",
+    "subject": "Natural gas power station with long turbine hall in subdued brick and slate, two tall thin striped exhaust stacks, complex silver gas pipes and valves, outdoor generator cooling units, transformer equipment, maintenance lanes and yellow safety rails. No nuclear cooling towers."
+  },
+  {
+    "id": "solar-power",
+    "kind": 13,
+    "span": 3,
+    "name": "태양광 발전소",
+    "subject": "Solar power plant with orderly angled rows of deep navy photovoltaic panels with fine blue cell grid, visible metal supports, service gaps, small inverter house, electrical cabinets, gravel track and fenced boundary. Modest olive grass between rows. No giant main building."
+  },
+  {
+    "id": "incinerator",
+    "kind": 14,
+    "span": 3,
+    "name": "쓰레기 소각시설",
+    "subject": "Municipal waste incinerator, weathered brick processing hall, tall striped exhaust chimney with no huge smoke plume, enclosed refuse delivery doors, tiny garbage truck, waste sorting containers, flue-cleaning silver vessels and ducts, service rails. Distinct industrial silhouette."
+  },
+  {
+    "id": "crematorium",
+    "kind": 15,
+    "span": 2,
+    "name": "화장시설",
+    "subject": "Respectful municipal crematorium, low warm-stone ceremonial building with slate pitched roof, discreet short brick exhaust chimney behind, sheltered entrance, quiet stone walkway, cypress trees and restrained flower beds. No crosses or cemetery graves, no industrial garbage."
+  },
+  {
+    "id": "cemetery",
+    "kind": 16,
+    "span": 3,
+    "name": "공동묘지",
+    "subject": "Quiet municipal cemetery, rows of small pale stone headstones with clear walkways, small slate-roof chapel at back, perimeter wrought iron fence, stone gateposts, cypress trees and muted flowers. No oversized monument, all graves inside lot."
+  },
+  {
+    "id": "telecom-tower",
+    "kind": 17,
+    "span": 1,
+    "name": "통신탑",
+    "subject": "Compact telecommunications tower on tiny square gravel lot, fully visible slender steel lattice mast with three cellular panel antenna arrays and one small dish, fenced base, tiny equipment cabinet. Fine crisp pixel metal lattice, no broad building, no cropped antenna."
+  },
+  {
+    "id": "small-airport",
+    "kind": 18,
+    "span": 3,
+    "name": "소형 공항",
+    "subject": "Small general aviation airfield, one short narrow runway with white threshold stripes, small propeller aircraft fully inside apron, low hangar with open door, modest terminal cabin, windsock and tiny control lookout. Airport scaled as a compact game lot, no surrounding roads."
+  },
+  {
+    "id": "passenger-port",
+    "kind": 19,
+    "span": 3,
+    "name": "소형 여객항",
+    "subject": "Small passenger ferry terminal on square lot: blue-gray arched passenger hall, sheltered waiting canopy, boarding gangway, one small white ferry completely within contained water strip on right, quay bollards, life rings, benches and tiny ticket kiosk. No container yard."
+  },
+  {
+    "id": "prison",
+    "kind": 20,
+    "span": 3,
+    "name": "교도소",
+    "subject": "Municipal prison with secure pale concrete perimeter walls, four modest corner watchtowers, barred window brick cell block, internal exercise court, secure sally-port gate and tiny guard vehicle. No barbed wire crossing lot boundary."
+  },
+  {
+    "id": "cargo-port",
+    "kind": 21,
+    "span": 3,
+    "name": "소형 화물항",
+    "subject": "Small cargo port, one yellow dock crane fully inside lot, muted rust blue and green container stacks, brick warehouse with loading shutters, tiny forklift, quayside bollards, contained dark blue water strip and small cargo barge entirely inside square footprint."
+  },
+  {
+    "id": "medium-port",
+    "kind": 22,
+    "span": 5,
+    "name": "중형 복합항",
+    "subject": "Medium mixed port occupying FIVE by FIVE game tiles: two dock cranes, several modest container stacks, warehouse, small passenger hall with gangway and ferry, one cargo barge, service truck lanes, contained harbor water along right edge. Buildings and props same tiny pixel scale as 2x2 fire station, more infrastructure not enlarged objects."
+  },
+  {
+    "id": "large-port",
+    "kind": 23,
+    "span": 7,
+    "name": "대형 복합항",
+    "subject": "Large mixed port occupying SEVEN by SEVEN game tiles: three complete gantry cranes, several container yards and warehouses, distinct ferry passenger terminal, two docked small vessels, service lanes, sheds, bollards and contained harbor water. Each truck tree and door remains small, same world pixel scale as small facilities. Lots of detailed infrastructure, no giant enlarged objects."
+  },
+  {
+    "id": "medium-airport",
+    "kind": 24,
+    "span": 5,
+    "name": "중형 공항",
+    "subject": "Medium regional airport on FIVE by FIVE tiles: one runway with markings, two small regional aircraft parked on apron, terminal and modest control tower, hangar, taxiway lines, fuel truck and airport fence. Doors vehicles windows same world pixel scale as small facilities."
+  },
+  {
+    "id": "large-airport",
+    "kind": 25,
+    "span": 7,
+    "name": "대형 공항",
+    "subject": "Large city airport on SEVEN by SEVEN tiles: long runway and parallel taxiway, terminal with three jet bridges, three modest passenger aircraft wholly on apron, distinct control tower, two hangars, fuel area, tiny baggage carts and service roads within fenced boundary. Objects retain small pixel scale; use extra area for more infrastructure not enlarged texture."
+  }
+]

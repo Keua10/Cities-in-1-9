@@ -1,0 +1,41 @@
+{
+  "id": "fire-station",
+  "kind": 0,
+  "span": 2,
+  "name": "소방서",
+  "subject": "Compact red-brown brick fire station with two large open garage bays, two tiny red fire engines parked inside the aprons, hose drying tower with dark slate cap, equipment lockers, a hydrant, white garage trim, subdued red service sign. Small native trees and iron fence at rear only.",
+  "sourceFile": "exec-f50e1747-ffdc-4078-aa2f-e442fb0247e5.png",
+  "sourceHash": "cca976a6d5718126aa3dbceb931f04463e9b872dfd41f08c01f7ef8c670bc2ee",
+  "sourceDimensions": [
+    1254,
+    1254
+  ],
+  "backgroundRemoval": "edge-connected neutral matte removal",
+  "nativeSize": 128,
+  "palette": "union of approved commercial-l3-a, residential-l3-a, industrial-l3-a RGB palettes",
+  "projection": {
+    "scaleY": 0.9679874636221176,
+    "shearY": 0.0022386389075442215,
+    "dx": 0,
+    "shiftY": 4.807253190060465,
+    "sourceFront": {
+      "left": {
+        "m": 0.5142229417206291,
+        "b": 90.22571692876966,
+        "inliers": 47,
+        "residual": 0.7377428307123068
+      },
+      "right": {
+        "m": -0.5188482886216467,
+        "b": 156.04347826086956,
+        "inliers": 47,
+        "residual": 0.6110083256244252
+      },
+      "cx": 63.71076785314528,
+      "cy": 122.98725539349411
+    },
+    "outsideSourceSamples": 0,
+    "unsupportedPerimeterPixels": 0,
+    "joinedPerimeterPixels": 242
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "id": "sewage-outfall",
+  "kind": 9,
+  "span": 2,
+  "name": "직접 방류구",
+  "subject": "Direct sewage outfall utility: small weathered gray control hut, two large concrete outfall pipe mouths and brown-gray discharge into a narrow contained channel on right side, maintenance catwalk, rusty valve wheel, warning post, chainlink enclosure. Unmistakably unprocessed wastewater outlet, no blue clean-water tanks.",
+  "sourceFile": "exec-73fdc86f-9316-4155-bac0-fa948bfa77a1.png",
+  "sourceHash": "b522db548e94938f50782247609c710859638c0ad50b9ea855880769344544a0",
+  "sourceDimensions": [
+    1254,
+    1254
+  ],
+  "backgroundRemoval": "edge-connected neutral matte removal",
+  "nativeSize": 128,
+  "palette": "union of approved commercial-l3-a, residential-l3-a, industrial-l3-a RGB palettes",
+  "projection": {
+    "scaleY": 0.997807776623976,
+    "shearY": -0.001096111688012047,
+    "dx": -1,
+    "shiftY": 1.2941040729202684,
+    "sourceFront": {
+      "left": {
+        "m": 0.5021970397779834,
+        "b": 90.69565217391305,
+        "inliers": 47,
+        "residual": 0.6922987974098049
+      },
+      "right": {
+        "m": -0.5000000000000001,
+        "b": 155.25531914893617,
+        "inliers": 47,
+        "residual": 0.2553191489361666
+      },
+      "cx": 64.41813776393215,
+      "cy": 123.04625026697009
+    },
+    "outsideSourceSamples": 0,
+    "unsupportedPerimeterPixels": 4,
+    "joinedPerimeterPixels": 244
+  }
+}

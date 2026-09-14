@@ -1,0 +1,41 @@
+{
+  "id": "police-station",
+  "kind": 1,
+  "span": 2,
+  "name": "경찰서",
+  "subject": "Compact civic police station in warm brick and cream stone, blue-gray mansard roof with small blue dome, a gold shield badge fixed on facade, radio antenna, two tiny blue-white patrol cars in parking bays, entrance steps, bollards, restrained hedges.",
+  "sourceFile": "exec-a7fd2780-bca7-4970-a61c-db3620396a20.png",
+  "sourceHash": "6a3a2a86621647b48b80fcac9e8fd9d9732cab24cff9f21ef142614aca2b884d",
+  "sourceDimensions": [
+    1254,
+    1254
+  ],
+  "backgroundRemoval": "edge-connected neutral matte removal",
+  "nativeSize": 128,
+  "palette": "union of approved commercial-l3-a, residential-l3-a, industrial-l3-a RGB palettes",
+  "projection": {
+    "scaleY": 1.1121399176954732,
+    "shearY": 0.008230452674897137,
+    "dx": -4,
+    "shiftY": -2.9953703703703614,
+    "sourceFront": {
+      "left": {
+        "m": 0.44218316373728034,
+        "b": 83.87141535615172,
+        "inliers": 47,
+        "residual": 0.5790934320074115
+      },
+      "right": {
+        "m": -0.45698427382053664,
+        "b": 144.50878815911193,
+        "inliers": 47,
+        "residual": 0.6919518963922258
+      },
+      "cx": 67.43724279835389,
+      "cy": 113.69102873044696
+    },
+    "outsideSourceSamples": 0,
+    "unsupportedPerimeterPixels": 23,
+    "joinedPerimeterPixels": 235
+  }
+}

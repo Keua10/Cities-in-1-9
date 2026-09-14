@@ -1,0 +1,41 @@
+{
+  "id": "wind-power",
+  "kind": 11,
+  "span": 2,
+  "name": "풍력 발전소",
+  "subject": "Wind power facility with ONE complete white wind turbine, all three blades fully visible and safely within canvas, slim tower and nacelle, small gray transformer hut, cable boxes and gravel maintenance track. Sparse low shrubs, low square grassy lot. No blade cuts.",
+  "sourceFile": "exec-3dfe92d4-a414-4263-a1ff-b4b60ce30778.png",
+  "sourceHash": "55198d7ab5001d0217fe9270b3a2e1a17c3fa67f75097bf18ba9652831121feb",
+  "sourceDimensions": [
+    1254,
+    1254
+  ],
+  "backgroundRemoval": "edge-connected neutral matte removal",
+  "nativeSize": 128,
+  "palette": "union of approved commercial-l3-a, residential-l3-a, industrial-l3-a RGB palettes",
+  "projection": {
+    "scaleY": 0.9710779369327898,
+    "shearY": 0.0006433217590673945,
+    "dx": 1,
+    "shiftY": 4.247510130139309,
+    "sourceFront": {
+      "left": {
+        "m": 0.5142292490118577,
+        "b": 90.89710144927535,
+        "inliers": 45,
+        "residual": 0.5801054018445342
+      },
+      "right": {
+        "m": -0.5155542132286318,
+        "b": 155.74116581093324,
+        "inliers": 43,
+        "residual": 0.6276049531863634
+      },
+      "cx": 62.96864024265577,
+      "cy": 123.27741803255407
+    },
+    "outsideSourceSamples": 0,
+    "unsupportedPerimeterPixels": 2,
+    "joinedPerimeterPixels": 220
+  }
+}

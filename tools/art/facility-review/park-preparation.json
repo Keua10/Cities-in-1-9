@@ -1,0 +1,41 @@
+{
+  "id": "park",
+  "kind": 5,
+  "span": 2,
+  "name": "공원",
+  "subject": "Neighborhood park with green copper gazebo, small stone fountain, pond and little footbridge, curving stone paths, wood benches, clipped bushes, a few leafy trees and restrained pink flower beds. All entirely inside square lot.",
+  "sourceFile": "exec-e831006e-319a-4f62-a183-05c635d63cb7.png",
+  "sourceHash": "b1e61bdec0552756e7d61c0fc1c7e2dc084274d5eac28d181ad14a91d0432401",
+  "sourceDimensions": [
+    1254,
+    1254
+  ],
+  "backgroundRemoval": "edge-connected neutral matte removal",
+  "nativeSize": 128,
+  "palette": "union of approved commercial-l3-a, residential-l3-a, industrial-l3-a RGB palettes",
+  "projection": {
+    "scaleY": 0.896630378434422,
+    "shearY": -0.0030585795749091815,
+    "dx": -1,
+    "shiftY": 13.73478486262312,
+    "sourceFront": {
+      "left": {
+        "m": 0.5610545790934319,
+        "b": 86.87604070305274,
+        "inliers": 47,
+        "residual": 0.6119333950046268
+      },
+      "right": {
+        "m": -0.5542321924144311,
+        "b": 159.0786308973173,
+        "inliers": 47,
+        "residual": 0.7903561517113644
+      },
+      "cx": 64.73903576982893,
+      "cy": 123.19817316780873
+    },
+    "outsideSourceSamples": 0,
+    "unsupportedPerimeterPixels": 4,
+    "joinedPerimeterPixels": 257
+  }
+}

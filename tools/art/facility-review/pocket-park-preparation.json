@@ -1,0 +1,41 @@
+{
+  "id": "pocket-park",
+  "kind": 4,
+  "span": 1,
+  "name": "소공원",
+  "subject": "Tiny square pocket park with two compact leafy trees, a wood bench, flower beds, short dirt and stone paths, litter bin and a lamppost. Clearly a small single-tile park, low canopy, not a building.",
+  "sourceFile": "exec-2792046d-4fed-45f9-ac5c-9340e5d6c040.png",
+  "sourceHash": "d1443be0c84376dc1b91459ec0e048c49d664480c6bedae4419040623d694373",
+  "sourceDimensions": [
+    1254,
+    1254
+  ],
+  "backgroundRemoval": "source alpha",
+  "nativeSize": 64,
+  "palette": "union of approved commercial-l3-a, residential-l3-a, industrial-l3-a RGB palettes",
+  "projection": {
+    "scaleY": 0.9740134744947063,
+    "shearY": -0.012993262752646673,
+    "dx": -2,
+    "shiftY": 2.804619826756502,
+    "sourceFront": {
+      "left": {
+        "m": 0.5266798418972332,
+        "b": 41.70355731225297,
+        "inliers": 23,
+        "residual": 0.5029644268774689
+      },
+      "right": {
+        "m": -0.5000000000000001,
+        "b": 75.73913043478262,
+        "inliers": 23,
+        "residual": 0.2608695652173765
+      },
+      "cx": 33.15110683349375,
+      "cy": 59.16357701803574
+    },
+    "outsideSourceSamples": 0,
+    "unsupportedPerimeterPixels": 7,
+    "joinedPerimeterPixels": 114
+  }
+}

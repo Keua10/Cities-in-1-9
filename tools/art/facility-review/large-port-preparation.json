@@ -1,0 +1,41 @@
+{
+  "id": "large-port",
+  "kind": 23,
+  "span": 7,
+  "name": "대형 복합항",
+  "subject": "Large mixed port occupying SEVEN by SEVEN game tiles: three complete gantry cranes, several container yards and warehouses, distinct ferry passenger terminal, two docked small vessels, service lanes, sheds, bollards and contained harbor water. Each truck tree and door remains small, same world pixel scale as small facilities. Lots of detailed infrastructure, no giant enlarged objects.",
+  "sourceFile": "exec-e80348b9-1e3f-4b7b-a20e-17530c8d6383.png",
+  "sourceHash": "7207ee48568d17bde21dc531857617224127eb7120e49d4a4e4a1b6af0935e92",
+  "sourceDimensions": [
+    1254,
+    1254
+  ],
+  "backgroundRemoval": "edge-connected neutral matte removal",
+  "nativeSize": 448,
+  "palette": "union of approved commercial-l3-a, residential-l3-a, industrial-l3-a RGB palettes",
+  "projection": {
+    "scaleY": 0.9881671429386896,
+    "shearY": 0.004732061636667173,
+    "dx": 4,
+    "shiftY": 3.7245313005495895,
+    "sourceFront": {
+      "left": {
+        "m": 0.501198549154818,
+        "b": 332.80575780344174,
+        "inliers": 117,
+        "residual": 1.095961165863173
+      },
+      "right": {
+        "m": -0.5107760010474088,
+        "b": 554.2414828001513,
+        "inliers": 150,
+        "residual": 1.2026505047820137
+      },
+      "cx": 218.81550771455585,
+      "cy": 442.475772802552
+    },
+    "outsideSourceSamples": 0,
+    "unsupportedPerimeterPixels": 254,
+    "joinedPerimeterPixels": 1471
+  }
+}

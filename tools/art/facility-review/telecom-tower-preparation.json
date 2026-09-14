@@ -1,0 +1,41 @@
+{
+  "id": "telecom-tower",
+  "kind": 17,
+  "span": 1,
+  "name": "통신탑",
+  "subject": "Compact telecommunications tower on tiny square gravel lot, fully visible slender steel lattice mast with three cellular panel antenna arrays and one small dish, fenced base, tiny equipment cabinet. Fine crisp pixel metal lattice, no broad building, no cropped antenna.",
+  "sourceFile": "exec-490c44f9-00e1-46e1-bb79-75bf9fa9866f.png",
+  "sourceHash": "8d00df115df1b2291810c0d1a96456422372897255bf19e4e730dff0b6305a93",
+  "sourceDimensions": [
+    1254,
+    1254
+  ],
+  "backgroundRemoval": "edge-connected neutral matte removal",
+  "nativeSize": 64,
+  "palette": "union of approved commercial-l3-a, residential-l3-a, industrial-l3-a RGB palettes",
+  "projection": {
+    "scaleY": 0.8943239501615137,
+    "shearY": -0.00023073373327187063,
+    "dx": 1,
+    "shiftY": 7.070739117058912,
+    "sourceFront": {
+      "left": {
+        "m": 0.5593395252837977,
+        "b": 41.87444100447196,
+        "inliers": 18,
+        "residual": 0.4981080151358839
+      },
+      "right": {
+        "m": -0.5588235294117647,
+        "b": 76.49264705882354,
+        "inliers": 16,
+        "residual": 0.5808823529411882
+      },
+      "cx": 30.95989078603293,
+      "cy": 59.191531619569844
+    },
+    "outsideSourceSamples": 0,
+    "unsupportedPerimeterPixels": 1,
+    "joinedPerimeterPixels": 85
+  }
+}

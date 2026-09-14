@@ -1,0 +1,41 @@
+{
+  "id": "river-intake",
+  "kind": 8,
+  "span": 2,
+  "name": "하천 취수장",
+  "subject": "River intake waterworks on a square contained lot: small teal-roof pump house, grated intake basin of clean muted blue water along right side, thick blue extraction pipes, screened intake racks, valve wheels, maintenance gantry and low railing. No water outside the diamond.",
+  "sourceFile": "exec-8cccdec2-e4f2-4255-9b07-60c843c7a4af.png",
+  "sourceHash": "953a792bc6d071a829faf247d70a7bf5a98a5f90b520e1a9df74c31819a933ea",
+  "sourceDimensions": [
+    1254,
+    1254
+  ],
+  "backgroundRemoval": "edge-connected neutral matte removal",
+  "nativeSize": 128,
+  "palette": "union of approved commercial-l3-a, residential-l3-a, industrial-l3-a RGB palettes",
+  "projection": {
+    "scaleY": 0.9863138686131387,
+    "shearY": 0.0018248175182482007,
+    "dx": -1,
+    "shiftY": 2.326642335766407,
+    "sourceFront": {
+      "left": {
+        "m": 0.5050878815911193,
+        "b": 90.87974098057354,
+        "inliers": 47,
+        "residual": 0.6392229417206323
+      },
+      "right": {
+        "m": -0.5087881591119334,
+        "b": 155.8436632747456,
+        "inliers": 47,
+        "residual": 0.6845513413505842
+      },
+      "cx": 64.07481751824818,
+      "cy": 123.24315482420306
+    },
+    "outsideSourceSamples": 0,
+    "unsupportedPerimeterPixels": 4,
+    "joinedPerimeterPixels": 237
+  }
+}

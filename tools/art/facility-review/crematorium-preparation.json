@@ -1,0 +1,41 @@
+{
+  "id": "crematorium",
+  "kind": 15,
+  "span": 2,
+  "name": "화장시설",
+  "subject": "Respectful municipal crematorium, low warm-stone ceremonial building with slate pitched roof, discreet short brick exhaust chimney behind, sheltered entrance, quiet stone walkway, cypress trees and restrained flower beds. No crosses or cemetery graves, no industrial garbage.",
+  "sourceFile": "exec-81baa50f-ae81-4ac8-bbd5-2659c813cbbc.png",
+  "sourceHash": "5ab5d84685afe2dff1145abc69043efa64bb2b53272d2804543b11a584894889",
+  "sourceDimensions": [
+    1254,
+    1254
+  ],
+  "backgroundRemoval": "edge-connected neutral matte removal",
+  "nativeSize": 128,
+  "palette": "union of approved commercial-l3-a, residential-l3-a, industrial-l3-a RGB palettes",
+  "projection": {
+    "scaleY": 1.0344497607655503,
+    "shearY": 0.0007177033492822837,
+    "dx": -4,
+    "shiftY": -3.238277511961714,
+    "sourceFront": {
+      "left": {
+        "m": 0.48265494912118406,
+        "b": 90.49121184088807,
+        "inliers": 47,
+        "residual": 0.6269657724329392
+      },
+      "right": {
+        "m": -0.48404255319148937,
+        "b": 155.51063829787233,
+        "inliers": 47,
+        "residual": 0.5372340425531945
+      },
+      "cx": 67.25933014354067,
+      "cy": 122.9542604092436
+    },
+    "outsideSourceSamples": 0,
+    "unsupportedPerimeterPixels": 23,
+    "joinedPerimeterPixels": 233
+  }
+}

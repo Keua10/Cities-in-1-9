@@ -1,0 +1,41 @@
+{
+  "id": "sewage-treatment",
+  "kind": 10,
+  "span": 3,
+  "name": "하수처리장",
+  "subject": "Wastewater treatment plant with two circular settling tanks of muted brown-green water, radial scraper bridges, rectangular aeration basin, thick teal pipes, low brick control building, railings and service walkway. Detailed functional treatment machinery.",
+  "sourceFile": "exec-a486a129-4c7a-45b0-a0bd-402f2d26419d.png",
+  "sourceHash": "9e9f27e0cf82d1afcadbdf41949cac41a77b69425e85dc204821ea240163f7c5",
+  "sourceDimensions": [
+    1254,
+    1254
+  ],
+  "backgroundRemoval": "edge-connected neutral matte removal",
+  "nativeSize": 192,
+  "palette": "union of approved commercial-l3-a, residential-l3-a, industrial-l3-a RGB palettes",
+  "projection": {
+    "scaleY": 0.9564579256360077,
+    "shearY": 0.005206877271456578,
+    "dx": -4,
+    "shiftY": 8.35989190196628,
+    "sourceFront": {
+      "left": {
+        "m": 0.5173182316404823,
+        "b": 135.92234806966266,
+        "inliers": 69,
+        "residual": 0.6251491901108182
+      },
+      "right": {
+        "m": -0.5282060650347097,
+        "b": 239.71384727804167,
+        "inliers": 69,
+        "residual": 0.6931677018633309
+      },
+      "cx": 99.27220203149753,
+      "cy": 187.27766807565365
+    },
+    "outsideSourceSamples": 0,
+    "unsupportedPerimeterPixels": 23,
+    "joinedPerimeterPixels": 371
+  }
+}

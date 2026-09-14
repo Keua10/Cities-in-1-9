@@ -2,7 +2,7 @@ import { pickTile } from '../core/pick';
 import type { WorldRenderer } from '../render/worldRenderer';
 import { FACILITY_COUNT, isWelfareKind } from '../sim/buildings';
 import { canPlaceFacility, FACILITY_SPECS } from '../sim/facilities';
-import { facilityArt } from '../render/facilityArt';
+import { facilityCellSize, paintFacilityThumbnail } from '../render/facilityAtlas';
 import type { MacroSim } from '../sim/macro';
 import { PIPE_COST, PIPE_SEWER, PIPE_WATER, WATER_SPECS } from '../sim/config/water';
 import { POWER_SPECS, WIRE_COST, facilityPowerDemand } from '../sim/config/power';
@@ -529,12 +529,11 @@ function buildFacilitySheet(tools: Tools, onPick: () => void): FacilitySheet {
         }
       }
 
-      const art = facilityArt(kind);
       const thumbnail = document.createElement('canvas');
       thumbnail.className = 'fs-thumbnail';
-      thumbnail.width = thumbnail.height = art.size;
+      thumbnail.width = thumbnail.height = facilityCellSize(spec.span);
       thumbnail.setAttribute('aria-hidden', 'true');
-      art.paint(thumbnail.getContext('2d')!);
+      void paintFacilityThumbnail(thumbnail.getContext('2d')!, kind);
       btn.prepend(thumbnail);
       btn.addEventListener('click', () => {
         if (tools.cityLevel < spec.unlockLevel) return;

@@ -1,0 +1,41 @@
+{
+  "id": "groundwater-pump",
+  "kind": 7,
+  "span": 2,
+  "name": "지하수 펌프",
+  "subject": "Groundwater pumping station with blue cylindrical pressure tank, compact cream-and-brick pump house, exposed thick blue pipe elbows, well-head valve cluster, maintenance hatch, pressure gauges, low security fence. Dry paved land, no river.",
+  "sourceFile": "exec-d5cdfda8-6a44-477f-810c-6934126592b1.png",
+  "sourceHash": "afd8a127c8b821fdd1f589770cccb3ce32174c1045f8946e64e2ecb25b1c0418",
+  "sourceDimensions": [
+    1254,
+    1254
+  ],
+  "backgroundRemoval": "edge-connected neutral matte removal",
+  "nativeSize": 128,
+  "palette": "union of approved commercial-l3-a, residential-l3-a, industrial-l3-a RGB palettes",
+  "projection": {
+    "scaleY": 1.0012735903670258,
+    "shearY": 0.007699432673381856,
+    "dx": -1,
+    "shiftY": 0.2963992126895836,
+    "sourceFront": {
+      "left": {
+        "m": 0.49167437557816834,
+        "b": 91.13876040703053,
+        "inliers": 47,
+        "residual": 0.6026827012025819
+      },
+      "right": {
+        "m": -0.5070536540240518,
+        "b": 155.9537465309898,
+        "inliers": 47,
+        "residual": 0.6284690101757633
+      },
+      "cx": 64.89753386592565,
+      "cy": 123.04721484712256
+    },
+    "outsideSourceSamples": 0,
+    "unsupportedPerimeterPixels": 4,
+    "joinedPerimeterPixels": 243
+  }
+}

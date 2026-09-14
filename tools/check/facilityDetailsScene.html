@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>특수시설 실제 렌더러 검수</title>
+    <style>
+      body {
+        margin: 0;
+        overflow: hidden;
+        background: #203026;
+        font: 14px system-ui;
+        color: #eef1e7;
+      }
+      #controls {
+        position: fixed;
+        top: 12px;
+        left: 12px;
+        z-index: 2;
+        background: #192f30e8;
+        padding: 12px;
+        border-radius: 8px;
+      }
+      select,
+      button,
+      a {
+        font: inherit;
+        margin-right: 8px;
+        color: #eef1e7;
+        background: #34564d;
+        padding: 6px;
+        border: 1px solid #6f9787;
+      }
+      p {
+        margin: 10px 0 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="controls">
+      <label
+        >시설
+        <select id="kind"></select></label
+      ><label
+        >지형
+        <select id="terrain">
+          <option value="flat">평지</option>
+          <option value="slope">인접 경사</option>
+        </select></label
+      ><label
+        >배율
+        <select id="zoom">
+          <option value="1">100%</option>
+          <option value="2" selected>200%</option>
+          <option value="3">300%</option>
+        </select></label
+      ><a href="./facilityDetailsVisual.html">비교 화면</a>
+      <p id="result"></p>
+    </div>
+    <script type="module" src="./facilityDetailsScene.ts"></script>
+  </body>
+</html>

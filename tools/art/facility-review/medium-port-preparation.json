@@ -1,0 +1,41 @@
+{
+  "id": "medium-port",
+  "kind": 22,
+  "span": 5,
+  "name": "중형 복합항",
+  "subject": "Medium mixed port occupying FIVE by FIVE game tiles: two dock cranes, several modest container stacks, warehouse, small passenger hall with gangway and ferry, one cargo barge, service truck lanes, contained harbor water along right edge. Buildings and props same tiny pixel scale as 2x2 fire station, more infrastructure not enlarged objects.",
+  "sourceFile": "exec-c22a6ec9-b8de-4459-83a2-d2316197a7a5.png",
+  "sourceHash": "19896c3b4765b5696c9c34c0de5fda906721e6323b4aa8c1d6a2fd2dc2339974",
+  "sourceDimensions": [
+    1254,
+    1254
+  ],
+  "backgroundRemoval": "edge-connected neutral matte removal",
+  "nativeSize": 320,
+  "palette": "union of approved commercial-l3-a, residential-l3-a, industrial-l3-a RGB palettes",
+  "projection": {
+    "scaleY": 0.9381708887934733,
+    "shearY": -0.011119172058453253,
+    "dx": -4,
+    "shiftY": 22.143816348588363,
+    "sourceFront": {
+      "left": {
+        "m": 0.5448039138325574,
+        "b": 225.96351298035194,
+        "inliers": 115,
+        "residual": 0.7198847944449085
+      },
+      "right": {
+        "m": -0.5210999763276258,
+        "b": 400.481385622978,
+        "inliers": 115,
+        "residual": 1.0890081275152284
+      },
+      "cx": 163.72758768747866,
+      "cy": 315.16294355485354
+    },
+    "outsideSourceSamples": 0,
+    "unsupportedPerimeterPixels": 23,
+    "joinedPerimeterPixels": 657
+  }
+}

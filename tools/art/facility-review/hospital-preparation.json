@@ -1,0 +1,41 @@
+{
+  "id": "hospital",
+  "kind": 2,
+  "span": 3,
+  "name": "병원",
+  "subject": "District hospital, cream stone wings around a blue glass emergency canopy, red medical cross signs on facade and roof, compact roof helipad marked H, tiny ambulance in drop-off lane, rooftop ventilation, accessible ramp, landscaped frontage. Clearly medical architecture.",
+  "sourceFile": "exec-5a6bf285-906e-457f-86c9-1ee17bd83d4f.png",
+  "sourceHash": "35a08248a10b35f3eaaed728a43eab18c4faa8b02eaaa27dd2d4d60f889860b7",
+  "sourceDimensions": [
+    1254,
+    1254
+  ],
+  "backgroundRemoval": "source alpha",
+  "nativeSize": 192,
+  "palette": "union of approved commercial-l3-a, residential-l3-a, industrial-l3-a RGB palettes",
+  "projection": {
+    "scaleY": 1.009665043529585,
+    "shearY": -0.012357975505385865,
+    "dx": -4,
+    "shiftY": 0.31830701883827284,
+    "sourceFront": {
+      "left": {
+        "m": 0.5074534161490685,
+        "b": 136.81614906832297,
+        "inliers": 69,
+        "residual": 0.6621118012422187
+      },
+      "right": {
+        "m": -0.482974059188893,
+        "b": 234.95406162464988,
+        "inliers": 69,
+        "residual": 0.6163561076604651
+      },
+      "cx": 99.08641975308643,
+      "cy": 187.09789126600722
+    },
+    "outsideSourceSamples": 0,
+    "unsupportedPerimeterPixels": 23,
+    "joinedPerimeterPixels": 367
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "id": "incinerator",
+  "kind": 14,
+  "span": 3,
+  "name": "쓰레기 소각시설",
+  "subject": "Municipal waste incinerator, weathered brick processing hall, tall striped exhaust chimney with no huge smoke plume, enclosed refuse delivery doors, tiny garbage truck, waste sorting containers, flue-cleaning silver vessels and ducts, service rails. Distinct industrial silhouette.",
+  "sourceFile": "exec-df7c659a-0300-44d0-910a-ad3fbd8b0c1d.png",
+  "sourceHash": "132839d4da311480d3db568a415ec8aedf9791b6fb3ec58cb7350a30634d5f39",
+  "sourceDimensions": [
+    1254,
+    1254
+  ],
+  "backgroundRemoval": "edge-connected neutral matte removal",
+  "nativeSize": 192,
+  "palette": "union of approved commercial-l3-a, residential-l3-a, industrial-l3-a RGB palettes",
+  "projection": {
+    "scaleY": 1.0114186467610222,
+    "shearY": 0.000498872916743387,
+    "dx": 0,
+    "shiftY": -1.0337262727419676,
+    "sourceFront": {
+      "left": {
+        "m": 0.4938618925831201,
+        "b": 139.65694799658996,
+        "inliers": 69,
+        "residual": 0.6622335890878048
+      },
+      "right": {
+        "m": -0.49484837413226107,
+        "b": 234.1422238460601,
+        "inliers": 69,
+        "residual": 0.6623066617951565
+      },
+      "cx": 95.56416983851297,
+      "cy": 186.8524497761727
+    },
+    "outsideSourceSamples": 0,
+    "unsupportedPerimeterPixels": 0,
+    "joinedPerimeterPixels": 348
+  }
+}

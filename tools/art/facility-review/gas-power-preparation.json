@@ -1,0 +1,41 @@
+{
+  "id": "gas-power",
+  "kind": 12,
+  "span": 3,
+  "name": "가스 발전소",
+  "subject": "Natural gas power station with long turbine hall in subdued brick and slate, two tall thin striped exhaust stacks, complex silver gas pipes and valves, outdoor generator cooling units, transformer equipment, maintenance lanes and yellow safety rails. No nuclear cooling towers.",
+  "sourceFile": "exec-4881d6da-d673-42de-b282-864aadfff91b.png",
+  "sourceHash": "0b7c7c658f9b4629f8717990838ae58391ebdf941049375aab34dcd5f203577b",
+  "sourceDimensions": [
+    1254,
+    1254
+  ],
+  "backgroundRemoval": "edge-connected neutral matte removal",
+  "nativeSize": 192,
+  "palette": "union of approved commercial-l3-a, residential-l3-a, industrial-l3-a RGB palettes",
+  "projection": {
+    "scaleY": 1.018759770713914,
+    "shearY": -0.001526092458869699,
+    "dx": 0,
+    "shiftY": -2.819362763344105,
+    "sourceFront": {
+      "left": {
+        "m": 0.49229082937522783,
+        "b": 140.48598221897456,
+        "inliers": 69,
+        "residual": 0.5613688953842768
+      },
+      "right": {
+        "m": -0.48929484837413234,
+        "b": 234.1251248325417,
+        "inliers": 69,
+        "residual": 0.6544878821093789
+      },
+      "cx": 95.39579145884515,
+      "cy": 187.44845551515573
+    },
+    "outsideSourceSamples": 0,
+    "unsupportedPerimeterPixels": 0,
+    "joinedPerimeterPixels": 383
+  }
+}

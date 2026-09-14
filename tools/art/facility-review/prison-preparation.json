@@ -1,0 +1,41 @@
+{
+  "id": "prison",
+  "kind": 20,
+  "span": 3,
+  "name": "교도소",
+  "subject": "Municipal prison with secure pale concrete perimeter walls, four modest corner watchtowers, barred window brick cell block, internal exercise court, secure sally-port gate and tiny guard vehicle. No barbed wire crossing lot boundary.",
+  "sourceFile": "exec-3287219a-e4b2-4280-b3cb-914cddb437fd.png",
+  "sourceHash": "dfdf8b2c2a7cf71d51a1c1697b3ff06f190297630f7cf288e7d37ba2961f20bd",
+  "sourceDimensions": [
+    1254,
+    1254
+  ],
+  "backgroundRemoval": "edge-connected neutral matte removal",
+  "nativeSize": 192,
+  "palette": "union of approved commercial-l3-a, residential-l3-a, industrial-l3-a RGB palettes",
+  "projection": {
+    "scaleY": 0.914314347753466,
+    "shearY": -0.0010188742274930274,
+    "dx": -1,
+    "shiftY": 17.231100718222795,
+    "sourceFront": {
+      "left": {
+        "m": 0.5479722323712094,
+        "b": 134.19008646937036,
+        "inliers": 69,
+        "residual": 0.7123371087565431
+      },
+      "right": {
+        "m": -0.5457435147972229,
+        "b": 239.3551820728291,
+        "inliers": 69,
+        "residual": 0.6956765314821212
+      },
+      "cx": 96.15395579310729,
+      "cy": 186.87978427664194
+    },
+    "outsideSourceSamples": 0,
+    "unsupportedPerimeterPixels": 4,
+    "joinedPerimeterPixels": 383
+  }
+}

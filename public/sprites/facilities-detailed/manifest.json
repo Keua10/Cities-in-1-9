@@ -1,0 +1,1146 @@
+[
+  {
+    "id": "fire-station",
+    "kind": 0,
+    "span": 2,
+    "name": "소방서",
+    "subject": "Compact red-brown brick fire station with two large open garage bays, two tiny red fire engines parked inside the aprons, hose drying tower with dark slate cap, equipment lockers, a hydrant, white garage trim, subdued red service sign. Small native trees and iron fence at rear only.",
+    "size": 128,
+    "x": 0,
+    "y": 64,
+    "colors": 280,
+    "bounds": [
+      3,
+      28,
+      124,
+      126
+    ],
+    "source": "tools/art/facility-sources/fire-station.png",
+    "sourceHash": "b9e9db93c104a6d04b3a319dc4082476a8a7afa0e304175651e53f0c17b45789",
+    "projection": {
+      "scaleY": 0.9679874636221176,
+      "shearY": 0.0022386389075442215,
+      "dx": 0,
+      "shiftY": 4.807253190060465,
+      "sourceFront": {
+        "left": {
+          "m": 0.5142229417206291,
+          "b": 90.22571692876966,
+          "inliers": 47,
+          "residual": 0.7377428307123068
+        },
+        "right": {
+          "m": -0.5188482886216467,
+          "b": 156.04347826086956,
+          "inliers": 47,
+          "residual": 0.6110083256244252
+        },
+        "cx": 63.71076785314528,
+        "cy": 122.98725539349411
+      },
+      "outsideSourceSamples": 0,
+      "unsupportedPerimeterPixels": 0,
+      "joinedPerimeterPixels": 242
+    }
+  },
+  {
+    "id": "police-station",
+    "kind": 1,
+    "span": 2,
+    "name": "경찰서",
+    "subject": "Compact civic police station in warm brick and cream stone, blue-gray mansard roof with small blue dome, a gold shield badge fixed on facade, radio antenna, two tiny blue-white patrol cars in parking bays, entrance steps, bollards, restrained hedges.",
+    "size": 128,
+    "x": 128,
+    "y": 64,
+    "colors": 267,
+    "bounds": [
+      1,
+      27,
+      118,
+      126
+    ],
+    "source": "tools/art/facility-sources/police-station.png",
+    "sourceHash": "707e96832417a331c6cf86197cbd6905f6d2abe01d01a808e3d252825c91b9a5",
+    "projection": {
+      "scaleY": 1.1121399176954732,
+      "shearY": 0.008230452674897137,
+      "dx": -4,
+      "shiftY": -2.9953703703703614,
+      "sourceFront": {
+        "left": {
+          "m": 0.44218316373728034,
+          "b": 83.87141535615172,
+          "inliers": 47,
+          "residual": 0.5790934320074115
+        },
+        "right": {
+          "m": -0.45698427382053664,
+          "b": 144.50878815911193,
+          "inliers": 47,
+          "residual": 0.6919518963922258
+        },
+        "cx": 67.43724279835389,
+        "cy": 113.69102873044696
+      },
+      "outsideSourceSamples": 0,
+      "unsupportedPerimeterPixels": 23,
+      "joinedPerimeterPixels": 235
+    }
+  },
+  {
+    "id": "hospital",
+    "kind": 2,
+    "span": 3,
+    "name": "병원",
+    "subject": "District hospital, cream stone wings around a blue glass emergency canopy, red medical cross signs on facade and roof, compact roof helipad marked H, tiny ambulance in drop-off lane, rooftop ventilation, accessible ramp, landscaped frontage. Clearly medical architecture.",
+    "size": 192,
+    "x": 0,
+    "y": 192,
+    "colors": 298,
+    "bounds": [
+      1,
+      65,
+      182,
+      190
+    ],
+    "source": "tools/art/facility-sources/hospital.png",
+    "sourceHash": "cdfd928a9bc2323a3d4139c9259a25f10534c44229bd551977826b73bb09d4d9",
+    "projection": {
+      "scaleY": 1.009665043529585,
+      "shearY": -0.012357975505385865,
+      "dx": -4,
+      "shiftY": 0.31830701883827284,
+      "sourceFront": {
+        "left": {
+          "m": 0.5074534161490685,
+          "b": 136.81614906832297,
+          "inliers": 69,
+          "residual": 0.6621118012422187
+        },
+        "right": {
+          "m": -0.482974059188893,
+          "b": 234.95406162464988,
+          "inliers": 69,
+          "residual": 0.6163561076604651
+        },
+        "cx": 99.08641975308643,
+        "cy": 187.09789126600722
+      },
+      "outsideSourceSamples": 0,
+      "unsupportedPerimeterPixels": 23,
+      "joinedPerimeterPixels": 367
+    }
+  },
+  {
+    "id": "school",
+    "kind": 3,
+    "span": 3,
+    "name": "학교",
+    "subject": "Brick school with red-brown pitched roof, clock tower, classroom wings, fenced playground with slide and swings, small sports court and tiny yellow school bus. Garden beds, entrance stone steps.",
+    "size": 192,
+    "x": 192,
+    "y": 192,
+    "colors": 348,
+    "bounds": [
+      1,
+      58,
+      176,
+      190
+    ],
+    "source": "tools/art/facility-sources/school.png",
+    "sourceHash": "a8cdf31750c2d273f20f05b32ffbaae58dd79194c5ded96df0ef062e99bf51ec",
+    "projection": {
+      "scaleY": 1.011867351842952,
+      "shearY": -0.0010166734444895242,
+      "dx": -7,
+      "shiftY": -0.998089886255887,
+      "sourceFront": {
+        "left": {
+          "m": 0.4951406649616366,
+          "b": 136.0593350383632,
+          "inliers": 69,
+          "residual": 0.6107416879795267
+        },
+        "right": {
+          "m": -0.4931311655096821,
+          "b": 237.5036414565826,
+          "inliers": 69,
+          "residual": 0.7270490805017857
+        },
+        "cx": 102.64818169494865,
+        "cy": 186.88462397990298
+      },
+      "outsideSourceSamples": 0,
+      "unsupportedPerimeterPixels": 47,
+      "joinedPerimeterPixels": 326
+    }
+  },
+  {
+    "id": "pocket-park",
+    "kind": 4,
+    "span": 1,
+    "name": "소공원",
+    "subject": "Tiny square pocket park with two compact leafy trees, a wood bench, flower beds, short dirt and stone paths, litter bin and a lamppost. Clearly a small single-tile park, low canopy, not a building.",
+    "size": 64,
+    "x": 0,
+    "y": 0,
+    "colors": 179,
+    "bounds": [
+      1,
+      19,
+      58,
+      62
+    ],
+    "source": "tools/art/facility-sources/pocket-park.png",
+    "sourceHash": "28c93016594ea6f08bd85ec984e5cb2bef09b93761fbed7fc09501a7a2be42ec",
+    "projection": {
+      "scaleY": 0.9740134744947063,
+      "shearY": -0.012993262752646673,
+      "dx": -2,
+      "shiftY": 2.804619826756502,
+      "sourceFront": {
+        "left": {
+          "m": 0.5266798418972332,
+          "b": 41.70355731225297,
+          "inliers": 23,
+          "residual": 0.5029644268774689
+        },
+        "right": {
+          "m": -0.5000000000000001,
+          "b": 75.73913043478262,
+          "inliers": 23,
+          "residual": 0.2608695652173765
+        },
+        "cx": 33.15110683349375,
+        "cy": 59.16357701803574
+      },
+      "outsideSourceSamples": 0,
+      "unsupportedPerimeterPixels": 7,
+      "joinedPerimeterPixels": 114
+    }
+  },
+  {
+    "id": "park",
+    "kind": 5,
+    "span": 2,
+    "name": "공원",
+    "subject": "Neighborhood park with green copper gazebo, small stone fountain, pond and little footbridge, curving stone paths, wood benches, clipped bushes, a few leafy trees and restrained pink flower beds. All entirely inside square lot.",
+    "size": 128,
+    "x": 256,
+    "y": 64,
+    "colors": 313,
+    "bounds": [
+      2,
+      41,
+      123,
+      126
+    ],
+    "source": "tools/art/facility-sources/park.png",
+    "sourceHash": "36b819a24399d9a55be3f79503e078c984a850384873a7d9c79c7e6bd3980b3e",
+    "projection": {
+      "scaleY": 0.896630378434422,
+      "shearY": -0.0030585795749091815,
+      "dx": -1,
+      "shiftY": 13.73478486262312,
+      "sourceFront": {
+        "left": {
+          "m": 0.5610545790934319,
+          "b": 86.87604070305274,
+          "inliers": 47,
+          "residual": 0.6119333950046268
+        },
+        "right": {
+          "m": -0.5542321924144311,
+          "b": 159.0786308973173,
+          "inliers": 47,
+          "residual": 0.7903561517113644
+        },
+        "cx": 64.73903576982893,
+        "cy": 123.19817316780873
+      },
+      "outsideSourceSamples": 0,
+      "unsupportedPerimeterPixels": 4,
+      "joinedPerimeterPixels": 257
+    }
+  },
+  {
+    "id": "sports-center",
+    "kind": 6,
+    "span": 3,
+    "name": "체육시설",
+    "subject": "Sports center: low brick gymnasium with curved dark teal roof, small basketball emblem on facade, outdoor basketball court with correct lines and two hoops, mesh fence, bleachers, equipment shed and entrance benches.",
+    "size": 192,
+    "x": 384,
+    "y": 192,
+    "colors": 298,
+    "bounds": [
+      2,
+      78,
+      177,
+      190
+    ],
+    "source": "tools/art/facility-sources/sports-center.png",
+    "sourceHash": "e0513340d8ba47ef14f776aba58e0b0328714fe8d7a2ddecf2c79f89a149d57f",
+    "projection": {
+      "scaleY": 1.0160368253025465,
+      "shearY": -0.0036379835177073883,
+      "dx": -6,
+      "shiftY": -1.625522805454454,
+      "sourceFront": {
+        "left": {
+          "m": 0.49568871026671546,
+          "b": 136.8881013274875,
+          "inliers": 69,
+          "residual": 0.638046522957012
+        },
+        "right": {
+          "m": -0.4885275849470223,
+          "b": 236.37695773961758,
+          "inliers": 69,
+          "residual": 0.5809523809523967
+        },
+        "cx": 101.08434182196154,
+        "cy": 186.99446835337542
+      },
+      "outsideSourceSamples": 0,
+      "unsupportedPerimeterPixels": 43,
+      "joinedPerimeterPixels": 331
+    }
+  },
+  {
+    "id": "groundwater-pump",
+    "kind": 7,
+    "span": 2,
+    "name": "지하수 펌프",
+    "subject": "Groundwater pumping station with blue cylindrical pressure tank, compact cream-and-brick pump house, exposed thick blue pipe elbows, well-head valve cluster, maintenance hatch, pressure gauges, low security fence. Dry paved land, no river.",
+    "size": 128,
+    "x": 384,
+    "y": 64,
+    "colors": 268,
+    "bounds": [
+      2,
+      48,
+      123,
+      126
+    ],
+    "source": "tools/art/facility-sources/groundwater-pump.png",
+    "sourceHash": "c0a7bf423063397c6ea07640d25e5b7e97f3ea6f09d81e4df78c63ece5835c56",
+    "projection": {
+      "scaleY": 1.0012735903670258,
+      "shearY": 0.007699432673381856,
+      "dx": -1,
+      "shiftY": 0.2963992126895836,
+      "sourceFront": {
+        "left": {
+          "m": 0.49167437557816834,
+          "b": 91.13876040703053,
+          "inliers": 47,
+          "residual": 0.6026827012025819
+        },
+        "right": {
+          "m": -0.5070536540240518,
+          "b": 155.9537465309898,
+          "inliers": 47,
+          "residual": 0.6284690101757633
+        },
+        "cx": 64.89753386592565,
+        "cy": 123.04721484712256
+      },
+      "outsideSourceSamples": 0,
+      "unsupportedPerimeterPixels": 4,
+      "joinedPerimeterPixels": 243
+    }
+  },
+  {
+    "id": "river-intake",
+    "kind": 8,
+    "span": 2,
+    "name": "하천 취수장",
+    "subject": "River intake waterworks on a square contained lot: small teal-roof pump house, grated intake basin of clean muted blue water along right side, thick blue extraction pipes, screened intake racks, valve wheels, maintenance gantry and low railing. No water outside the diamond.",
+    "size": 128,
+    "x": 512,
+    "y": 64,
+    "colors": 222,
+    "bounds": [
+      2,
+      51,
+      123,
+      126
+    ],
+    "source": "tools/art/facility-sources/river-intake.png",
+    "sourceHash": "4835db067efc08ff2fe3561a1de836a2d9e61c8aaa5e940a4e4b33e23b268466",
+    "projection": {
+      "scaleY": 0.9863138686131387,
+      "shearY": 0.0018248175182482007,
+      "dx": -1,
+      "shiftY": 2.326642335766407,
+      "sourceFront": {
+        "left": {
+          "m": 0.5050878815911193,
+          "b": 90.87974098057354,
+          "inliers": 47,
+          "residual": 0.6392229417206323
+        },
+        "right": {
+          "m": -0.5087881591119334,
+          "b": 155.8436632747456,
+          "inliers": 47,
+          "residual": 0.6845513413505842
+        },
+        "cx": 64.07481751824818,
+        "cy": 123.24315482420306
+      },
+      "outsideSourceSamples": 0,
+      "unsupportedPerimeterPixels": 4,
+      "joinedPerimeterPixels": 237
+    }
+  },
+  {
+    "id": "sewage-outfall",
+    "kind": 9,
+    "span": 2,
+    "name": "직접 방류구",
+    "subject": "Direct sewage outfall utility: small weathered gray control hut, two large concrete outfall pipe mouths and brown-gray discharge into a narrow contained channel on right side, maintenance catwalk, rusty valve wheel, warning post, chainlink enclosure. Unmistakably unprocessed wastewater outlet, no blue clean-water tanks.",
+    "size": 128,
+    "x": 640,
+    "y": 64,
+    "colors": 205,
+    "bounds": [
+      2,
+      48,
+      123,
+      126
+    ],
+    "source": "tools/art/facility-sources/sewage-outfall.png",
+    "sourceHash": "2a4a00267e2103b6b967411ccfae6e1327d46497ef57ef13dcc7845772bee567",
+    "projection": {
+      "scaleY": 0.997807776623976,
+      "shearY": -0.001096111688012047,
+      "dx": -1,
+      "shiftY": 1.2941040729202684,
+      "sourceFront": {
+        "left": {
+          "m": 0.5021970397779834,
+          "b": 90.69565217391305,
+          "inliers": 47,
+          "residual": 0.6922987974098049
+        },
+        "right": {
+          "m": -0.5000000000000001,
+          "b": 155.25531914893617,
+          "inliers": 47,
+          "residual": 0.2553191489361666
+        },
+        "cx": 64.41813776393215,
+        "cy": 123.04625026697009
+      },
+      "outsideSourceSamples": 0,
+      "unsupportedPerimeterPixels": 4,
+      "joinedPerimeterPixels": 244
+    }
+  },
+  {
+    "id": "sewage-treatment",
+    "kind": 10,
+    "span": 3,
+    "name": "하수처리장",
+    "subject": "Wastewater treatment plant with two circular settling tanks of muted brown-green water, radial scraper bridges, rectangular aeration basin, thick teal pipes, low brick control building, railings and service walkway. Detailed functional treatment machinery.",
+    "size": 192,
+    "x": 576,
+    "y": 192,
+    "colors": 299,
+    "bounds": [
+      1,
+      81,
+      182,
+      190
+    ],
+    "source": "tools/art/facility-sources/sewage-treatment.png",
+    "sourceHash": "3a573b232b863bcc0d617c295410213cc80bc3ae2f2d5003af995f22e7cc8090",
+    "projection": {
+      "scaleY": 0.9564579256360077,
+      "shearY": 0.005206877271456578,
+      "dx": -4,
+      "shiftY": 8.35989190196628,
+      "sourceFront": {
+        "left": {
+          "m": 0.5173182316404823,
+          "b": 135.92234806966266,
+          "inliers": 69,
+          "residual": 0.6251491901108182
+        },
+        "right": {
+          "m": -0.5282060650347097,
+          "b": 239.71384727804167,
+          "inliers": 69,
+          "residual": 0.6931677018633309
+        },
+        "cx": 99.27220203149753,
+        "cy": 187.27766807565365
+      },
+      "outsideSourceSamples": 0,
+      "unsupportedPerimeterPixels": 23,
+      "joinedPerimeterPixels": 371
+    }
+  },
+  {
+    "id": "wind-power",
+    "kind": 11,
+    "span": 2,
+    "name": "풍력 발전소",
+    "subject": "Wind power facility with ONE complete white wind turbine, all three blades fully visible and safely within canvas, slim tower and nacelle, small gray transformer hut, cable boxes and gravel maintenance track. Sparse low shrubs, low square grassy lot. No blade cuts.",
+    "size": 128,
+    "x": 768,
+    "y": 64,
+    "colors": 227,
+    "bounds": [
+      12,
+      6,
+      116,
+      126
+    ],
+    "source": "tools/art/facility-sources/wind-power.png",
+    "sourceHash": "d02324a17a7fe30d58fd959d8758948b8f94dfcfe155ccdf62aa93a5b860b4cd",
+    "projection": {
+      "scaleY": 0.9710779369327898,
+      "shearY": 0.0006433217590673945,
+      "dx": 1,
+      "shiftY": 4.247510130139309,
+      "sourceFront": {
+        "left": {
+          "m": 0.5142292490118577,
+          "b": 90.89710144927535,
+          "inliers": 45,
+          "residual": 0.5801054018445342
+        },
+        "right": {
+          "m": -0.5155542132286318,
+          "b": 155.74116581093324,
+          "inliers": 43,
+          "residual": 0.6276049531863634
+        },
+        "cx": 62.96864024265577,
+        "cy": 123.27741803255407
+      },
+      "outsideSourceSamples": 0,
+      "unsupportedPerimeterPixels": 2,
+      "joinedPerimeterPixels": 220
+    }
+  },
+  {
+    "id": "gas-power",
+    "kind": 12,
+    "span": 3,
+    "name": "가스 발전소",
+    "subject": "Natural gas power station with long turbine hall in subdued brick and slate, two tall thin striped exhaust stacks, complex silver gas pipes and valves, outdoor generator cooling units, transformer equipment, maintenance lanes and yellow safety rails. No nuclear cooling towers.",
+    "size": 192,
+    "x": 768,
+    "y": 192,
+    "colors": 292,
+    "bounds": [
+      3,
+      27,
+      188,
+      190
+    ],
+    "source": "tools/art/facility-sources/gas-power.png",
+    "sourceHash": "e61dec691f5d58667a03f7c8525c57221844e91ad4fc79aa3cacafa1f6b3dd27",
+    "projection": {
+      "scaleY": 1.018759770713914,
+      "shearY": -0.001526092458869699,
+      "dx": 0,
+      "shiftY": -2.819362763344105,
+      "sourceFront": {
+        "left": {
+          "m": 0.49229082937522783,
+          "b": 140.48598221897456,
+          "inliers": 69,
+          "residual": 0.5613688953842768
+        },
+        "right": {
+          "m": -0.48929484837413234,
+          "b": 234.1251248325417,
+          "inliers": 69,
+          "residual": 0.6544878821093789
+        },
+        "cx": 95.39579145884515,
+        "cy": 187.44845551515573
+      },
+      "outsideSourceSamples": 0,
+      "unsupportedPerimeterPixels": 0,
+      "joinedPerimeterPixels": 383
+    }
+  },
+  {
+    "id": "solar-power",
+    "kind": 13,
+    "span": 3,
+    "name": "태양광 발전소",
+    "subject": "Solar power plant with orderly angled rows of deep navy photovoltaic panels with fine blue cell grid, visible metal supports, service gaps, small inverter house, electrical cabinets, gravel track and fenced boundary. Modest olive grass between rows. No giant main building.",
+    "size": 192,
+    "x": 960,
+    "y": 192,
+    "colors": 233,
+    "bounds": [
+      4,
+      73,
+      189,
+      190
+    ],
+    "source": "tools/art/facility-sources/solar-power.png",
+    "sourceHash": "bec003728f85d9c5dc194c29f92f6191ab5f94acfe168b72307a51088446b557",
+    "projection": {
+      "scaleY": 0.9006844807160717,
+      "shearY": -0.009740687113334423,
+      "dx": 1,
+      "shiftY": 20.50578079066308,
+      "sourceFront": {
+        "left": {
+          "m": 0.5659481183777865,
+          "b": 133.2982584338083,
+          "inliers": 69,
+          "residual": 0.6297649494580355
+        },
+        "right": {
+          "m": -0.5443185970040191,
+          "b": 238.62825478017294,
+          "inliers": 69,
+          "residual": 0.7911094872731894
+        },
+        "cx": 94.86909306305117,
+        "cy": 186.98924314504922
+      },
+      "outsideSourceSamples": 0,
+      "unsupportedPerimeterPixels": 4,
+      "joinedPerimeterPixels": 374
+    }
+  },
+  {
+    "id": "incinerator",
+    "kind": 14,
+    "span": 3,
+    "name": "쓰레기 소각시설",
+    "subject": "Municipal waste incinerator, weathered brick processing hall, tall striped exhaust chimney with no huge smoke plume, enclosed refuse delivery doors, tiny garbage truck, waste sorting containers, flue-cleaning silver vessels and ducts, service rails. Distinct industrial silhouette.",
+    "size": 192,
+    "x": 1152,
+    "y": 192,
+    "colors": 329,
+    "bounds": [
+      3,
+      22,
+      188,
+      190
+    ],
+    "source": "tools/art/facility-sources/incinerator.png",
+    "sourceHash": "2ea793fc08752fc796bc4070d027a7993c903b9ad556c61ea8d8ca914c6d8ec5",
+    "projection": {
+      "scaleY": 1.0114186467610222,
+      "shearY": 0.000498872916743387,
+      "dx": 0,
+      "shiftY": -1.0337262727419676,
+      "sourceFront": {
+        "left": {
+          "m": 0.4938618925831201,
+          "b": 139.65694799658996,
+          "inliers": 69,
+          "residual": 0.6622335890878048
+        },
+        "right": {
+          "m": -0.49484837413226107,
+          "b": 234.1422238460601,
+          "inliers": 69,
+          "residual": 0.6623066617951565
+        },
+        "cx": 95.56416983851297,
+        "cy": 186.8524497761727
+      },
+      "outsideSourceSamples": 0,
+      "unsupportedPerimeterPixels": 0,
+      "joinedPerimeterPixels": 348
+    }
+  },
+  {
+    "id": "crematorium",
+    "kind": 15,
+    "span": 2,
+    "name": "화장시설",
+    "subject": "Respectful municipal crematorium, low warm-stone ceremonial building with slate pitched roof, discreet short brick exhaust chimney behind, sheltered entrance, quiet stone walkway, cypress trees and restrained flower beds. No crosses or cemetery graves, no industrial garbage.",
+    "size": 128,
+    "x": 896,
+    "y": 64,
+    "colors": 243,
+    "bounds": [
+      1,
+      50,
+      118,
+      126
+    ],
+    "source": "tools/art/facility-sources/crematorium.png",
+    "sourceHash": "4599404296d85f9032159136789c47fa9e9c07fc3a43cd96b77b3a3fc58d598a",
+    "projection": {
+      "scaleY": 1.0344497607655503,
+      "shearY": 0.0007177033492822837,
+      "dx": -4,
+      "shiftY": -3.238277511961714,
+      "sourceFront": {
+        "left": {
+          "m": 0.48265494912118406,
+          "b": 90.49121184088807,
+          "inliers": 47,
+          "residual": 0.6269657724329392
+        },
+        "right": {
+          "m": -0.48404255319148937,
+          "b": 155.51063829787233,
+          "inliers": 47,
+          "residual": 0.5372340425531945
+        },
+        "cx": 67.25933014354067,
+        "cy": 122.9542604092436
+      },
+      "outsideSourceSamples": 0,
+      "unsupportedPerimeterPixels": 23,
+      "joinedPerimeterPixels": 233
+    }
+  },
+  {
+    "id": "cemetery",
+    "kind": 16,
+    "span": 3,
+    "name": "공동묘지",
+    "subject": "Quiet municipal cemetery, rows of small pale stone headstones with clear walkways, small slate-roof chapel at back, perimeter wrought iron fence, stone gateposts, cypress trees and muted flowers. No oversized monument, all graves inside lot.",
+    "size": 192,
+    "x": 1344,
+    "y": 192,
+    "colors": 307,
+    "bounds": [
+      3,
+      52,
+      188,
+      190
+    ],
+    "source": "tools/art/facility-sources/cemetery.png",
+    "sourceHash": "80538fbfe0ff7c92e9dd046ba9108d018af034e29328f9320adf0adea4243960",
+    "projection": {
+      "scaleY": 1.008511735878257,
+      "shearY": 0.0030399056708059757,
+      "dx": 0,
+      "shiftY": -0.8327130697521333,
+      "sourceFront": {
+        "left": {
+          "m": 0.4927658019729627,
+          "b": 139.88347338935574,
+          "inliers": 69,
+          "residual": 0.6375106564364614
+        },
+        "right": {
+          "m": -0.498794300328827,
+          "b": 234.5944951893801,
+          "inliers": 69,
+          "residual": 0.6920959688222865
+        },
+        "cx": 95.517177002346,
+        "cy": 186.9510717171102
+      },
+      "outsideSourceSamples": 0,
+      "unsupportedPerimeterPixels": 0,
+      "joinedPerimeterPixels": 363
+    }
+  },
+  {
+    "id": "telecom-tower",
+    "kind": 17,
+    "span": 1,
+    "name": "통신탑",
+    "subject": "Compact telecommunications tower on tiny square gravel lot, fully visible slender steel lattice mast with three cellular panel antenna arrays and one small dish, fenced base, tiny equipment cabinet. Fine crisp pixel metal lattice, no broad building, no cropped antenna.",
+    "size": 64,
+    "x": 64,
+    "y": 0,
+    "colors": 154,
+    "bounds": [
+      11,
+      9,
+      53,
+      62
+    ],
+    "source": "tools/art/facility-sources/telecom-tower.png",
+    "sourceHash": "6be7cf7632ae774f130c3faaf4b0acee3be9cbf9f38b331b7001263f6cd3f252",
+    "projection": {
+      "scaleY": 0.8943239501615137,
+      "shearY": -0.00023073373327187063,
+      "dx": 1,
+      "shiftY": 7.070739117058912,
+      "sourceFront": {
+        "left": {
+          "m": 0.5593395252837977,
+          "b": 41.87444100447196,
+          "inliers": 18,
+          "residual": 0.4981080151358839
+        },
+        "right": {
+          "m": -0.5588235294117647,
+          "b": 76.49264705882354,
+          "inliers": 16,
+          "residual": 0.5808823529411882
+        },
+        "cx": 30.95989078603293,
+        "cy": 59.191531619569844
+      },
+      "outsideSourceSamples": 0,
+      "unsupportedPerimeterPixels": 1,
+      "joinedPerimeterPixels": 85
+    }
+  },
+  {
+    "id": "small-airport",
+    "kind": 18,
+    "span": 3,
+    "name": "소형 공항",
+    "subject": "Small general aviation airfield, one short narrow runway with white threshold stripes, small propeller aircraft fully inside apron, low hangar with open door, modest terminal cabin, windsock and tiny control lookout. Airport scaled as a compact game lot, no surrounding roads.",
+    "size": 192,
+    "x": 1536,
+    "y": 192,
+    "colors": 338,
+    "bounds": [
+      1,
+      86,
+      182,
+      190
+    ],
+    "source": "tools/art/facility-sources/small-airport.png",
+    "sourceHash": "f85ec36f075c47d24f4d4cb1c3e745b0fe7022afa8edaac96773d6ade3b9b906",
+    "projection": {
+      "scaleY": 0.9489962206580911,
+      "shearY": 0.006258451510003038,
+      "dx": -4,
+      "shiftY": 9.957502629358645,
+      "sourceFront": {
+        "left": {
+          "m": 0.5202776762879064,
+          "b": 135.37449762513702,
+          "inliers": 69,
+          "residual": 0.8213372305443727
+        },
+        "right": {
+          "m": -0.5334672999634636,
+          "b": 239.84827670198513,
+          "inliers": 69,
+          "residual": 0.636341493119005
+        },
+        "cx": 99.1452215017972,
+        "cy": 186.95754308314184
+      },
+      "outsideSourceSamples": 0,
+      "unsupportedPerimeterPixels": 23,
+      "joinedPerimeterPixels": 364
+    }
+  },
+  {
+    "id": "passenger-port",
+    "kind": 19,
+    "span": 3,
+    "name": "소형 여객항",
+    "subject": "Small passenger ferry terminal on square lot: blue-gray arched passenger hall, sheltered waiting canopy, boarding gangway, one small white ferry completely within contained water strip on right, quay bollards, life rings, benches and tiny ticket kiosk. No container yard.",
+    "size": 192,
+    "x": 1728,
+    "y": 192,
+    "colors": 312,
+    "bounds": [
+      4,
+      82,
+      171,
+      190
+    ],
+    "source": "tools/art/facility-sources/passenger-port.png",
+    "sourceHash": "b22ae298fd53e1bc7eb0bdac1504f61be5d6a2c70116940b57085c254feb2f97",
+    "projection": {
+      "scaleY": 1.0095533178414668,
+      "shearY": 0.0014938585813875638,
+      "dx": -8,
+      "shiftY": -1.0517502120910647,
+      "sourceFront": {
+        "left": {
+          "m": 0.49378881987577633,
+          "b": 135.8198757763975,
+          "inliers": 69,
+          "residual": 0.6708074534161312
+        },
+        "right": {
+          "m": -0.49674826452320037,
+          "b": 238.7056631348191,
+          "inliers": 69,
+          "residual": 0.6381439532334525
+        },
+        "cx": 103.86868798642617,
+        "cy": 187.10907263926012
+      },
+      "outsideSourceSamples": 0,
+      "unsupportedPerimeterPixels": 59,
+      "joinedPerimeterPixels": 313
+    }
+  },
+  {
+    "id": "prison",
+    "kind": 20,
+    "span": 3,
+    "name": "교도소",
+    "subject": "Municipal prison with secure pale concrete perimeter walls, four modest corner watchtowers, barred window brick cell block, internal exercise court, secure sally-port gate and tiny guard vehicle. No barbed wire crossing lot boundary.",
+    "size": 192,
+    "x": 1920,
+    "y": 192,
+    "colors": 209,
+    "bounds": [
+      2,
+      66,
+      187,
+      190
+    ],
+    "source": "tools/art/facility-sources/prison.png",
+    "sourceHash": "fff3ed3debd5efebccc636c1f0c9d0f2abf5acb8059c345ec65b00b89cd28e40",
+    "projection": {
+      "scaleY": 0.914314347753466,
+      "shearY": -0.0010188742274930274,
+      "dx": -1,
+      "shiftY": 17.231100718222795,
+      "sourceFront": {
+        "left": {
+          "m": 0.5479722323712094,
+          "b": 134.19008646937036,
+          "inliers": 69,
+          "residual": 0.7123371087565431
+        },
+        "right": {
+          "m": -0.5457435147972229,
+          "b": 239.3551820728291,
+          "inliers": 69,
+          "residual": 0.6956765314821212
+        },
+        "cx": 96.15395579310729,
+        "cy": 186.87978427664194
+      },
+      "outsideSourceSamples": 0,
+      "unsupportedPerimeterPixels": 4,
+      "joinedPerimeterPixels": 383
+    }
+  },
+  {
+    "id": "cargo-port",
+    "kind": 21,
+    "span": 3,
+    "name": "소형 화물항",
+    "subject": "Small cargo port, one yellow dock crane fully inside lot, muted rust blue and green container stacks, brick warehouse with loading shutters, tiny forklift, quayside bollards, contained dark blue water strip and small cargo barge entirely inside square footprint.",
+    "size": 192,
+    "x": 2112,
+    "y": 192,
+    "colors": 283,
+    "bounds": [
+      1,
+      56,
+      186,
+      190
+    ],
+    "source": "tools/art/facility-sources/cargo-port.png",
+    "sourceHash": "fb22e1763d6ee8aa09aa5254f7e54f4721db28129d90fb94f2b688d4f752fc04",
+    "projection": {
+      "scaleY": 0.9414880809053702,
+      "shearY": -0.0649616456262252,
+      "dx": -2,
+      "shiftY": 18.51346702899785,
+      "sourceFront": {
+        "left": {
+          "m": 0.6000730727073432,
+          "b": 128.31243453903303,
+          "inliers": 69,
+          "residual": 0.7174765558397098
+        },
+        "right": {
+          "m": -0.4620752648885641,
+          "b": 231.72724394105467,
+          "inliers": 69,
+          "residual": 0.5910242357812763
+        },
+        "cx": 97.36381044110398,
+        "cy": 186.7378354409216
+      },
+      "outsideSourceSamples": 0,
+      "unsupportedPerimeterPixels": 7,
+      "joinedPerimeterPixels": 371
+    }
+  },
+  {
+    "id": "medium-port",
+    "kind": 22,
+    "span": 5,
+    "name": "중형 복합항",
+    "subject": "Medium mixed port occupying FIVE by FIVE game tiles: two dock cranes, several modest container stacks, warehouse, small passenger hall with gangway and ferry, one cargo barge, service truck lanes, contained harbor water along right edge. Buildings and props same tiny pixel scale as 2x2 fire station, more infrastructure not enlarged objects.",
+    "size": 320,
+    "x": 0,
+    "y": 384,
+    "colors": 362,
+    "bounds": [
+      1,
+      117,
+      310,
+      318
+    ],
+    "source": "tools/art/facility-sources/medium-port.png",
+    "sourceHash": "0c430f87e83d5afef979cd675bb68250265f400996679f9b71c9d32f554117ae",
+    "projection": {
+      "scaleY": 0.9381708887934733,
+      "shearY": -0.011119172058453253,
+      "dx": -4,
+      "shiftY": 22.143816348588363,
+      "sourceFront": {
+        "left": {
+          "m": 0.5448039138325574,
+          "b": 225.96351298035194,
+          "inliers": 115,
+          "residual": 0.7198847944449085
+        },
+        "right": {
+          "m": -0.5210999763276258,
+          "b": 400.481385622978,
+          "inliers": 115,
+          "residual": 1.0890081275152284
+        },
+        "cx": 163.72758768747866,
+        "cy": 315.16294355485354
+      },
+      "outsideSourceSamples": 0,
+      "unsupportedPerimeterPixels": 23,
+      "joinedPerimeterPixels": 657
+    }
+  },
+  {
+    "id": "large-port",
+    "kind": 23,
+    "span": 7,
+    "name": "대형 복합항",
+    "subject": "Large mixed port occupying SEVEN by SEVEN game tiles: three complete gantry cranes, several container yards and warehouses, distinct ferry passenger terminal, two docked small vessels, service lanes, sheds, bollards and contained harbor water. Each truck tree and door remains small, same world pixel scale as small facilities. Lots of detailed infrastructure, no giant enlarged objects.",
+    "size": 448,
+    "x": 0,
+    "y": 704,
+    "colors": 401,
+    "bounds": [
+      9,
+      165,
+      446,
+      446
+    ],
+    "source": "tools/art/facility-sources/large-port.png",
+    "sourceHash": "12d4b6fa248dcb5ab7c64fe6ff47b770344ce68044d08c0a4b0c70fa3485bd29",
+    "projection": {
+      "scaleY": 0.9881671429386896,
+      "shearY": 0.004732061636667173,
+      "dx": 4,
+      "shiftY": 3.7245313005495895,
+      "sourceFront": {
+        "left": {
+          "m": 0.501198549154818,
+          "b": 332.80575780344174,
+          "inliers": 117,
+          "residual": 1.095961165863173
+        },
+        "right": {
+          "m": -0.5107760010474088,
+          "b": 554.2414828001513,
+          "inliers": 150,
+          "residual": 1.2026505047820137
+        },
+        "cx": 218.81550771455585,
+        "cy": 442.475772802552
+      },
+      "outsideSourceSamples": 0,
+      "unsupportedPerimeterPixels": 254,
+      "joinedPerimeterPixels": 1471
+    }
+  },
+  {
+    "id": "medium-airport",
+    "kind": 24,
+    "span": 5,
+    "name": "중형 공항",
+    "subject": "Medium regional airport on FIVE by FIVE tiles: one runway with markings, two small regional aircraft parked on apron, terminal and modest control tower, hangar, taxiway lines, fuel truck and airport fence. Doors vehicles windows same world pixel scale as small facilities.",
+    "size": 320,
+    "x": 320,
+    "y": 384,
+    "colors": 328,
+    "bounds": [
+      28,
+      126,
+      315,
+      318
+    ],
+    "source": "tools/art/facility-sources/medium-airport.png",
+    "sourceHash": "607eb87717e5f797bbe0e2e95cc67a3765775d1bc9b8bbc35abc01cba3504a98",
+    "projection": {
+      "scaleY": 1.0239401455961605,
+      "shearY": -0.05628721710956874,
+      "dx": 12,
+      "shiftY": 1.7752066382800287,
+      "sourceFront": {
+        "left": {
+          "m": 0.5432809910834057,
+          "b": 234.73752071332754,
+          "inliers": 115,
+          "residual": 0.7043636076698476
+        },
+        "right": {
+          "m": -0.43333859386096424,
+          "b": 379.01865383097925,
+          "inliers": 115,
+          "residual": 0.7828612009784592
+        },
+        "cx": 147.7352444512673,
+        "cy": 314.9992707367612
+      },
+      "outsideSourceSamples": 0,
+      "unsupportedPerimeterPixels": 91,
+      "joinedPerimeterPixels": 566
+    }
+  },
+  {
+    "id": "large-airport",
+    "kind": 25,
+    "span": 7,
+    "name": "대형 공항",
+    "subject": "Large city airport on SEVEN by SEVEN tiles: long runway and parallel taxiway, terminal with three jet bridges, three modest passenger aircraft wholly on apron, distinct control tower, two hangars, fuel area, tiny baggage carts and service roads within fenced boundary. Objects retain small pixel scale; use extra area for more infrastructure not enlarged texture.",
+    "size": 448,
+    "x": 448,
+    "y": 704,
+    "colors": 379,
+    "bounds": [
+      22,
+      173,
+      445,
+      446
+    ],
+    "source": "tools/art/facility-sources/large-airport.png",
+    "sourceHash": "2c774783d0270e349e9d3f734e74af389e2e3be1c6d60ebe0c84eac7d12a6484",
+    "projection": {
+      "scaleY": 0.912648112427666,
+      "shearY": -0.05926727814300159,
+      "dx": 10,
+      "shiftY": 51.83367843693004,
+      "sourceFront": {
+        "left": {
+          "m": 0.6127961812744422,
+          "b": 312.7953991258339,
+          "inliers": 161,
+          "residual": 0.8124568668047232
+        },
+        "right": {
+          "m": -0.4829163791120313,
+          "b": 546.607729468599,
+          "inliers": 161,
+          "residual": 1.1632648953300304
+        },
+        "cx": 213.38838194963847,
+        "cy": 443.5589847129045
+      },
+      "outsideSourceSamples": 0,
+      "unsupportedPerimeterPixels": 158,
+      "joinedPerimeterPixels": 856
+    }
+  }
+]

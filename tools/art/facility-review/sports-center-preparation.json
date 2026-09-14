@@ -1,0 +1,41 @@
+{
+  "id": "sports-center",
+  "kind": 6,
+  "span": 3,
+  "name": "체육시설",
+  "subject": "Sports center: low brick gymnasium with curved dark teal roof, small basketball emblem on facade, outdoor basketball court with correct lines and two hoops, mesh fence, bleachers, equipment shed and entrance benches.",
+  "sourceFile": "exec-43620cf8-8d3c-4b36-9d71-75e2085df4ca.png",
+  "sourceHash": "492cb34a590a5e0d3732eed1d1ee54b2e85d97586a1f26064551dddd1d246b0a",
+  "sourceDimensions": [
+    1254,
+    1254
+  ],
+  "backgroundRemoval": "edge-connected neutral matte removal",
+  "nativeSize": 192,
+  "palette": "union of approved commercial-l3-a, residential-l3-a, industrial-l3-a RGB palettes",
+  "projection": {
+    "scaleY": 1.0160368253025465,
+    "shearY": -0.0036379835177073883,
+    "dx": -6,
+    "shiftY": -1.625522805454454,
+    "sourceFront": {
+      "left": {
+        "m": 0.49568871026671546,
+        "b": 136.8881013274875,
+        "inliers": 69,
+        "residual": 0.638046522957012
+      },
+      "right": {
+        "m": -0.4885275849470223,
+        "b": 236.37695773961758,
+        "inliers": 69,
+        "residual": 0.5809523809523967
+      },
+      "cx": 101.08434182196154,
+      "cy": 186.99446835337542
+    },
+    "outsideSourceSamples": 0,
+    "unsupportedPerimeterPixels": 43,
+    "joinedPerimeterPixels": 331
+  }
+}

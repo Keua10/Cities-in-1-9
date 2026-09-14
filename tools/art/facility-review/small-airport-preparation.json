@@ -1,0 +1,41 @@
+{
+  "id": "small-airport",
+  "kind": 18,
+  "span": 3,
+  "name": "소형 공항",
+  "subject": "Small general aviation airfield, one short narrow runway with white threshold stripes, small propeller aircraft fully inside apron, low hangar with open door, modest terminal cabin, windsock and tiny control lookout. Airport scaled as a compact game lot, no surrounding roads.",
+  "sourceFile": "exec-7c07e290-adf1-4238-8e40-df69eec959a0.png",
+  "sourceHash": "a15bc3555adc3620da395d0d37e1d2cc43b701de8a761480f0dbf6febcddce8f",
+  "sourceDimensions": [
+    1254,
+    1254
+  ],
+  "backgroundRemoval": "edge-connected neutral matte removal",
+  "nativeSize": 192,
+  "palette": "union of approved commercial-l3-a, residential-l3-a, industrial-l3-a RGB palettes",
+  "projection": {
+    "scaleY": 0.9489962206580911,
+    "shearY": 0.006258451510003038,
+    "dx": -4,
+    "shiftY": 9.957502629358645,
+    "sourceFront": {
+      "left": {
+        "m": 0.5202776762879064,
+        "b": 135.37449762513702,
+        "inliers": 69,
+        "residual": 0.8213372305443727
+      },
+      "right": {
+        "m": -0.5334672999634636,
+        "b": 239.84827670198513,
+        "inliers": 69,
+        "residual": 0.636341493119005
+      },
+      "cx": 99.1452215017972,
+      "cy": 186.95754308314184
+    },
+    "outsideSourceSamples": 0,
+    "unsupportedPerimeterPixels": 23,
+    "joinedPerimeterPixels": 364
+  }
+}

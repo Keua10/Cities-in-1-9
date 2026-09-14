@@ -1,0 +1,41 @@
+{
+  "id": "cemetery",
+  "kind": 16,
+  "span": 3,
+  "name": "공동묘지",
+  "subject": "Quiet municipal cemetery, rows of small pale stone headstones with clear walkways, small slate-roof chapel at back, perimeter wrought iron fence, stone gateposts, cypress trees and muted flowers. No oversized monument, all graves inside lot.",
+  "sourceFile": "exec-01d5f0a6-d867-4b81-acb1-2c7ea80990b3.png",
+  "sourceHash": "2d785803bcba101a5a03fef918884854f699371c5703e947fe5484f5ce6b81db",
+  "sourceDimensions": [
+    1254,
+    1254
+  ],
+  "backgroundRemoval": "edge-connected neutral matte removal",
+  "nativeSize": 192,
+  "palette": "union of approved commercial-l3-a, residential-l3-a, industrial-l3-a RGB palettes",
+  "projection": {
+    "scaleY": 1.008511735878257,
+    "shearY": 0.0030399056708059757,
+    "dx": 0,
+    "shiftY": -0.8327130697521333,
+    "sourceFront": {
+      "left": {
+        "m": 0.4927658019729627,
+        "b": 139.88347338935574,
+        "inliers": 69,
+        "residual": 0.6375106564364614
+      },
+      "right": {
+        "m": -0.498794300328827,
+        "b": 234.5944951893801,
+        "inliers": 69,
+        "residual": 0.6920959688222865
+      },
+      "cx": 95.517177002346,
+      "cy": 186.9510717171102
+    },
+    "outsideSourceSamples": 0,
+    "unsupportedPerimeterPixels": 0,
+    "joinedPerimeterPixels": 363
+  }
+}

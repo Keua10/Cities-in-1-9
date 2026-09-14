@@ -1,5 +1,10 @@
 import { buildingArt, BUILDING_NAMES } from '../../src/render/buildingArt';
-import { facilityArt } from '../../src/render/facilityArt';
+import {
+  loadFacilitySpriteSheet,
+  FACILITY_ATLAS_COLUMN,
+  facilityBandY,
+  facilityCellSize,
+} from '../../src/render/facilityAtlas';
 import { FACILITY_SPECS } from '../../src/sim/facilities';
 import type { PixelArt } from '../../src/render/pixelArt';
 import {
@@ -23,6 +28,7 @@ import {
 } from '../../src/core/constants';
 
 const gallery = document.getElementById('gallery')!;
+const facilitySheet = await loadFacilitySpriteSheet();
 let filter = 0,
   zoom = 1;
 function card(a: PixelArt, name: string, description: string): void {
@@ -191,7 +197,14 @@ function render(): void {
         );
   else if (filter === 3)
     for (const s of FACILITY_SPECS)
-      card(facilityArt(s.kind), s.name, `${s.span}×${s.span} 타일 · ${s.span * 64}px 셀`);
+      rasterCard(
+        facilitySheet,
+        s.name,
+        `${s.span}×${s.span} 타일 · ${s.span * 64}px 셀 · 상세 도트`,
+        facilityCellSize(s.span),
+        FACILITY_ATLAS_COLUMN[s.kind] * facilityCellSize(s.span),
+        facilityBandY(s.span),
+      );
   else if (filter === 4) surfaceGallery();
   else candidateComparison(filter - 4);
   document

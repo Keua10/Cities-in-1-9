@@ -1,0 +1,41 @@
+{
+  "id": "large-airport",
+  "kind": 25,
+  "span": 7,
+  "name": "대형 공항",
+  "subject": "Large city airport on SEVEN by SEVEN tiles: long runway and parallel taxiway, terminal with three jet bridges, three modest passenger aircraft wholly on apron, distinct control tower, two hangars, fuel area, tiny baggage carts and service roads within fenced boundary. Objects retain small pixel scale; use extra area for more infrastructure not enlarged texture.",
+  "sourceFile": "exec-5af0c73b-8676-4690-8ccd-36702b7eca1f.png",
+  "sourceHash": "d2983397702fcee3736ecee5b7fcf4b943ad931e675bc3ae29d332fe0a9d636c",
+  "sourceDimensions": [
+    1254,
+    1254
+  ],
+  "backgroundRemoval": "edge-connected neutral matte removal",
+  "nativeSize": 448,
+  "palette": "union of approved commercial-l3-a, residential-l3-a, industrial-l3-a RGB palettes",
+  "projection": {
+    "scaleY": 0.912648112427666,
+    "shearY": -0.05926727814300159,
+    "dx": 10,
+    "shiftY": 51.83367843693004,
+    "sourceFront": {
+      "left": {
+        "m": 0.6127961812744422,
+        "b": 312.7953991258339,
+        "inliers": 161,
+        "residual": 0.8124568668047232
+      },
+      "right": {
+        "m": -0.4829163791120313,
+        "b": 546.607729468599,
+        "inliers": 161,
+        "residual": 1.1632648953300304
+      },
+      "cx": 213.38838194963847,
+      "cy": 443.5589847129045
+    },
+    "outsideSourceSamples": 0,
+    "unsupportedPerimeterPixels": 158,
+    "joinedPerimeterPixels": 856
+  }
+}

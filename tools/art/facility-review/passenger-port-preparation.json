@@ -1,0 +1,41 @@
+{
+  "id": "passenger-port",
+  "kind": 19,
+  "span": 3,
+  "name": "소형 여객항",
+  "subject": "Small passenger ferry terminal on square lot: blue-gray arched passenger hall, sheltered waiting canopy, boarding gangway, one small white ferry completely within contained water strip on right, quay bollards, life rings, benches and tiny ticket kiosk. No container yard.",
+  "sourceFile": "exec-1416555d-0954-422e-89b2-f3cb162ec9a2.png",
+  "sourceHash": "3aa9dd0efa4c8e5dfeb06b2d2a8e5171b5429c0cea625c26c95c91dfc1520b9a",
+  "sourceDimensions": [
+    1254,
+    1254
+  ],
+  "backgroundRemoval": "edge-connected neutral matte removal",
+  "nativeSize": 192,
+  "palette": "union of approved commercial-l3-a, residential-l3-a, industrial-l3-a RGB palettes",
+  "projection": {
+    "scaleY": 1.0095533178414668,
+    "shearY": 0.0014938585813875638,
+    "dx": -8,
+    "shiftY": -1.0517502120910647,
+    "sourceFront": {
+      "left": {
+        "m": 0.49378881987577633,
+        "b": 135.8198757763975,
+        "inliers": 69,
+        "residual": 0.6708074534161312
+      },
+      "right": {
+        "m": -0.49674826452320037,
+        "b": 238.7056631348191,
+        "inliers": 69,
+        "residual": 0.6381439532334525
+      },
+      "cx": 103.86868798642617,
+      "cy": 187.10907263926012
+    },
+    "outsideSourceSamples": 0,
+    "unsupportedPerimeterPixels": 59,
+    "joinedPerimeterPixels": 313
+  }
+}

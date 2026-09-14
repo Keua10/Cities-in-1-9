@@ -58,19 +58,74 @@ export function drawSanitationFacilities(ctx: CanvasRenderingContext2D): void {
 export function drawSpecialFacilities(ctx: CanvasRenderingContext2D): void {
   drawRange(ctx, 17, FACILITY_COUNT);
 }
-export async function loadFacilityAtlas(): Promise<FacilityAtlas> {
+export const FACILITY_SPRITE_SOURCE = '/sprites/facilities-v2.png?v=1';
+const sheetCache = new Map<string, Promise<HTMLImageElement>>();
+export function loadFacilitySpriteSheet(
+  source = FACILITY_SPRITE_SOURCE,
+): Promise<HTMLImageElement> {
+  let pending = sheetCache.get(source);
+  if (!pending) {
+    pending = (async () => {
+      const image = new Image();
+      image.src = source;
+      await image.decode();
+      if (image.naturalWidth !== FACILITY_ATLAS_W || image.naturalHeight !== FACILITY_ATLAS_H)
+        throw new Error(`시설 아틀라스 규격 오류: ${image.naturalWidth}x${image.naturalHeight}`);
+      return image;
+    })();
+    sheetCache.set(source, pending);
+    void pending.catch(() => sheetCache.delete(source));
+  }
+  return pending;
+}
+
+/** Catalog and live city consume the same native sprite cells. */
+export async function paintFacilityThumbnail(
+  ctx: CanvasRenderingContext2D,
+  kind: number,
+): Promise<void> {
+  const size = facilityCellSize(FACILITY_SPECS[kind].span);
+  try {
+    const image = await loadFacilitySpriteSheet();
+    ctx.clearRect(0, 0, size, size);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(
+      image,
+      FACILITY_ATLAS_COLUMN[kind] * size,
+      facilityBandY(FACILITY_SPECS[kind].span),
+      size,
+      size,
+      0,
+      0,
+      size,
+      size,
+    );
+  } catch {
+    facilityArt(kind).paint(ctx);
+  }
+}
+
+export async function loadFacilityAtlas(source = FACILITY_SPRITE_SOURCE): Promise<FacilityAtlas> {
   const canvas = document.createElement('canvas');
   canvas.width = FACILITY_ATLAS_W;
   canvas.height = FACILITY_ATLAS_H;
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('2D 캔버스를 만들 수 없습니다');
-  drawFacilityAtlas(ctx);
+  ctx.imageSmoothingEnabled = false;
+  let placeholder = false;
+  try {
+    ctx.drawImage(await loadFacilitySpriteSheet(source), 0, 0);
+  } catch (error) {
+    placeholder = true;
+    console.warn('시설 아틀라스를 읽지 못해 기존 코드 그림으로 대체합니다.', error);
+    drawFacilityAtlas(ctx);
+  }
   const texture = Texture.from(canvas);
   texture.source.scaleMode = 'nearest';
   texture.source.autoGenerateMipmaps = false;
   return {
     texture,
-    placeholder: false,
+    placeholder,
     uv(kind) {
       const size = facilityCellSize(FACILITY_SPECS[kind].span),
         x = FACILITY_ATLAS_COLUMN[kind] * size,

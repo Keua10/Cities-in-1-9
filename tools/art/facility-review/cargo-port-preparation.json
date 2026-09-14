@@ -1,0 +1,41 @@
+{
+  "id": "cargo-port",
+  "kind": 21,
+  "span": 3,
+  "name": "소형 화물항",
+  "subject": "Small cargo port, one yellow dock crane fully inside lot, muted rust blue and green container stacks, brick warehouse with loading shutters, tiny forklift, quayside bollards, contained dark blue water strip and small cargo barge entirely inside square footprint.",
+  "sourceFile": "exec-df061060-056c-4c8f-91d4-24ea9afb645e.png",
+  "sourceHash": "0877293ff53dfd74a4b8d99d68e1b535708473f9f7f2ab2de4c457a360398719",
+  "sourceDimensions": [
+    1254,
+    1254
+  ],
+  "backgroundRemoval": "source alpha",
+  "nativeSize": 192,
+  "palette": "union of approved commercial-l3-a, residential-l3-a, industrial-l3-a RGB palettes",
+  "projection": {
+    "scaleY": 0.9414880809053702,
+    "shearY": -0.0649616456262252,
+    "dx": -2,
+    "shiftY": 18.51346702899785,
+    "sourceFront": {
+      "left": {
+        "m": 0.6000730727073432,
+        "b": 128.31243453903303,
+        "inliers": 69,
+        "residual": 0.7174765558397098
+      },
+      "right": {
+        "m": -0.4620752648885641,
+        "b": 231.72724394105467,
+        "inliers": 69,
+        "residual": 0.5910242357812763
+      },
+      "cx": 97.36381044110398,
+      "cy": 186.7378354409216
+    },
+    "outsideSourceSamples": 0,
+    "unsupportedPerimeterPixels": 7,
+    "joinedPerimeterPixels": 371
+  }
+}

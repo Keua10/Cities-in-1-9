@@ -1,0 +1,41 @@
+{
+  "id": "school",
+  "kind": 3,
+  "span": 3,
+  "name": "학교",
+  "subject": "Brick school with red-brown pitched roof, clock tower, classroom wings, fenced playground with slide and swings, small sports court and tiny yellow school bus. Garden beds, entrance stone steps.",
+  "sourceFile": "exec-20d51602-93eb-4920-9e09-543941ccbc46.png",
+  "sourceHash": "c9745ef80bd667173bfb627febc26dc800ab5934763c1921e8ae8a1ddbb0afe8",
+  "sourceDimensions": [
+    1254,
+    1254
+  ],
+  "backgroundRemoval": "edge-connected neutral matte removal",
+  "nativeSize": 192,
+  "palette": "union of approved commercial-l3-a, residential-l3-a, industrial-l3-a RGB palettes",
+  "projection": {
+    "scaleY": 1.011867351842952,
+    "shearY": -0.0010166734444895242,
+    "dx": -7,
+    "shiftY": -0.998089886255887,
+    "sourceFront": {
+      "left": {
+        "m": 0.4951406649616366,
+        "b": 136.0593350383632,
+        "inliers": 69,
+        "residual": 0.6107416879795267
+      },
+      "right": {
+        "m": -0.4931311655096821,
+        "b": 237.5036414565826,
+        "inliers": 69,
+        "residual": 0.7270490805017857
+      },
+      "cx": 102.64818169494865,
+      "cy": 186.88462397990298
+    },
+    "outsideSourceSamples": 0,
+    "unsupportedPerimeterPixels": 47,
+    "joinedPerimeterPixels": 326
+  }
+}

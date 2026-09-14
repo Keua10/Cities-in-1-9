@@ -1,0 +1,41 @@
+{
+  "id": "medium-airport",
+  "kind": 24,
+  "span": 5,
+  "name": "중형 공항",
+  "subject": "Medium regional airport on FIVE by FIVE tiles: one runway with markings, two small regional aircraft parked on apron, terminal and modest control tower, hangar, taxiway lines, fuel truck and airport fence. Doors vehicles windows same world pixel scale as small facilities.",
+  "sourceFile": "exec-cd362c43-6ed2-4e38-8476-74fcdd1b1605.png",
+  "sourceHash": "5ac8aeef37221d054f933da8594f7770e0598a522ff0ba4f630cd58785631bdb",
+  "sourceDimensions": [
+    1254,
+    1254
+  ],
+  "backgroundRemoval": "edge-connected neutral matte removal",
+  "nativeSize": 320,
+  "palette": "union of approved commercial-l3-a, residential-l3-a, industrial-l3-a RGB palettes",
+  "projection": {
+    "scaleY": 1.0239401455961605,
+    "shearY": -0.05628721710956874,
+    "dx": 12,
+    "shiftY": 1.7752066382800287,
+    "sourceFront": {
+      "left": {
+        "m": 0.5432809910834057,
+        "b": 234.73752071332754,
+        "inliers": 115,
+        "residual": 0.7043636076698476
+      },
+      "right": {
+        "m": -0.43333859386096424,
+        "b": 379.01865383097925,
+        "inliers": 115,
+        "residual": 0.7828612009784592
+      },
+      "cx": 147.7352444512673,
+      "cy": 314.9992707367612
+    },
+    "outsideSourceSamples": 0,
+    "unsupportedPerimeterPixels": 91,
+    "joinedPerimeterPixels": 566
+  }
+}

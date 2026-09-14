@@ -1,0 +1,7 @@
+{
+  "kind": 0,
+  "id": "fire-station",
+  "tool": "built-in image_gen",
+  "prompt": "Use case: stylized-concept. Asset type: one production pixel-art sprite for a TheoTown-inspired isometric city game. Reference images are STYLE/PALETTE references only, do not reproduce their building. Match their restrained warm stone, rusty brick, dark blue slate, deep olive foliage, tiny textured pixel clusters and ambient roof shadows. NO neon grass, no saturated orange, no glossy 3D render. Subject: Compact red-brown brick fire station with two large open garage bays, two tiny red fire engines parked inside the aprons, hose drying tower with dark slate cap, equipment lockers, a hydrant, white garage trim, subdued red service sign. Small native trees and iron fence at rear only. Composition: exactly one isolated complete facility on a square 2x2 tile diamond foundation. Orthodox 2:1 dimetric view, ground axes slopes EXACTLY +0.5 and -0.5, vertical walls vertical. Diamond width twice its ground depth. Canvas logical resolution 128x128, crisp pixel-art intended for nearest-neighbor raster export. Base spans 94% canvas width, bottom tip centered with safety margin, roof and all trees/vehicles entirely inside frame. Render entire lot including all FOUR ground corners, no cutouts at edges, no surrounding road or scene. Upper-left light, nuanced small material pixels. Transparent background with true alpha, no checkerboard, no labels, no text except essential icon signage.",
+  "generatedFile": "exec-f50e1747-ffdc-4078-aa2f-e442fb0247e5.png"
+}

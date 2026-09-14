@@ -1,0 +1,41 @@
+{
+  "id": "solar-power",
+  "kind": 13,
+  "span": 3,
+  "name": "태양광 발전소",
+  "subject": "Solar power plant with orderly angled rows of deep navy photovoltaic panels with fine blue cell grid, visible metal supports, service gaps, small inverter house, electrical cabinets, gravel track and fenced boundary. Modest olive grass between rows. No giant main building.",
+  "sourceFile": "exec-2fcd1405-5e92-4675-b503-78e2722ae9d0.png",
+  "sourceHash": "0cf300c6a90a0d40424004c0bbc8c49db906388f8a52d3791306d8b67cc4d12a",
+  "sourceDimensions": [
+    1254,
+    1254
+  ],
+  "backgroundRemoval": "edge-connected neutral matte removal",
+  "nativeSize": 192,
+  "palette": "union of approved commercial-l3-a, residential-l3-a, industrial-l3-a RGB palettes",
+  "projection": {
+    "scaleY": 0.9006844807160717,
+    "shearY": -0.009740687113334423,
+    "dx": 1,
+    "shiftY": 20.50578079066308,
+    "sourceFront": {
+      "left": {
+        "m": 0.5659481183777865,
+        "b": 133.2982584338083,
+        "inliers": 69,
+        "residual": 0.6297649494580355
+      },
+      "right": {
+        "m": -0.5443185970040191,
+        "b": 238.62825478017294,
+        "inliers": 69,
+        "residual": 0.7911094872731894
+      },
+      "cx": 94.86909306305117,
+      "cy": 186.98924314504922
+    },
+    "outsideSourceSamples": 0,
+    "unsupportedPerimeterPixels": 4,
+    "joinedPerimeterPixels": 374
+  }
+}
