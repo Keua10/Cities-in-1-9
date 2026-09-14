@@ -366,6 +366,8 @@ export function bindToolButtons(tools: Tools, onChange?: () => void): void {
     ['btn-tool-pipe-erase', 'pipeErase'],
     ['btn-tool-wire', 'wire'],
     ['btn-tool-wire-erase', 'wireErase'],
+    ['btn-tool-runway', 'runway'],
+    ['btn-tool-taxiway', 'taxiway'],
   ];
 
   const buttons: Array<[HTMLElement, ToolId]> = [];
@@ -375,21 +377,103 @@ export function bindToolButtons(tools: Tools, onChange?: () => void): void {
   }
 
   const sheet = buildFacilitySheet(tools, () => {
+    closeToolSubmenus();
     syncAll();
     onChange?.();
   });
 
+  const zoneMenu = document.getElementById('tools-zone-menu');
+  const serviceMenu = document.getElementById('tools-service-menu');
+  const transportMenu = document.getElementById('tools-transport-menu');
+  const zoneCategory = document.getElementById('btn-tool-zones');
+  const serviceCategory = document.getElementById('btn-tool-services');
+  const transportCategory = document.getElementById('btn-tool-transport');
+  const menus = [zoneMenu, serviceMenu, transportMenu].filter((el): el is HTMLElement =>
+    Boolean(el),
+  );
+  const categories = [zoneCategory, serviceCategory, transportCategory];
+
+  const closeToolSubmenus = (): void => {
+    for (const menu of menus) menu.hidden = true;
+    for (const category of categories) {
+      category?.setAttribute('aria-expanded', 'false');
+      category?.setAttribute('aria-pressed', 'false');
+    }
+  };
+
+  const openToolSubmenu = (menu: HTMLElement, category: HTMLElement): void => {
+    const open = menu.hidden;
+    closeToolSubmenus();
+    if (open) {
+      menu.hidden = false;
+      category.setAttribute('aria-expanded', 'true');
+      category.setAttribute('aria-pressed', 'true');
+    }
+  };
+
   const syncAll = (): void => {
     for (const [el, tool] of buttons) el.setAttribute('aria-pressed', String(tools.tool === tool));
     sheet.sync();
+    const zoneTool = tools.tool === 'zoneR' || tools.tool === 'zoneC' || tools.tool === 'zoneI';
+    const serviceTool =
+      tools.tool === 'waterPipe' ||
+      tools.tool === 'sewerPipe' ||
+      tools.tool === 'pipeErase' ||
+      tools.tool === 'wire' ||
+      tools.tool === 'wireErase';
+    const transportTool = tools.tool === 'runway' || tools.tool === 'taxiway';
+    zoneCategory?.setAttribute('aria-expanded', String(zoneMenu ? !zoneMenu.hidden : false));
+    serviceCategory?.setAttribute(
+      'aria-expanded',
+      String(serviceMenu ? !serviceMenu.hidden : false),
+    );
+    transportCategory?.setAttribute(
+      'aria-expanded',
+      String(transportMenu ? !transportMenu.hidden : false),
+    );
+    zoneCategory?.setAttribute('aria-pressed', String(zoneTool));
+    serviceCategory?.setAttribute('aria-pressed', String(serviceTool));
+    transportCategory?.setAttribute('aria-pressed', String(transportTool));
   };
+
+  zoneCategory?.addEventListener('click', () => {
+    sheet.setOpen(false);
+    openToolSubmenu(zoneMenu!, zoneCategory);
+    syncAll();
+  });
+  serviceCategory?.addEventListener('click', () => {
+    sheet.setOpen(false);
+    openToolSubmenu(serviceMenu!, serviceCategory);
+    syncAll();
+  });
+  transportCategory?.addEventListener('click', () => {
+    sheet.setOpen(false);
+    openToolSubmenu(transportMenu!, transportCategory);
+    syncAll();
+  });
 
   for (const [el, tool] of buttons) {
     el.addEventListener('click', () => {
       const reopen = tool === 'facility' && tools.tool !== 'facility';
       tools.setTool(tool);
-      if (tool === 'facility') sheet.setOpen(reopen || !sheet.isOpen());
-      else sheet.setOpen(false);
+      if (tool === 'facility') {
+        closeToolSubmenus();
+        sheet.setOpen(reopen || !sheet.isOpen());
+      } else {
+        sheet.setOpen(false);
+        const groupedTool =
+          tool === 'zoneR' ||
+          tool === 'zoneC' ||
+          tool === 'zoneI' ||
+          tool === 'waterPipe' ||
+          tool === 'sewerPipe' ||
+          tool === 'pipeErase' ||
+          tool === 'wire' ||
+          tool === 'wireErase' ||
+          tool === 'runway' ||
+          tool === 'taxiway';
+        if (!groupedTool) closeToolSubmenus();
+      }
       syncAll();
       onChange?.();
     });
@@ -449,12 +533,12 @@ function buildFacilitySheet(tools: Tools, onPick: () => void): FacilitySheet {
   });
 
   const groups: Array<[string, number[]]> = [
-    ['필수 시설', []],
-    ['복지 시설', []],
-    ['상하수도 시설', []],
-    ['발전 시설', []],
-    ['위생·장의 시설', []],
-    ['특수 시설', []],
+    ['공공 서비스', []],
+    ['공원·복지', []],
+    ['상하수도', []],
+    ['발전', []],
+    ['환경·장의', []],
+    ['특수·교통', []],
   ];
 
   for (let kind = 0; kind < FACILITY_COUNT; kind++) {

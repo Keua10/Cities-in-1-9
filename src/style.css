@@ -237,12 +237,37 @@ body.clean-view #minimap-shell {
   transform: translateX(-50%);
   z-index: 5;
   display: flex;
-  gap: 6px;
-  padding: 6px;
+  flex-direction: column;
+  gap: 4px;
+  padding: 5px;
   border: 1px solid var(--edge);
   border-radius: 12px;
   background: var(--panel);
   backdrop-filter: blur(6px);
+}
+
+.tool-primary,
+.tool-submenu {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tool-submenu {
+  padding-top: 4px;
+  border-top: 1px solid rgba(231, 238, 242, 0.12);
+}
+
+.tool-submenu[hidden] {
+  display: none;
+}
+
+.tool-submenu-label {
+  flex: 0 0 auto;
+  padding: 0 5px;
+  color: var(--ink-dim);
+  font-size: 10px;
+  letter-spacing: 0.03em;
 }
 
 #tools button {
@@ -265,6 +290,55 @@ body.clean-view #minimap-shell {
 #tools button[aria-pressed='true'] {
   background: rgba(111, 211, 184, 0.16);
   color: var(--accent);
+}
+
+#tools .tool-primary > button {
+  min-width: 68px;
+  min-height: 42px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(231, 238, 242, 0.08);
+  font-weight: 600;
+}
+
+#tools .tool-primary > button:first-child,
+#tools .tool-primary > button:last-child {
+  min-width: 58px;
+}
+
+#tools .tool-primary > button[aria-expanded='true'] {
+  border-color: rgba(111, 211, 184, 0.55);
+  background: rgba(111, 211, 184, 0.16);
+  color: var(--accent);
+}
+
+#tools .tool-primary > button:nth-child(2) {
+  color: #d6d8d1;
+}
+
+#tools .tool-primary > button:nth-child(3) {
+  color: #a7d99d;
+}
+
+#tools .tool-primary > button:nth-child(4) {
+  color: #f0cf86;
+}
+
+#tools .tool-primary > button:nth-child(5) {
+  color: #82d6dd;
+}
+
+#tools .tool-primary > button:nth-child(6) {
+  color: #9ebaf0;
+}
+
+#tools .tool-primary > button:nth-child(7) {
+  color: #ee9a82;
+}
+
+#tools .tool-submenu button {
+  min-height: 38px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid transparent;
 }
 
 /* 지구 버튼은 켜졌을 때 지구 색을 그대로 쓴다. 지도 위 색과 같아야 헷갈리지 않는다. */
@@ -725,6 +799,28 @@ body.clean-view #minimap-shell {
   }
   #tools {
     bottom: calc(80px + var(--safe-bottom));
+    width: calc(100vw - 20px);
+    overflow: visible;
+  }
+  #tools .tool-primary,
+  #tools .tool-submenu {
+    width: 100%;
+    min-width: 0;
+    flex-wrap: wrap;
+  }
+  #tools .tool-primary > button {
+    flex: 1 1 calc(25% - 4px);
+    min-width: 0;
+    padding-inline: 5px;
+    font-size: 12px;
+  }
+  #tools .tool-primary > button:first-child,
+  #tools .tool-primary > button:last-child {
+    min-width: 0;
+  }
+  #tools .tool-submenu-label {
+    flex: 0 0 100%;
+    padding: 0 3px 2px;
   }
   .facility-finder button {
     width: 100%;
@@ -757,6 +853,14 @@ body.clean-view #minimap-shell {
   border-radius: 12px;
   background: var(--panel);
   backdrop-filter: blur(6px);
+}
+
+#facility-sheet::before {
+  content: '시설 선택 · 카드 선택 후 지도에 배치';
+  display: block;
+  color: #c5d7c9;
+  font-size: 11px;
+  letter-spacing: 0.02em;
 }
 
 #facility-sheet .fs-row {
@@ -798,8 +902,14 @@ body.clean-view #minimap-shell {
 
 #facility-sheet .fs-label {
   flex: 0 0 62px;
+  align-self: flex-start;
+  margin-top: 8px;
+  padding: 3px 5px;
+  border-left: 2px solid #6fd3b8;
+  background: rgba(111, 211, 184, 0.08);
   color: var(--ink-dim);
   font-size: 12px;
+  line-height: 1.25;
 }
 
 #facility-sheet .fs-list {
@@ -821,8 +931,34 @@ body.clean-view #minimap-shell {
   color: var(--ink-dim);
   font: inherit;
   text-align: left;
-  width: 180px;
+  width: 168px;
   cursor: pointer;
+}
+
+#facility-sheet .fs-row:nth-of-type(2) .fs-label {
+  border-left-color: #7ee28e;
+  background: rgba(126, 226, 142, 0.08);
+}
+
+#facility-sheet .fs-row:nth-of-type(3) .fs-label {
+  border-left-color: #52cbff;
+  background: rgba(82, 203, 255, 0.08);
+}
+
+#facility-sheet .fs-row:nth-of-type(4) .fs-label {
+  border-left-color: #ffdf55;
+  background: rgba(255, 223, 85, 0.08);
+}
+
+#facility-sheet .fs-row:nth-of-type(5) .fs-label {
+  border-left-color: #e0bc6a;
+  background: rgba(224, 188, 106, 0.08);
+}
+
+#facility-sheet .fs-row:nth-of-type(6) .fs-label,
+#facility-sheet .fs-row:nth-of-type(7) .fs-label {
+  border-left-color: #9ebaf0;
+  background: rgba(158, 186, 240, 0.08);
 }
 @media (max-width: 560px) {
   #facility-sheet .fs-row {
@@ -834,6 +970,9 @@ body.clean-view #minimap-shell {
   }
   #facility-sheet .fs-item {
     width: 100%;
+  }
+  #facility-sheet .fs-label {
+    margin-top: 2px;
   }
 }
 

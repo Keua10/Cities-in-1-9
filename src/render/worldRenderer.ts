@@ -115,6 +115,7 @@ export class WorldRenderer {
   private lastZoom = -1;
   private cursorTile: { tx: number; ty: number } | null = null;
   private preview: FacilityPreview | null = null;
+  private facilityFocus: { tx: number; ty: number; span: number } | null = null;
 
   showFog = true;
   showGrid = false;
@@ -168,26 +169,8 @@ export class WorldRenderer {
   }
   /** Finder highlight is separate from placement preview and hover selection. */
   setFacilityFocus(f: { tx: number; ty: number; span: number } | null): void {
-    const g = this.facilityFocusLayer;
-    g.clear();
-    if (!f) return;
-    const { tx, ty, span } = f,
-      end = span - 1,
-      h = this.world.sampleHeight(tx, ty);
-    const x = (x: number, y: number) => tileToWorldX(x, y),
-      y = (x: number, y: number) => tileToWorldY(x, y, h);
-    const points = [
-      x(tx, ty),
-      y(tx, ty) - TILE_HH,
-      x(tx + end, ty) + TILE_HW,
-      y(tx + end, ty),
-      x(tx + end, ty + end),
-      y(tx + end, ty + end) + TILE_HH,
-      x(tx, ty + end) - TILE_HW,
-      y(tx, ty + end),
-    ];
-    g.poly(points).stroke({ color: 0x17282c, width: 5 });
-    g.poly(points).stroke({ color: 0xf1d185, width: 2 });
+    this.facilityFocus = f;
+    this.drawFacilityFocus(0);
   }
   attachDisasters(sim: DisasterSim): void {
     this.disasters = sim;
@@ -337,6 +320,9 @@ export class WorldRenderer {
       this.drawGrid(range, camera.zoom);
       this.drawCursor();
     }
+    // 시설 찾기 표식은 선택된 한 곳만 갱신한다. 전체 건물 메시를 다시 굽지
+    // 않고도 멀리서 위치가 읽히며, 확대·축소 때도 화면 픽셀 두께를 유지한다.
+    if (this.facilityFocus) this.drawFacilityFocus(now);
 
     this.evict(now, range);
     this.pedestrianLayer.draw(this.world, this.traffic?.pedestrians ?? [], this.showFog, view);
@@ -524,6 +510,57 @@ export class WorldRenderer {
     g.fill({ color: 0x6fd3b8, alpha: 0.18 });
     g.poly(diamond);
     g.stroke({ width: Math.max(1, 1 / this.lastZoom), color: 0x9df0da, alpha: 0.95 });
+  }
+
+  /** 시설 찾기에서 선택한 한 곳을 도트풍 핀과 맥동 링으로 강조한다. */
+  private drawFacilityFocus(now: number): void {
+    const g = this.facilityFocusLayer;
+    g.clear();
+    const f = this.facilityFocus;
+    if (!f) return;
+    const end = f.span - 1;
+    const h = this.world.sampleHeight(f.tx, f.ty);
+    const x = tileToWorldX(f.tx + end / 2, f.ty + end / 2);
+    const y = tileToWorldY(f.tx + end / 2, f.ty + end / 2, h);
+    const left = tileToWorldX(f.tx, f.ty),
+      top = tileToWorldY(f.tx, f.ty, h) - TILE_HH,
+      right = tileToWorldX(f.tx + end, f.ty) + TILE_HW,
+      bottom = tileToWorldY(f.tx + end, f.ty + end, h) + TILE_HH,
+      points = [
+        left,
+        top,
+        right,
+        tileToWorldY(f.tx + end, f.ty, h),
+        tileToWorldX(f.tx + end, f.ty + end),
+        bottom,
+        tileToWorldX(f.tx, f.ty + end) - TILE_HW,
+        tileToWorldY(f.tx, f.ty + end, h),
+      ];
+    const zoom = this.lastZoom > 0 ? this.lastZoom : 1;
+    const px = Math.max(1, 1 / zoom);
+    // 어두운 외곽선을 먼저 깔아 어떤 지형 색 위에서도 읽히게 한다.
+    g.poly(points).stroke({ color: 0x17282c, width: px * 5, alpha: 0.95 });
+    g.poly(points).stroke({ color: 0xf1d185, width: px * 2, alpha: 1 });
+
+    const phase = Number.isFinite(now) ? (now % 1100) / 1100 : 0;
+    const pulse = 1 + phase * 0.75;
+    const radius = Math.max(TILE_HW * 0.55, TILE_HW * Math.min(3.2, 0.95 + f.span * 0.12)) * pulse;
+    const alpha = 0.78 - phase * 0.38;
+    g.circle(x, y - TILE_HH * Math.max(1.5, f.span * 0.35), radius).stroke({
+      color: 0xffd36e,
+      width: px * 2,
+      alpha,
+    });
+    const pinY = y - TILE_HH * Math.max(2.2, f.span * 0.62);
+    g.moveTo(x, y - TILE_HH * 0.5)
+      .lineTo(x, pinY + TILE_HH * 0.2)
+      .stroke({
+        color: 0xffd36e,
+        width: px * 2,
+        alpha: 0.9,
+      });
+    g.circle(x, pinY, Math.max(4, TILE_HW * 0.18)).fill({ color: 0x17282c, alpha: 0.96 });
+    g.circle(x, pinY, Math.max(2, TILE_HW * 0.1)).fill({ color: 0xffd36e, alpha: 1 });
   }
 
   /** 프레임 끝에서 UV 변경분을 GPU 로 올린다. */
