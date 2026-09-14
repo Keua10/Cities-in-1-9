@@ -311,6 +311,14 @@ export class MacroSim {
     this.rebuildTrafficFields();
   }
 
+  /** 일시정지 중에는 접속 시각과 공급망만 갱신하고 시간은 진행하지 않는다. */
+  holdClock(now = Date.now()): void {
+    // A live pause must not become offline catch-up time after saving and reopening.
+    this.macro.tickedAt = now;
+    this.power.ensure(this.world);
+    this.water.ensure(this.world);
+  }
+
   /** 실시간 프레임에서 부른다. 지나간 만큼 틱을 돌린다. */
   update(deltaMs: number, budget: number): void {
     this.power.ensure(this.world);

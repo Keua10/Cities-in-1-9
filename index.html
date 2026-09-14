@@ -2,74 +2,89 @@
 <html lang="ko">
   <head>
     <meta charset="UTF-8" />
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
-    />
-    <meta name="theme-color" content="#0e1418" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#233c47" />
     <title>1-9 도시</title>
   </head>
-  <body>
-    <div id="loading">지형을 그리는 중…</div>
-    <div id="hud"></div>
-    <div id="save-status" data-status="idle">저장됨</div>
-    <div id="city-panel"></div>
-    <div id="tools" role="toolbar" aria-label="건설 도구">
-      <div class="tool-primary">
-        <button id="btn-tool-select" type="button">선택</button>
-        <button
-          id="btn-tool-road"
-          type="button"
-          title="클릭: 독립 도로 · 드래그: 지나간 방향으로 설치·연결"
-        >
-          도로
-        </button>
-        <button id="btn-tool-zones" type="button" aria-expanded="false">구역</button>
-        <button id="btn-tool-facility" type="button">시설</button>
-        <button id="btn-tool-services" type="button" aria-expanded="false">서비스</button>
-        <button id="btn-tool-transport" type="button" aria-expanded="false">교통</button>
-        <button id="btn-tool-bulldoze" type="button">철거</button>
-      </div>
-      <div id="tools-zone-menu" class="tool-submenu" hidden aria-label="구역 종류">
-        <span class="tool-submenu-label">구역 종류</span>
-        <button id="btn-tool-zone-r" type="button" data-zone="r">주거</button>
-        <button id="btn-tool-zone-c" type="button" data-zone="c">상업</button>
-        <button id="btn-tool-zone-i" type="button" data-zone="i">공업</button>
-      </div>
-      <div id="tools-service-menu" class="tool-submenu" hidden aria-label="도시 서비스 도구">
-        <span class="tool-submenu-label">공급</span>
-        <button id="btn-tool-water" type="button" title="지하 상수도관 · 칸당 ₩12">상수도관</button>
-        <button id="btn-tool-sewer" type="button" title="지하 하수도관 · 칸당 ₩12">하수도관</button>
-        <button id="btn-tool-wire" type="button" title="칸당 ₩18 · 건물 사이 자동 전력 공유">
-          전선
-        </button>
-        <button
-          id="btn-tool-pipe-erase"
-          type="button"
-          title="지상 건물을 보존하고 해당 칸의 배관만 철거"
-        >
-          배관 철거
-        </button>
-        <button id="btn-tool-wire-erase" type="button">전선 철거</button>
-      </div>
-      <div id="tools-transport-menu" class="tool-submenu" hidden aria-label="교통 도구">
-        <span class="tool-submenu-label">공항</span>
-        <button id="btn-tool-runway" type="button">활주로</button>
-        <button id="btn-tool-taxiway" type="button">유도로</button>
-      </div>
-    </div>
-    <div id="toolbar">
-      <button id="btn-city-info" type="button" aria-expanded="false" aria-controls="city-panel">
-        도시 정보
+  <body class="game-ui">
+    <div id="loading">도시를 준비하고 있습니다…</div>
+    <header id="city-strip" aria-label="도시 요약">
+      <button
+        id="btn-city-info"
+        class="city-identity"
+        aria-expanded="false"
+        aria-controls="city-panel"
+      >
+        <span data-icon="city"></span><b>1–9 도시</b><span id="strip-level">Lv.1</span>
       </button>
-      <button id="btn-center" type="button">내 도시로</button>
-      <button id="btn-clean-view" type="button" aria-pressed="false">화면 정리</button>
-      <button id="btn-fog" type="button">안개 보기</button>
-      <button id="btn-grid" type="button">격자 보기</button>
-      <button id="btn-pipes" type="button" aria-pressed="false">공급 범위 보기</button>
-      <button id="btn-save" type="button">저장</button>
-      <button id="btn-reset" type="button">맵 초기화</button>
-      <button id="btn-logout" type="button">로그아웃</button>
+      <span class="strip-stat"
+        ><span data-icon="people"></span><b id="strip-pop">0</b><small>명</small></span
+      >
+      <span class="strip-stat occupancy"><small>입주</small><b id="strip-occupancy">0%</b></span>
+      <span id="save-status" data-status="idle">저장됨</span>
+    </header>
+    <nav id="tools" aria-label="건설 분류"></nav>
+    <nav id="game-actions" aria-label="도시 도구">
+      <button
+        data-panel="city-panel"
+        data-icon="chart"
+        aria-label="도시 통계"
+        title="도시 통계"
+      ></button>
+      <button
+        data-panel="hud"
+        data-icon="search"
+        aria-label="건물 정보와 시설 찾기"
+        title="건물 정보와 시설 찾기"
+      ></button>
+      <button
+        data-panel="map-layers"
+        data-icon="layers"
+        aria-label="지도 보기"
+        title="지도 보기"
+      ></button>
+      <button data-panel="toolbar" data-icon="settings" aria-label="설정" title="설정"></button>
+    </nav>
+    <section id="city-panel" aria-label="도시 통계" hidden></section>
+    <section id="hud" aria-label="건물 정보" hidden></section>
+    <section id="map-layers" class="game-panel" aria-label="지도 보기" hidden>
+      <header>
+        <b>지도 보기</b><button data-close-panel aria-label="지도 보기 닫기">×</button>
+      </header>
+      <button data-overlay="off">일반 지도</button><button data-overlay="water">급수 범위</button
+      ><button data-overlay="sewer">하수 범위</button
+      ><button data-overlay="power">전력 범위</button> <button id="btn-grid">격자 보기</button
+      ><button id="btn-fog">안개 보기</button>
+    </section>
+    <section id="toolbar" class="game-panel" aria-label="설정" hidden>
+      <header><b>도시 설정</b><button data-close-panel aria-label="설정 닫기">×</button></header>
+      <button id="btn-center">내 도시로 이동</button
+      ><button id="btn-clean-view" aria-pressed="false">화면 정리</button
+      ><button id="btn-save">지금 저장</button><button id="btn-logout">로그아웃</button
+      ><button id="btn-reset" class="danger">도시 초기화</button>
+    </section>
+    <div id="active-build" hidden>
+      <span id="active-build-label"></span
+      ><button id="cancel-build" aria-label="건설 취소">×</button>
+    </div>
+    <div id="game-notice" role="status"></div>
+    <footer id="game-bottom">
+      <div class="time-controls">
+        <span id="strip-date">1일차 00시</span
+        ><button data-speed="0" aria-label="일시정지" data-icon="pause"></button
+        ><button data-speed="1" aria-label="보통 속도" aria-pressed="true" data-icon="play"></button
+        ><button data-speed="2" aria-label="2배속" data-icon="fast"></button
+        ><span id="speed-label">1×</span>
+      </div>
+      <button class="finance-strip" data-panel="city-panel" aria-label="재정 상세">
+        <span data-icon="coin"></span><b id="strip-money">₩0</b
+        ><span id="strip-income">+0 /일</span>
+      </button>
+    </footer>
+    <div id="map-controls">
+      <button id="zoom-out" aria-label="축소">−</button
+      ><button id="map-home" data-icon="target" aria-label="내 도시로"></button
+      ><button id="zoom-in" aria-label="확대">+</button>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>

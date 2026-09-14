@@ -39,6 +39,8 @@ import { randomCitySeed, seedCityIfEmpty, SEEDED_CITY_MONEY } from './world/city
 import { findDryTileNearBase } from './world/spawn';
 import type { ChunkOverride } from './world/world';
 import { World } from './world/world';
+import { bindGameChrome } from './ui/gameChrome';
+import './ui/gameChrome.css';
 
 /** 카메라가 base 밖으로 나갈 수 있는 거리(청크). 이웃의 안개까지는 보이게 둔다. */
 const ROAM_CHUNKS = 8;
@@ -201,7 +203,12 @@ async function boot(): Promise<void> {
     onTap: (wx, wy) => {
       cursor = pickTile(world, wx, wy);
       renderer.setCursorTile(cursor);
-      if (cursor) transportPanel.showAt(cursor.tx, cursor.ty);
+      if (cursor) {
+        chrome.closePanels();
+        const transportSelected = transportPanel.showAt(cursor.tx, cursor.ty);
+        if (!transportSelected && world.buildingCovering(cursor.tx, cursor.ty))
+          chrome.showInspection();
+      }
     },
     onHover: (wx, wy) => {
       cursor = pickTile(world, wx, wy);
@@ -264,6 +271,7 @@ async function boot(): Promise<void> {
     },
   });
   bindToolButtons(tools);
+  const chrome = bindGameChrome(camera, tools, centerCamera);
 
   const cityLabel = city
     ? `${city.cityName} (${city.cityIndex}번)`
@@ -287,8 +295,11 @@ async function boot(): Promise<void> {
 
   app.ticker.add((ticker) => {
     const now = performance.now();
-    sim.update(ticker.deltaMS, CATCHUP_TICKS_PER_FRAME);
-    transport.update();
+    const gameDelta = ticker.deltaMS * chrome.speed;
+    if (chrome.speed > 0) {
+      sim.update(gameDelta, CATCHUP_TICKS_PER_FRAME);
+      transport.update();
+    } else sim.holdClock();
 
     const camTile = worldToTile(camera.x, camera.y);
     traffic.setActiveChunk(
@@ -297,7 +308,7 @@ async function boot(): Promise<void> {
       camTile.tx,
       camTile.ty,
     );
-    traffic.update(ticker.deltaMS);
+    if (chrome.speed > 0) traffic.update(gameDelta);
     camera.update(ticker.deltaMS);
     camera.applyTo(renderer.root);
     renderer.setFacilityPreview(cursor ? tools.facilityPreviewAt(cursor.tx, cursor.ty) : null);
@@ -312,6 +323,7 @@ async function boot(): Promise<void> {
 
     transportPanel.update();
     cityPanel.update(now, sim);
+    chrome.update(now, sim);
     facilityFinder.update(now);
     updateHud(now, ticker.FPS);
   });

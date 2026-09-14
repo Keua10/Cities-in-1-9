@@ -35,17 +35,9 @@ export function bindToolbar(deps: ToolbarDeps): void {
   centerBtn?.addEventListener('click', deps.centerCamera);
   const cleanBtn = document.getElementById('btn-clean-view');
   const cityBtn = document.getElementById('btn-city-info');
-  cityBtn?.addEventListener('click', () => {
-    const open = document.body.classList.toggle('city-info-open');
-    cityBtn.setAttribute('aria-expanded', String(open));
-    if (open) {
-      document.body.classList.remove('clean-view');
-      cleanBtn?.setAttribute('aria-pressed', 'false');
-      if (cleanBtn) cleanBtn.textContent = '화면 정리';
-    }
-  });
   cleanBtn?.addEventListener('click', () => {
     const clean = document.body.classList.toggle('clean-view');
+    document.dispatchEvent(new Event('close-game-panels'));
     document.body.classList.remove('city-info-open');
     cityBtn?.setAttribute('aria-expanded', 'false');
     cleanBtn.setAttribute('aria-pressed', String(clean));

@@ -45,7 +45,12 @@ export class TransportHubPanel {
     });
 
     const head = document.createElement('div');
-    Object.assign(head.style, { display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '8px' });
+    Object.assign(head.style, {
+      display: 'flex',
+      gap: '8px',
+      alignItems: 'center',
+      marginBottom: '8px',
+    });
     const title = document.createElement('b');
     title.textContent = '교통 시설 운영';
     title.style.flex = '1';
@@ -60,17 +65,24 @@ export class TransportHubPanel {
     this.body = document.createElement('div');
     this.root.appendChild(this.body);
     document.body.appendChild(this.root);
+    document.addEventListener('close-game-panels', () => this.hide());
+    document.addEventListener('close-transport-panel', () => this.hide());
   }
 
-  showAt(tx: number, ty: number): void {
+  showAt(tx: number, ty: number): boolean {
     const info = this.world.buildingCovering(tx, ty);
-    if (!info || info.kind === null || (!isAirportFacility(info.kind) && !isHarborFacility(info.kind))) {
+    if (
+      !info ||
+      info.kind === null ||
+      (!isAirportFacility(info.kind) && !isHarborFacility(info.kind))
+    ) {
       this.hide();
-      return;
+      return false;
     }
     this.selected = { tx: info.tx, ty: info.ty };
     this.root.hidden = false;
     this.paint(true);
+    return !this.root.hidden;
   }
 
   update(): void {
@@ -127,12 +139,12 @@ export class TransportHubPanel {
     let extra = `<div>수역 ${water} · 운용 ${total}/${h.maxShips}척</div>`;
     extra += `<div>여객선 ${h.passengerShips}척 · 화물선 ${h.cargoShips}척</div>`;
     const citywide = this.transport.summary();
-    const localTrips = citywide.passengerHarbors >= 2
-      ? h.passengerShips * PASSENGER_LOCAL_TRIPS_PER_SHIP
-      : 0;
+    const localTrips =
+      citywide.passengerHarbors >= 2 ? h.passengerShips * PASSENGER_LOCAL_TRIPS_PER_SHIP : 0;
     extra += `<div>방문객 ${h.passengerShips * PASSENGER_VISITORS_PER_SHIP}명/일 · 수상교통 ${localTrips}회/일 · 화물 수출수요 +${h.cargoShips * CARGO_EXPORT_PER_SHIP}</div>`;
     if (h.passengerShips > 0 && citywide.passengerHarbors < 2)
-      extra += '<div style="color:#d9b870">도시 내 수상교통은 가동 중인 여객 항구가 2곳 이상 있어야 연결됩니다.</div>';
+      extra +=
+        '<div style="color:#d9b870">도시 내 수상교통은 가동 중인 여객 항구가 2곳 이상 있어야 연결됩니다.</div>';
     if (h.hybrid) {
       const alloc = this.transport.allocationAt(status.tx, status.ty, status.kind)!;
       extra +=
