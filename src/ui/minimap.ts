@@ -6,6 +6,7 @@ import type { ServiceField } from '../sim/services';
 import { Build } from '../world/build';
 import type { World } from '../world/world';
 import './minimap.css';
+import { bindMapPointer } from './mapPointer';
 
 /**
  * 시설 도구를 든 동안 미니맵에 얹는 레이어.
@@ -30,8 +31,7 @@ const MAP_RES = 512;
 const REDRAW_MS = 500;
 
 /**
- * 좌하단 미니맵 + 거의 전체 화면 지도.
- * 작은 지도 탭: 그 위치로 카메라 이동 + 큰 지도 열기.
+ * 작은 지도 탭: 큰 지도 열기. 작은 지도 드래그: 카메라 중심 이동.
  * 큰 지도 탭/드래그: 카메라 중심 이동. 흰 사각형은 현재 화면 범위다.
  */
 export class Minimap {
@@ -43,7 +43,6 @@ export class Minimap {
   private base = document.createElement('canvas');
   private bounds: TileBounds;
   private lastBasePaint = -Infinity;
-  private dragging = false;
   /** 지금 그려진 오버레이 종류. 바뀌면 다시 칠한다. */
   private overlayKey = '';
 
@@ -103,37 +102,18 @@ export class Minimap {
   }
 
   private bindSmall(): void {
-    this.small.addEventListener('pointerdown', (e) => {
-      e.preventDefault();
-      this.moveFromPointer(this.small, e);
-    });
-    this.small.addEventListener('pointerup', (e) => {
-      e.preventDefault();
-      this.moveFromPointer(this.small, e);
-      this.modal.classList.add('open');
-      this.paintView(this.large);
-    });
+    bindMapPointer(
+      this.small,
+      (e) => this.moveFromPointer(this.small, e),
+      () => {
+        this.modal.classList.add('open');
+        this.paintView(this.large);
+      },
+    );
   }
 
   private bindLarge(): void {
-    this.large.addEventListener('pointerdown', (e) => {
-      e.preventDefault();
-      this.dragging = true;
-      this.large.setPointerCapture(e.pointerId);
-      this.moveFromPointer(this.large, e);
-    });
-    this.large.addEventListener('pointermove', (e) => {
-      if (!this.dragging) return;
-      e.preventDefault();
-      this.moveFromPointer(this.large, e);
-    });
-    const end = (e: PointerEvent): void => {
-      if (!this.dragging) return;
-      this.dragging = false;
-      if (this.large.hasPointerCapture(e.pointerId)) this.large.releasePointerCapture(e.pointerId);
-    };
-    this.large.addEventListener('pointerup', end);
-    this.large.addEventListener('pointercancel', end);
+    bindMapPointer(this.large, (e) => this.moveFromPointer(this.large, e));
   }
 
   private moveFromPointer(canvas: HTMLCanvasElement, e: PointerEvent): void {

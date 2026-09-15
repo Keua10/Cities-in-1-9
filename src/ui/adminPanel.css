@@ -1,0 +1,43 @@
+#admin-panel {
+  width: min(380px, calc(100vw - 48px));
+  max-height: 85vh;
+  overflow: auto;
+  color: #eee;
+  background: #223b47;
+  border: 1px solid #8ba0a7;
+  padding: 18px;
+}
+#admin-panel::backdrop {
+  background: #0009;
+}
+#admin-panel header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+#admin-panel form,
+#admin-panel label {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0;
+}
+#admin-panel input,
+#admin-panel button {
+  box-sizing: border-box;
+  padding: 10px;
+  font: inherit;
+}
+#admin-panel input {
+  width: 100%;
+}
+#admin-panel button {
+  min-height: 44px;
+}
+#admin-panel [hidden] {
+  display: none !important;
+}
+#admin-panel small,
+#admin-panel p {
+  font-size: 12px;
+  line-height: 1.5;
+}

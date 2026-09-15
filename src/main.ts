@@ -243,7 +243,21 @@ async function boot(): Promise<void> {
     renderer,
     saver,
     loggedIn: Boolean(session),
+    getMoney: () => sim.money,
+    setMoney: async (amount) => {
+      if (saver.status === 'saving' || saver.status === 'conflict')
+        throw new Error('저장 중이거나 다른 기기와 충돌했습니다. 저장 상태를 확인하세요.');
+      macro.money = amount;
+      saver.noteMacroChange();
+      await saver.saveNow();
+      if (session && saver.status !== 'saved' && saver.status !== 'idle')
+        throw new Error(
+          '자금은 현재 화면에 적용됐지만 서버 저장은 완료되지 않았습니다. 저장 상태를 확인하세요.',
+        );
+    },
     resetCity: async () => {
+      if (saver.status === 'saving' || saver.status === 'conflict')
+        throw new Error('저장 중이거나 다른 기기와 충돌했습니다. 저장 상태를 확인하세요.');
       app.ticker.stop();
       transportPanel.hide();
       world.clearBuilt();
@@ -259,13 +273,14 @@ async function boot(): Promise<void> {
       sim.resetState(SEEDED_CITY_MONEY, Date.now());
       try {
         await saver.saveNow();
+        if (session && saver.status !== 'saved' && saver.status !== 'idle')
+          throw new Error('새 도시 초기화 상태를 서버에 저장하지 못했습니다.');
       } catch (err) {
         // 조용히 새로고침하면 학생은 "버튼이 안 먹는다" 로만 본다. 실제로
         // 무슨 일이 있었는지 알려주고 나서 화면을 서버 상태에 맞춘다.
         console.error('초기화 저장 실패', err);
-        window.alert(
-          '새 도시를 서버에 저장하지 못했습니다. 예전 도시가 그대로 보이면 잠시 뒤 다시 시도해 주세요.',
-        );
+        app.ticker.start();
+        throw err;
       }
       location.reload();
     },
