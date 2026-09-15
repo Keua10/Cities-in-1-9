@@ -1,4 +1,5 @@
 import type { CityStats } from '../sim/cityStats';
+import { formatMoney } from './money';
 import { FACILITY_NAMES } from '../sim/simConstants';
 
 export interface CityAdviceInput {
@@ -61,9 +62,7 @@ export function cityAdvice(input: CityAdviceInput): CityAdvice {
       `공원·복지 요구 충족 주거 건물 ${percent(s.amenityFulfilled)}% · 부족한 동네의 공원 범위를 확인하세요.`,
     );
   if (input.netIncome < 0)
-    issues.push(
-      `하루 예상 적자 ₩${Math.round(-input.netIncome).toLocaleString('ko-KR')} · 세입과 유지비를 확인하세요.`,
-    );
+    issues.push(`하루 예상 적자 ${formatMoney(-input.netIncome)} · 세입과 유지비를 확인하세요.`);
   const occupancy = percent(s.occupancy);
   const headline = `건물 ${s.buildings}채 · 입주율 ${occupancy}%`;
   if (!issues.length && s.occupancy < 0.75)

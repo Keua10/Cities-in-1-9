@@ -1,10 +1,5 @@
 import './adminPanel.css';
-
-export function parseAdminMoney(value: string): number | null {
-  if (!/^\d+$/.test(value.trim())) return null;
-  const amount = Number(value);
-  return Number.isSafeInteger(amount) && amount >= 0 && amount <= 1_000_000_000_000 ? amount : null;
-}
+import { formatMoney, parseAdminMoney, toWon } from './money';
 
 /** Local game tools; this code gate is not server-side administrator authentication. */
 export function bindAdminPanel(deps: {
@@ -18,7 +13,7 @@ export function bindAdminPanel(deps: {
   dialog.setAttribute('aria-labelledby', 'admin-title');
   dialog.innerHTML = `<header><b id="admin-title">관리자 도구</b><button type="button" id="admin-close" aria-label="관리자 도구 닫기">×</button></header>
     <form id="admin-unlock"><label>관리자 코드<input name="code" type="password" autocomplete="off" required></label><button>열기</button></form>
-    <div id="admin-controls" hidden><form id="admin-money"><label>도시 자금 설정<input name="amount" type="text" inputmode="numeric" required></label><small>0 ~ 1,000,000,000,000 · 정수 입력</small><button>자금 적용</button></form>
+    <div id="admin-controls" hidden><form id="admin-money"><label>도시 자금 설정 (원)<input name="amount" type="text" inputmode="numeric" required></label><small>0 ~ 1,000,000,000,000원 · 정수 입력</small><button>자금 적용</button></form>
     <button type="button" id="admin-generate">대도시 생성</button><p>대도시 생성은 현재 도시를 지우고 새로 만듭니다.</p></div><p id="admin-result" role="status"></p>`;
   document.body.append(dialog);
   const unlock = dialog.querySelector<HTMLFormElement>('#admin-unlock')!;
@@ -31,7 +26,7 @@ export function bindAdminPanel(deps: {
   document.getElementById('btn-admin')!.addEventListener('click', () => {
     document.dispatchEvent(new Event('close-game-panels'));
     document.dispatchEvent(new Event('close-build-palette'));
-    amount.value = String(Math.round(deps.getMoney()));
+    amount.value = String(toWon(deps.getMoney()));
     dialog.showModal();
   });
   dialog.querySelector('#admin-close')!.addEventListener('click', () => dialog.close());
@@ -77,10 +72,7 @@ export function bindAdminPanel(deps: {
       result.textContent = '허용 범위 안의 0 이상 정수를 입력하세요.';
       return;
     }
-    void run(
-      () => deps.setMoney(value),
-      `도시 자금을 ${value.toLocaleString('ko-KR')}으로 설정했습니다.`,
-    );
+    void run(() => deps.setMoney(value), `도시 자금을 ${formatMoney(value)}으로 설정했습니다.`);
   });
   dialog.querySelector('#admin-generate')!.addEventListener('click', () => {
     if (

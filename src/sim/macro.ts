@@ -777,7 +777,8 @@ export class MacroSim {
     this.stats.dailyIncome = income;
     this.stats.dailyUpkeep = upkeep;
     this.stats.facilityUpkeep = facilityUpkeep;
-    this.macro.money = Math.round((this.macro.money + income - upkeep) * 100) / 100;
+    // A ledger unit represents 10,000 won; retain whole-won precision at settlement.
+    this.macro.money = Math.round((this.macro.money + income - upkeep) * 10_000) / 10_000;
     this.macro.prosperity = normalizeProsperity(
       this.prosperity +
         dailyProsperity(this.stats.population, this.stats.occupancy, income - upkeep),

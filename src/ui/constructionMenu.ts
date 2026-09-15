@@ -1,4 +1,5 @@
 import type { Tools } from './tools';
+import { formatMoney } from './money';
 import {
   BUILD_CATEGORIES,
   BUILD_ITEMS,
@@ -61,7 +62,7 @@ export function bindConstructionMenu(tools: Tools, onChange?: () => void): void 
       tools.tool === 'bulldoze'
         ? '철거 · 지도를 눌러 제거'
         : selected
-          ? `${selected.name} · ₩${selected.cost.toLocaleString('ko-KR')} · 지도에 배치`
+          ? `${selected.name} · ${formatMoney(selected.cost, true)} · 지도에 배치`
           : '';
     onChange?.();
   };
@@ -127,7 +128,7 @@ export function bindConstructionMenu(tools: Tools, onChange?: () => void): void 
     b.dataset.item = item.id;
     b.setAttribute('aria-label', item.name);
     b.title = item.detail;
-    b.innerHTML = `<span class="build-art">${gameIcon(item.icon)}</span><b>${item.name}</b><span class="build-price">₩${item.cost.toLocaleString('ko-KR')}</span><small>${item.detail}</small><span class="build-lock"></span>`;
+    b.innerHTML = `<span class="build-art">${gameIcon(item.icon)}</span><b>${item.name}</b><span class="build-price" title="${formatMoney(item.cost)}">${formatMoney(item.cost, true)}</span><small>${item.detail}</small><span class="build-lock"></span>`;
     if (item.kind !== undefined) {
       const canvas = document.createElement('canvas');
       // Native canvas dimensions come from the actual atlas span, not the displayed card size.

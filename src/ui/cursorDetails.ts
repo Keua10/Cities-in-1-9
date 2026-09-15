@@ -1,4 +1,5 @@
 import { TIER_NAMES } from '../sim/buildings';
+import { formatMoney } from './money';
 import { FACILITY_SPECS } from '../sim/facilities';
 import type { MacroSim } from '../sim/macro';
 import { WATER_SPECS } from '../sim/config/water';
@@ -17,7 +18,7 @@ import { AMENITY_NEED_BY_TIER, FACILITY_NAMES } from '../sim/simConstants';
 
 export function describeFacility(sim: MacroSim, tx: number, ty: number, kind: number): string {
   const spec = FACILITY_SPECS[kind];
-  const upkeep = `하루 ₩${Math.round(sim.services.upkeepOfKind(kind)).toLocaleString('ko-KR')}`;
+  const upkeep = `하루 ${formatMoney(sim.services.upkeepOfKind(kind))}`;
 
   if (POWER_SPECS[kind])
     return `${spec.name} · 발전 용량 ${POWER_SPECS[kind].capacity.toLocaleString('ko-KR')} · ${sim.power.supplyAt(tx, ty) > 0 ? '가동' : '가동 중지: 도로 확인'} · ${upkeep}`;
@@ -49,7 +50,12 @@ export function describeFacility(sim: MacroSim, tx: number, ty: number, kind: nu
 
     if (isHarborFacility(kind)) {
       const harbor = HARBOR_SPECS[kind];
-      const mode = harbor.mode === 'passenger' ? '여객 전용' : harbor.mode === 'cargo' ? '화물 전용' : '여객+화물 배분';
+      const mode =
+        harbor.mode === 'passenger'
+          ? '여객 전용'
+          : harbor.mode === 'cargo'
+            ? '화물 전용'
+            : '여객+화물 배분';
       return `${spec.name} · ${role} · ${mode} · 최대 ${harbor.maxShips}척 · 수역 인접 · ${powered ? '전력 공급' : '전력 미공급'} (수요 ${power}) · ${upkeep}${road}`;
     }
     if (isAirportFacility(kind)) {

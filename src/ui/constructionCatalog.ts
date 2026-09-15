@@ -1,4 +1,5 @@
 import type { ToolId } from './tools';
+import { formatMoney } from './money';
 import { FACILITY_SPECS } from '../sim/facilities';
 import { COST_ROAD, COST_ZONE } from '../sim/simConstants';
 import { PIPE_COST, WATER_SPECS } from '../sim/config/water';
@@ -83,7 +84,7 @@ for (const spec of FACILITY_SPECS) {
     unlock: spec.unlockLevel,
     icon: BUILD_CATEGORIES.find((c) => c.id === category)!.icon,
     detail:
-      `${spec.span}×${spec.span} · 유지 ₩${spec.upkeepPerDay.toLocaleString('ko-KR')}/일` +
+      `${spec.span}×${spec.span} · 유지 ${formatMoney(spec.upkeepPerDay)}/일` +
       (capacity ? ` · 용량 ${capacity.toLocaleString('ko-KR')}` : '') +
       (spec.needsRoad ? ' · 도로 필요' : '') +
       (k === 17 ? ' · 장식용, 현재 도시 기능 없음' : '') +

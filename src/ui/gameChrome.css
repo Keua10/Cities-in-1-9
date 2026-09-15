@@ -285,6 +285,7 @@ body.game-ui {
 }
 .game-ui #city-panel .cp-money {
   font-size: 25px;
+  overflow-wrap: anywhere;
 }
 .game-ui .cp-gauge-label {
   flex-basis: 72px;

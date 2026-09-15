@@ -4,6 +4,7 @@ import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const checks = {
+  money: 'tools/check/moneyCheck.ts',
   minimapPointer: 'tools/check/minimapPointerCheck.ts',
   gameUi: 'tools/check/gameUiCheck.ts',
   facilityDetails: 'tools/check/facilityDetailsCheck.ts',

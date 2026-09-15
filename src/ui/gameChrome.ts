@@ -1,4 +1,5 @@
 import { decorateGameIcons } from './gameIcons';
+import { formatMoney } from './money';
 import type { Camera } from '../core/camera';
 import type { Tools } from './tools';
 import type { MacroSim } from '../sim/macro';
@@ -100,9 +101,12 @@ export function bindGameChrome(camera: Camera, tools: Tools, center: () => void)
       setText('strip-pop', Math.round(sim.stats.population).toLocaleString('ko-KR'));
       setText('strip-occupancy', `${Math.round(sim.stats.occupancy * 100)}%`);
       setText('strip-level', `Lv.${sim.cityLevel}`);
-      setText('strip-money', `₩${Math.round(sim.money).toLocaleString('ko-KR')}`);
-      const net = Math.round(sim.stats.dailyIncome - sim.financeEstimate().upkeep);
-      setText('strip-income', `${net >= 0 ? '+' : ''}${net.toLocaleString('ko-KR')} /일`);
+      setText('strip-money', formatMoney(sim.money, true));
+      document.getElementById('strip-money')!.title = formatMoney(sim.money);
+      const finance = sim.financeEstimate();
+      const net = finance.income - finance.upkeep;
+      setText('strip-income', `${formatMoney(net, true, true)} /일`);
+      document.getElementById('strip-income')!.title = `${formatMoney(net, false, true)} /일`;
       document.getElementById('strip-income')!.classList.toggle('negative', net < 0);
       setText('strip-date', `${sim.day}일차 ${String(sim.hourOfDay).padStart(2, '0')}:00`);
       setText('game-notice', tools.activeMessage(now));

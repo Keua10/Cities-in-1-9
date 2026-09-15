@@ -48,7 +48,7 @@ assert.match(notes, /주거 건물 40%/);
 assert.doesNotMatch(notes, /주민.*40%/);
 assert.match(notes, /2곳 과부하/);
 assert.match(notes, /쓰레기 처리 80%.*장의 서비스 60%/);
-assert.match(notes, /예상 적자 ₩1,200/);
+assert.match(notes, /예상 적자 ₩12,000,000/);
 const catchup = { ...outages, catchupLeft: 24 };
 assert.deepEqual(cityAdvice(catchup), {
   headline: '도시 변화를 계산하는 중… (24시간 남음)',

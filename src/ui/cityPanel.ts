@@ -1,4 +1,5 @@
 import { LEVEL_COUNT, TIER_NAMES, ZONE_C, ZONE_I, ZONE_NAMES, ZONE_R } from '../sim/buildings';
+import { formatMoney } from './money';
 import type { MacroSim } from '../sim/macro';
 import { BUILDING_UNLOCK_LEVEL, CITY_LEVELS } from '../sim/progression';
 import { SERVICE_KIND_COUNT } from '../sim/services';
@@ -280,11 +281,6 @@ function describeFacilities(sim: MacroSim): string {
   }
 
   return '';
-}
-
-function formatMoney(v: number): string {
-  const rounded = Math.round(v);
-  return `${rounded < 0 ? '-' : ''}₩${Math.abs(rounded).toLocaleString('ko-KR')}`;
 }
 
 function must(root: HTMLElement, sel: string): HTMLElement {
