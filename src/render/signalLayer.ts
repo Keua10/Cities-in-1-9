@@ -40,17 +40,28 @@ export class SignalLayer {
         const spanY = (junction.maxY - junction.minY + 1) / 2 + 0.55;
         const lx = cx + dir[0] * spanX;
         const ly = cy + dir[1] * spanY;
-        const x = tileToWorldX(lx, ly);
-        const y = tileToWorldY(lx, ly, world.sampleHeight(junction.minX, junction.minY));
+        const x = Math.round(tileToWorldX(lx, ly));
+        const y = Math.round(
+          tileToWorldY(lx, ly, world.sampleHeight(junction.minX, junction.minY)),
+        );
         const state = signalState(junction, leg.enterDir, signalTime);
-        const color =
-          state === SignalState.Green
-            ? 0x6fe27e
-            : state === SignalState.Yellow
-              ? 0xe8c15a
-              : 0xe25f5f;
-        this.graphics.rect(x - 2.5, y - 15, 5, 5).fill({ color, alpha: 0.95 });
+        drawSignalHead(this.graphics, x, y, state);
       }
     }
+  }
+}
+
+/** Three fixed lamp positions make state readable without relying on color alone. */
+export function drawSignalHead(g: Graphics, x: number, y: number, state: SignalState): void {
+  g.rect(x - 2, y - 1, 5, 2).fill(0x283337);
+  g.rect(x, y - 10, 2, 10).fill(0x39494b);
+  g.rect(x, y - 9, 1, 8).fill(0x9ca9a3);
+  g.rect(x - 2, y - 22, 6, 14).fill(0x1e292e);
+  g.rect(x - 1, y - 21, 1, 12).fill(0x526267);
+  const lamps = [SignalState.Red, SignalState.Yellow, SignalState.Green];
+  const lit = [0xe77c69, 0xe9c678, 0x82c893];
+  const unlit = [0x583c38, 0x514b36, 0x314a3e];
+  for (let i = 0; i < 3; i++) {
+    g.rect(x, y - 20 + i * 4, 2, 2).fill(state === lamps[i] ? lit[i] : unlit[i]);
   }
 }

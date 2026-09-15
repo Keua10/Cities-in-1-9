@@ -191,6 +191,8 @@ body.game-ui {
   background: #526457;
 }
 .game-ui .game-panel,
+.game-ui #toolbar,
+.game-ui #map-layers,
 .game-ui #hud,
 .game-ui #city-panel {
   position: fixed;
@@ -205,6 +207,8 @@ body.game-ui {
   max-width: none;
   max-height: calc(100dvh - var(--bar-top) - var(--bar-bottom) - 12px);
   overflow-y: auto;
+  overflow-x: hidden;
+  box-sizing: border-box;
   padding: 12px;
   border: 2px solid #607b81;
   border-radius: 5px;

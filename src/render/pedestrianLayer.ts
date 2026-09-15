@@ -37,7 +37,7 @@ export function pedestrianHidden(
   if (p.x >= b.maxTx || p.y >= b.maxTy) return false;
   const px = Math.floor(x - b.x);
   if (px < 0 || px >= b.size) return false;
-  for (const height of [1, 4, 7]) {
+  for (const height of [1, 4, 7, 9]) {
     const py = Math.floor(y - height - b.y);
     if (py < 0 || py >= b.size) continue;
     if (b.pixels.data[((b.v + py) * b.pixels.width + b.u + px) * 4 + 3] > 32) return true;
@@ -127,12 +127,28 @@ export class PedestrianLayer {
         y = tileToWorldY(p.x, p.y, surfaceHeightAt(world, p.x, p.y));
       if (x < bounds.minX || x > bounds.maxX || y < bounds.minY || y > bounds.maxY) continue;
       if (this.occluders.some((b) => pedestrianHidden(p, x, y, b))) continue;
-      const stride = Math.sin(p.progress * Math.PI * 5) * 0.8;
-      g.ellipse(x, y, 2.2, 1).fill({ color: 0x101820, alpha: 0.3 });
-      g.rect(x - 1.3, y - 3, 1, 2 + stride).fill(0x263340);
-      g.rect(x + 0.3, y - 3, 1, 2 - stride).fill(0x263340);
-      g.rect(x - 1.5, y - 6, 3, 3.5).fill(p.color);
-      g.circle(x, y - 7, 1.4).fill(0xf0c7a0);
+      drawPixelWalker(g, Math.round(x), Math.round(y), p.color, Math.floor(p.progress * 10) % 2);
     }
   }
+}
+
+/** Native integer pixels: hair, skin, jacket, arms, trousers and two walking poses. */
+export function drawPixelWalker(
+  g: Graphics,
+  x: number,
+  y: number,
+  color: number,
+  stride: number,
+): void {
+  g.rect(x - 2, y, 5, 1).fill({ color: 0x182327, alpha: 0.3 });
+  g.rect(x - 1, y - 3, 1, stride ? 3 : 2).fill(0x293642);
+  g.rect(x + 1, y - 3, 1, stride ? 2 : 3).fill(0x293642);
+  g.rect(x - 2, y - (stride ? 1 : 2), 2, 1).fill(0x1b272c);
+  g.rect(x + 1, y - (stride ? 2 : 1), 2, 1).fill(0x1b272c);
+  g.rect(x - 1, y - 6, 3, 3).fill(color);
+  g.rect(x - 2, y - 5, 1, 2).fill(color);
+  g.rect(x + 2, y - 5, 1, 2).fill(0xd5ac87);
+  g.rect(x - 1, y - 8, 3, 2).fill(0xd5ac87);
+  g.rect(x - 1, y - 9, 3, 1).fill(0x48382e);
+  g.rect(x - 1, y - 8, 1, 1).fill(0x48382e);
 }

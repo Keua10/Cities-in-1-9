@@ -2,7 +2,7 @@ import { Texture } from 'pixi.js';
 import { TILE_HH, TILE_HW } from '../core/constants';
 import { VEHICLE_BODY_LENGTH_TILES, VEHICLE_WIDTH_TILES } from '../sim/simConstants';
 
-export const VEHICLE_ATLAS_URL = 'sprites/vehicles.png';
+export const VEHICLE_ATLAS_URL = 'sprites/vehicles-pixel.png?v=1';
 export const VEHICLE_CELL = 32;
 /**
  * 차량 색/모양 변형 수.
@@ -77,7 +77,7 @@ async function loadImage(url: string): Promise<HTMLImageElement | null> {
 /* ------------------------------------------------------------------ */
 
 /**
- * sprites/vehicles.png 가 없을 때 쓰는 임시 차량.
+ * 제작 스크립트와 로딩 실패 시 대체 경로가 함께 사용하는 네이티브 차량 화가.
  *
  * 예전 fallback 은 네 방향 모두 같은 모양의 화면축 정렬 사각형이었고 색만 달랐다.
  * 그래서 차가 어느 쪽으로 가는지 화면에서 읽을 수 없었고, "우측통행이 되는지"
@@ -211,8 +211,8 @@ function drawCar(
     ]);
   };
 
-  // 접지 그림자
-  ctx.fillStyle = 'rgba(0,0,0,0.25)';
+  // Native opaque palette: no antialiased/partially transparent edge pixels.
+  ctx.fillStyle = '#303a3c';
   fillPoly(ctx, [point(hl, hw, 0), point(hl, -hw, 0), point(-hl, -hw, 0), point(-hl, hw, 0)]);
 
   const chassis = truck ? bodyHeight * 0.45 : bodyHeight * 0.5;
@@ -242,6 +242,28 @@ function drawCar(
     ]);
   }
 
+  // Side windows and wheels follow the same vehicle-local axes in all four views.
+  for (const side of [-1, 1]) {
+    if (ry * side <= 0) continue;
+    for (const axle of [-0.62, 0.62]) {
+      const [wx, wy] = point(hl * axle, hw * side, 1);
+      ctx.fillStyle = '#202c32';
+      ctx.fillRect(Math.round(wx) - 1, Math.round(wy) - 2, 3, 3);
+      ctx.fillStyle = '#879496';
+      ctx.fillRect(Math.round(wx), Math.round(wy) - 1, 1, 1);
+    }
+    ctx.fillStyle = '#64828d';
+    const from = truck ? hl * 0.4 : -hl * 0.45;
+    const to = truck ? hl * 0.85 : hl * 0.25;
+    const low = truck ? chassis + 3 : chassis + bodyHeight * 0.5;
+    fillPoly(ctx, [
+      point(from, hw * side * 0.83, low),
+      point(to, hw * side * 0.83, low),
+      point(to, hw * side * 0.83, low + 2),
+      point(from, hw * side * 0.83, low + 2),
+    ]);
+  }
+
   // 전조등(앞) / 후미등(뒤). 스프라이트만 보고도 진행방향을 알 수 있어야 한다.
   ctx.fillStyle = '#fff6c8';
   dot(ctx, point(hl * 0.99, hw * 0.62, chassis * 0.9));
@@ -254,11 +276,25 @@ function drawCar(
 }
 
 function fillPoly(ctx: CanvasRenderingContext2D, pts: ReadonlyArray<[number, number]>): void {
-  ctx.beginPath();
-  ctx.moveTo(pts[0][0], pts[0][1]);
-  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
-  ctx.closePath();
-  ctx.fill();
+  // Scanline rasterization: integer one-pixel runs keep the isometric edges crisp.
+  const minY = Math.floor(Math.min(...pts.map((p) => p[1])));
+  const maxY = Math.ceil(Math.max(...pts.map((p) => p[1])));
+  for (let y = minY; y < maxY; y++) {
+    const hits: number[] = [];
+    for (let i = 0; i < pts.length; i++) {
+      const a = pts[i],
+        b = pts[(i + 1) % pts.length],
+        sample = y + 0.5;
+      if ((a[1] <= sample && b[1] > sample) || (b[1] <= sample && a[1] > sample))
+        hits.push(a[0] + ((sample - a[1]) * (b[0] - a[0])) / (b[1] - a[1]));
+    }
+    hits.sort((a, b) => a - b);
+    for (let i = 0; i + 1 < hits.length; i += 2) {
+      const start = Math.ceil(hits[i] - 0.5),
+        end = Math.ceil(hits[i + 1] - 0.5);
+      if (end > start) ctx.fillRect(start, y, end - start, 1);
+    }
+  }
 }
 
 function dot(ctx: CanvasRenderingContext2D, p: [number, number]): void {
