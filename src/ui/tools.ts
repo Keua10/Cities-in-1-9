@@ -20,6 +20,10 @@ import {
 import type { World } from '../world/world';
 
 export type ToolId =
+  | 'metroTunnel'
+  | 'metroStation'
+  | 'metroErase'
+  | 'metroView'
   | 'select'
   | 'signalInstall'
   | 'signalRemove'
@@ -47,6 +51,10 @@ const TOOL_VALUE: Partial<Record<ToolId, number>> = {
 };
 
 export const TOOL_LABELS: Record<ToolId, string> = {
+  metroTunnel: '지하철 터널',
+  metroStation: '지하철역',
+  metroErase: '지하철 철거',
+  metroView: '지하철 보기',
   signalInstall: '신호등 설치',
   signalRemove: '신호등 제거',
   select: '선택',
@@ -69,6 +77,10 @@ const MAX_INTERPOLATE = 64;
 const MESSAGE_MS = 2500;
 
 export class Tools {
+  metroSelection: string | null = null;
+  get metroMode(): boolean {
+    return this.tool.startsWith('metro');
+  }
   inspectMode: UtilityMode = 'off';
   tool: ToolId = 'select';
   facilityKind = 0;
@@ -86,6 +98,8 @@ export class Tools {
   ) {}
 
   isPainting(): boolean | 'tap' {
+    if (this.tool === 'metroView') return false;
+    if (this.tool === 'metroStation' || this.tool === 'metroErase') return 'tap';
     return this.tool === 'facility' || this.tool === 'signalInstall' || this.tool === 'signalRemove'
       ? 'tap'
       : this.tool !== 'select';
@@ -96,6 +110,7 @@ export class Tools {
   }
 
   get utilityMode(): UtilityMode {
+    if (this.metroMode) return 'off';
     if (
       this.tool === 'wire' ||
       this.tool === 'wireErase' ||
@@ -116,6 +131,10 @@ export class Tools {
   }
 
   activeMessage(now: number): string {
+    if (this.metroMode && (!this.message || now - this.messageAt > MESSAGE_MS))
+      return this.tool === 'metroTunnel'
+        ? '드래그: 터널 연결 · 역은 도로 아래/옆에 설치 · 지상 건물 유지'
+        : '지하철 지도 · 역을 연결한 뒤 노선을 지정합니다.';
     if ((!this.message || now - this.messageAt > MESSAGE_MS) && this.utilityMode !== 'off') {
       return this.utilityMode === 'power'
         ? '노랑=전력 공급 범위 · 주황=용량 부족 · 회색 전선=단절 · 건물 가장자리 3칸 이내 자동 공유. 빈 땅은 전달하지 않습니다.'
@@ -221,6 +240,14 @@ export class Tools {
   }
 
   private apply(tx: number, ty: number): void {
+    if (this.metroMode) {
+      const action =
+        this.tool === 'metroStation' ? 'station' : this.tool === 'metroErase' ? 'erase' : 'tunnel';
+      const result = this.sim.metro.edit(tx, ty, action);
+      this.note(result.message);
+      this.metroSelection = `${tx},${ty}`;
+      return;
+    }
     if (this.tool === 'signalInstall' || this.tool === 'signalRemove') {
       if (!this.sim.setRoadSignal(tx, ty, this.tool === 'signalInstall'))
         this.note('신호등은 도로에서만 설치·제거할 수 있습니다.');

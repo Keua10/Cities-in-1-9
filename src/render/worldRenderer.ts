@@ -36,6 +36,8 @@ import type { FacilityAtlas } from './facilityAtlas';
 import { IncidentLayer } from './incidentLayer';
 import { PedestrianLayer } from './pedestrianLayer';
 import { SignalLayer } from './signalLayer';
+import { MetroLayer } from './metroLayer';
+import type { MetroNetwork } from '../sim/metro';
 import type { VehicleAtlas } from './vehicleAtlas';
 import { VehicleMesh } from './vehicleMesh';
 import { UtilityLayer, type UtilityMode } from './utilityLayer';
@@ -95,6 +97,10 @@ export class WorldRenderer {
   private previewLayer = new Graphics();
   private facilityFocusLayer = new Graphics();
   private signalLayer = new SignalLayer();
+  metro: MetroNetwork | null = null;
+  metroMode = false;
+  metroSelection: string | null = null;
+  private metroLayer = new MetroLayer();
   private incidentLayer = new IncidentLayer();
   private pedestrianLayer: PedestrianLayer;
   private disasters: DisasterSim | null = null;
@@ -145,6 +151,7 @@ export class WorldRenderer {
       this.incidentLayer.graphics,
       this.gridLayer,
       this.waterLayer.graphics,
+      this.metroLayer.graphics,
       this.cursorLayer,
       this.previewLayer,
       this.facilityFocusLayer,
@@ -268,7 +275,10 @@ export class WorldRenderer {
     view.maxY += MAX_HEIGHT * HEIGHT_UNIT;
     const range = visibleChunkRange(view);
     this.waterLayer.update(this.world, this.waterField, this.powerField, this.utilityMode, range);
-    this.scene.setOpacity(this.utilityMode === 'off' ? 1 : 0.22);
+    this.scene.setOpacity(this.metroMode ? 0.16 : this.utilityMode === 'off' ? 1 : 0.22);
+    this.metroLayer.draw(this.world, this.metro, this.metroMode, range, this.metroSelection);
+    this.signalLayer.graphics.visible = !this.metroMode;
+    this.pedestrianLayer.graphics.visible = !this.metroMode;
     const rangeKey = `${range.cx0},${range.cy0},${range.cx1},${range.cy1}`;
     const zoomChanged = Math.abs(camera.zoom - this.lastZoom) > 0.001;
 

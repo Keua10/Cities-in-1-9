@@ -16,6 +16,7 @@ import {
   setPedestrianRenderZoom,
 } from './render/pedestrianRenderPatch';
 import { WorldRenderer } from './render/worldRenderer';
+import { MetroPanel } from './ui/metroPanel';
 import { AssignmentTable } from './sim/assignment';
 import { CongestionMap } from './sim/congestion';
 import { MacroSim } from './sim/macro';
@@ -176,6 +177,7 @@ async function boot(): Promise<void> {
   let cursor: { tx: number; ty: number } | null = null;
 
   const sim = new MacroSim(world, macro);
+  renderer.metro = sim.metro;
   renderer.waterField = sim.water;
   renderer.powerField = sim.power;
   sim.onMacroChange = () => saver.noteMacroChange();
@@ -217,12 +219,17 @@ async function boot(): Promise<void> {
   };
 
   const tools = new Tools(world, renderer, sim);
+  const metroPanel = new MetroPanel(sim.metro, tools);
   const transportPanel = new TransportHubPanel(world, transport);
 
   attachInput(app.canvas, camera, {
     onTap: (wx, wy) => {
       cursor = pickTile(world, wx, wy);
       renderer.setCursorTile(cursor);
+      if (tools.metroMode) {
+        tools.metroSelection = `${cursor.tx},${cursor.ty}`;
+        return;
+      }
       if (cursor) {
         chrome.closePanels();
         const transportSelected = transportPanel.showAt(cursor.tx, cursor.ty);
@@ -352,6 +359,8 @@ async function boot(): Promise<void> {
     camera.applyTo(renderer.root);
     renderer.setFacilityPreview(cursor ? tools.facilityPreviewAt(cursor.tx, cursor.ty) : null);
     renderer.utilityMode = tools.utilityMode;
+    renderer.metroMode = tools.metroMode;
+    renderer.metroSelection = tools.metroSelection;
     setPedestrianRenderZoom(camera.zoom);
     renderer.update(camera, now);
     renderer.flush();
@@ -361,6 +370,7 @@ async function boot(): Promise<void> {
     );
 
     transportPanel.update();
+    metroPanel.update();
     cityPanel.update(now, sim);
     chrome.update(now, sim);
     facilityFinder.update(now);

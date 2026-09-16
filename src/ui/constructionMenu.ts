@@ -59,11 +59,13 @@ export function bindConstructionMenu(tools: Tools, onChange?: () => void): void 
     bulldoze.setAttribute('aria-pressed', String(tools.tool === 'bulldoze'));
     active.hidden = tools.tool === 'select';
     activeLabel.textContent =
-      tools.tool === 'bulldoze'
-        ? '철거 · 지도를 눌러 제거'
-        : selected
-          ? `${selected.name} · ${formatMoney(selected.cost, true)} · 지도에 배치`
-          : '';
+      tools.tool === 'metroView'
+        ? '지하철 보기 · 역을 눌러 연결 확인'
+        : tools.tool === 'bulldoze'
+          ? '철거 · 지도를 눌러 제거'
+          : selected
+            ? `${selected.name} · ${formatMoney(selected.cost, true)} · 지도에 배치`
+            : '';
     onChange?.();
   };
   const cancel = () => {

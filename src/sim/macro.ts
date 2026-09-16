@@ -1,4 +1,5 @@
 import { CHUNK_SIZE } from '../core/constants';
+import { MetroNetwork } from './metro';
 import { Build } from '../world/build';
 import { JunctionIndex } from './traffic/junctions';
 import { chunkIndexOf, localIndexOf } from '../core/iso';
@@ -95,6 +96,7 @@ export { graceFactor } from './satisfaction';
  */
 
 export class MacroSim {
+  readonly metro: MetroNetwork;
   sanitation = { waste: 1, funeral: 1 };
   /** [zone][tier] 수요. -1 ~ +1. */
   demand: number[][] = zeroDemand();
@@ -153,6 +155,7 @@ export class MacroSim {
     private macro: MacroState,
   ) {
     this.world.signalOverrides = this.macro.signalOverrides ?? {};
+    this.metro = new MetroNetwork(world, macro, () => this.onMacroChange?.());
     this.disasters = new DisasterSim(macro.disasters, macro.tick);
     this.water.power = this.power;
     this.services.power = this.power;
@@ -800,6 +803,7 @@ export class MacroSim {
    * 그러면 초기화가 서버에 안 실리고, 새로고침하면 예전 도시가 그대로 돌아온다.
    */
   resetState(money: number, nowMs: number): void {
+    this.metro.reset();
     delete this.macro.signalOverrides;
     this.world.signalOverrides = {};
     this.world.signalRevision++;

@@ -1,0 +1,58 @@
+#metro-panel {
+  position: fixed;
+  right: 60px;
+  top: 100px;
+  z-index: 35;
+  width: min(280px, calc(100vw - 88px));
+  max-height: 35dvh;
+  overflow: auto;
+  box-sizing: border-box;
+  padding: 12px;
+  color: #e1e5d8;
+  background: #203943;
+  border: 2px solid #648087;
+  box-shadow: 3px 3px #13252c;
+  font: 12px/1.5 system-ui;
+}
+#metro-panel[hidden] {
+  display: none;
+}
+#metro-panel header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+#metro-panel header b {
+  font-size: 16px;
+  color: #e2c586;
+}
+#metro-panel button {
+  background: #354f59;
+  border: 1px solid #789394;
+  color: #edf0dc;
+  min-height: 40px;
+  padding: 5px 10px;
+}
+#metro-panel p {
+  margin: 8px 0 0;
+  color: #b8cace;
+}
+#metro-panel .metro-summary {
+  color: #eef0db;
+  font-weight: 700;
+}
+#metro-panel .metro-state {
+  color: #e2c586;
+  border-top: 1px solid #536e75;
+  padding-top: 8px;
+}
+@media (max-width: 600px) {
+  #metro-panel {
+    right: 8px;
+    top: 80px;
+    width: 230px;
+    max-height: 25dvh;
+    font-size: 11px;
+  }
+}
