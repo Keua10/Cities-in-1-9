@@ -1,5 +1,7 @@
 /** Original 20×20 stepped silhouettes; integer coordinates keep the UI on a pixel grid. */
 const paths: Record<string, string> = {
+  signal: 'M2 19V2h13v2H4v15z M10 5h8v11h-8z M13 6v2h2V6z M13 9v2h2V9z M13 12v2h2v-2z',
+  signalRemove: 'M2 19V2h13v2H4v15z M10 5h8v5h-8z M9 13h10v3H9z',
   city: 'M2 18V8h5V3h6v7h5v8H2 M9 5v2h2V5 M4 10v2h1v-2 M9 9v2h2V9 M14 12v2h2v-2',
   people: 'M3 3h5v5H3z M2 10h7v7H7v2H4v-2H2z M12 5h4v4h-4z M11 11h7v6h-2v2h-3v-2h-2z',
   zones: 'M2 3h7v6H2z M11 3h7v6h-7z M2 11h7v6H2z M11 11h7v6h-7z',

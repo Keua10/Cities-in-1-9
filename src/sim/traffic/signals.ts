@@ -29,7 +29,7 @@ export const enum SignalState {
 
 const PHASE_LEN = SIGNAL_GREEN_MS + SIGNAL_YELLOW_MS + SIGNAL_ALL_RED_MS;
 
-/** 실제 한 주기 길이. simConstants 의 SIGNAL_CYCLE_MS 는 오프셋 해시 범위로만 쓴다. */
+/** 두 축의 녹색 합계와 황색/전적색을 보존하는 공통 주기. */
 export const SIGNAL_PERIOD_MS = PHASE_LEN * 2;
 
 /** 진입 방향이 속한 축(0 = ±tx, 1 = ±ty). */
@@ -48,11 +48,13 @@ export function signalState(junction: Junction, enterDir: number, timeMs: number
   if (!junction.signalized) return SignalState.Green;
   const t = cycleTime(junction, timeMs);
   const axis = signalAxis(enterDir);
-  const mine = axis === 0 ? 0 : PHASE_LEN;
+  const green0 = junction.green0Ms ?? SIGNAL_GREEN_MS;
+  const green = axis === 0 ? green0 : 2 * SIGNAL_GREEN_MS - green0;
+  const mine = axis === 0 ? 0 : green0 + SIGNAL_YELLOW_MS + SIGNAL_ALL_RED_MS;
   const local = t - mine;
-  if (local < 0 || local >= PHASE_LEN) return SignalState.Red;
-  if (local < SIGNAL_GREEN_MS) return SignalState.Green;
-  if (local < SIGNAL_GREEN_MS + SIGNAL_YELLOW_MS) return SignalState.Yellow;
+  if (local < 0) return SignalState.Red;
+  if (local < green) return SignalState.Green;
+  if (local < green + SIGNAL_YELLOW_MS) return SignalState.Yellow;
   return SignalState.Red; // 전적색
 }
 
@@ -68,10 +70,9 @@ export function signalState(junction: Junction, enterDir: number, timeMs: number
  */
 export function greenAxis(junction: Junction, timeMs: number): number {
   if (!junction.signalized) return -1;
-  const t = cycleTime(junction, timeMs);
-  const local = t < PHASE_LEN ? t : t - PHASE_LEN;
-  if (local >= SIGNAL_GREEN_MS) return -1;
-  return t < PHASE_LEN ? 0 : 1;
+  if (signalState(junction, 0, timeMs) === SignalState.Green) return 0;
+  if (signalState(junction, 1, timeMs) === SignalState.Green) return 1;
+  return -1;
 }
 
 /** 이 축의 녹색이 끝나기까지 남은 시간(ms). 이미 녹색이 아니면 0. */
@@ -79,8 +80,10 @@ export function greenRemainingMs(junction: Junction, enterDir: number, timeMs: n
   if (!junction.signalized) return Number.POSITIVE_INFINITY;
   const t = cycleTime(junction, timeMs);
   const axis = signalAxis(enterDir);
-  const mine = axis === 0 ? 0 : PHASE_LEN;
+  const green0 = junction.green0Ms ?? SIGNAL_GREEN_MS;
+  const green = axis === 0 ? green0 : 2 * SIGNAL_GREEN_MS - green0;
+  const mine = axis === 0 ? 0 : green0 + SIGNAL_YELLOW_MS + SIGNAL_ALL_RED_MS;
   const local = t - mine;
-  if (local < 0 || local >= SIGNAL_GREEN_MS) return 0;
-  return SIGNAL_GREEN_MS - local;
+  if (local < 0 || local >= green) return 0;
+  return green - local;
 }

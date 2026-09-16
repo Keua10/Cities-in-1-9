@@ -325,11 +325,20 @@ export class WorldRenderer {
     if (this.facilityFocus) this.drawFacilityFocus(now);
 
     this.evict(now, range);
+    this.pedestrianLayer.prepare(this.world, {
+      cx0: range.cx0 - 1,
+      cy0: range.cy0 - 1,
+      cx1: range.cx1 + 1,
+      cy1: range.cy1 + 1,
+    });
     this.pedestrianLayer.draw(this.world, this.traffic?.pedestrians ?? [], this.showFog, view);
 
     if (this.lastSignalDrawMs < 0 || now - this.lastSignalDrawMs >= 120) {
       this.lastSignalDrawMs = now;
-      this.signalLayer.draw(this.world, this.traffic, this.showFog, range);
+      this.traffic?.refreshRoadControls?.();
+      this.signalLayer.draw(this.world, this.traffic, this.showFog, range, (tx, ty, x, y) =>
+        this.pedestrianLayer.maskFor(tx, ty, x, y),
+      );
       if (this.disasters) this.incidentLayer.draw(this.world, this.disasters, range);
     }
 

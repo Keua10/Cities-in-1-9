@@ -134,6 +134,8 @@ export interface BuildingInfo {
  * Firestore 로 간다.
  */
 export class World {
+  signalOverrides: Record<string, boolean> = {};
+  signalRevision = 0;
   private legacyTerrain = new Set<string>();
 
   /** Configure once, before loading/rendering chunks. Persist this list in macro metadata. */
@@ -486,6 +488,8 @@ export class World {
     if (cur === value) return;
     this.walkRevision++;
     if (cur === Build.Road) {
+      delete this.signalOverrides[`${tx},${ty}`];
+      this.signalRevision++;
       for (let d = 0; d < 4; d++) {
         const nx = tx + DIRS[d][0],
           ny = ty + DIRS[d][1];

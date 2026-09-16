@@ -44,14 +44,23 @@ function tool(category: BuildCategory, id: ToolId, name: string, cost: number, d
     detail,
     unlock: 1,
     icon:
-      ({ zoneR: 'house', zoneC: 'shop', zoneI: 'factory' } as Record<string, string>)[id] ??
-      BUILD_CATEGORIES.find((c) => c.id === category)!.icon,
+      (
+        {
+          zoneR: 'house',
+          zoneC: 'shop',
+          zoneI: 'factory',
+          signalInstall: 'signal',
+          signalRemove: 'signalRemove',
+        } as Record<string, string>
+      )[id] ?? BUILD_CATEGORIES.find((c) => c.id === category)!.icon,
   });
 }
 tool('zones', 'zoneR', '주거 구역', COST_ZONE, '주택이 들어서는 구역 · 도로와 공급망 필요');
 tool('zones', 'zoneC', '상업 구역', COST_ZONE, '상점과 업무시설이 들어서는 구역');
 tool('zones', 'zoneI', '공업 구역', COST_ZONE, '공장과 생산시설이 들어서는 구역');
 tool('transport', 'road', '도로', COST_ROAD, '드래그로 도로 연결 · 클릭으로 독립 타일 설치');
+tool('transport', 'signalInstall', '신호등 설치', 0, '도로에만 설치 · 교차로는 영역 전체에 적용');
+tool('transport', 'signalRemove', '신호등 제거', 0, '도로에만 적용 · 해당 교차로 자동 설치도 해제');
 tool('transport', 'runway', '활주로', RUNWAY_COST, '일직선으로 설치 · 공항 등급별 최소 길이 필요');
 tool('transport', 'taxiway', '유도로', TAXIWAY_COST, '공항 터미널과 활주로를 연결');
 tool('power', 'wire', '전선', WIRE_COST, '건물 사이 전력 공유 · 빈 땅은 전선으로 연결');

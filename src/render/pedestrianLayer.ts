@@ -63,19 +63,8 @@ export class PedestrianLayer {
     this.buildings = read(buildingAtlas);
     this.facilities = read(facilityAtlas);
   }
-  draw(
-    world: World,
-    walkers: readonly Pedestrian[],
-    showFog: boolean,
-    bounds: { minX: number; minY: number; maxX: number; maxY: number },
-  ): void {
-    const g = this.graphics;
-    g.clear();
-    if (!walkers.length) return;
-    const cx0 = Math.min(...walkers.map((p) => chunkIndexOf(p.x))) - 1;
-    const cy0 = Math.min(...walkers.map((p) => chunkIndexOf(p.y))) - 1;
-    const cx1 = Math.max(...walkers.map((p) => chunkIndexOf(p.x))) + 1;
-    const cy1 = Math.max(...walkers.map((p) => chunkIndexOf(p.y))) + 1;
+  prepare(world: World, range: { cx0: number; cy0: number; cx1: number; cy1: number }): void {
+    const { cx0, cy0, cx1, cy1 } = range;
     const cacheKey = `${world.walkRevision},${cx0},${cy0},${cx1},${cy1}`;
     if (cacheKey !== this.cacheKey) {
       this.cacheKey = cacheKey;
@@ -117,6 +106,39 @@ export class PedestrianLayer {
         }
       }
     }
+  }
+  maskFor(tx: number, ty: number, x: number, y: number): (x: number, y: number) => boolean {
+    const candidates = this.occluders.filter(
+      (b) =>
+        tx < b.maxTx &&
+        ty < b.maxTy &&
+        b.x < x + 48 &&
+        b.x + b.size > x - 48 &&
+        b.y < y + 4 &&
+        b.y + b.size > y - 48,
+    );
+    return (x, y) =>
+      candidates.some((b) => {
+        if (tx >= b.maxTx || ty >= b.maxTy) return false;
+        const px = Math.floor(x - b.x),
+          py = Math.floor(y - b.y);
+        return (
+          px >= 0 &&
+          py >= 0 &&
+          px < b.size &&
+          py < b.size &&
+          b.pixels.data[((b.v + py) * b.pixels.width + b.u + px) * 4 + 3] > 32
+        );
+      });
+  }
+  draw(
+    world: World,
+    walkers: readonly Pedestrian[],
+    showFog: boolean,
+    bounds: { minX: number; minY: number; maxX: number; maxY: number },
+  ): void {
+    const g = this.graphics;
+    g.clear();
     for (const p of walkers) {
       if (
         showFog &&
@@ -127,9 +149,31 @@ export class PedestrianLayer {
         y = tileToWorldY(p.x, p.y, surfaceHeightAt(world, p.x, p.y));
       if (x < bounds.minX || x > bounds.maxX || y < bounds.minY || y > bounds.maxY) continue;
       if (this.occluders.some((b) => pedestrianHidden(p, x, y, b))) continue;
-      drawPixelWalker(g, Math.round(x), Math.round(y), p.color, Math.floor(p.progress * 10) % 2);
+      drawPixelWalker(
+        g,
+        Math.round(x),
+        Math.round(y),
+        p.color,
+        Math.floor(p.progress * 10) % 2,
+        walkingDirection(p),
+      );
     }
   }
+}
+
+export function walkingDirection(p: Pick<Pedestrian, 'path' | 'progress'>): number {
+  const length = p.path.length - 1;
+  if (length < 1) return 0;
+  const progress = ((p.progress % (length * 2)) + length * 2) % (length * 2);
+  const forward = progress < length;
+  const distance = forward ? progress : length * 2 - progress;
+  const i = Math.max(
+    0,
+    Math.min(length - 1, forward ? Math.floor(distance) : Math.ceil(distance) - 1),
+  );
+  const dx = (p.path[i + 1][0] - p.path[i][0]) * (forward ? 1 : -1);
+  const dy = (p.path[i + 1][1] - p.path[i][1]) * (forward ? 1 : -1);
+  return dx > 0 ? 0 : dy > 0 ? 1 : dx < 0 ? 2 : 3;
 }
 
 /** Native integer pixels: hair, skin, jacket, arms, trousers and two walking poses. */
@@ -139,6 +183,7 @@ export function drawPixelWalker(
   y: number,
   color: number,
   stride: number,
+  direction = 0,
 ): void {
   g.rect(x - 2, y, 5, 1).fill({ color: 0x182327, alpha: 0.3 });
   g.rect(x - 1, y - 3, 1, stride ? 3 : 2).fill(0x293642);
@@ -147,8 +192,11 @@ export function drawPixelWalker(
   g.rect(x + 1, y - (stride ? 2 : 1), 2, 1).fill(0x1b272c);
   g.rect(x - 1, y - 6, 3, 3).fill(color);
   g.rect(x - 2, y - 5, 1, 2).fill(color);
-  g.rect(x + 2, y - 5, 1, 2).fill(0xd5ac87);
-  g.rect(x - 1, y - 8, 3, 2).fill(0xd5ac87);
+  const right = direction === 0 || direction === 3;
+  const back = direction >= 2;
+  g.rect(x + (right ? 2 : -2), y - 5, 1, 2).fill(back ? color : 0xd5ac87);
+  g.rect(x - 1, y - 8, 3, 2).fill(back ? 0x48382e : 0xd5ac87);
   g.rect(x - 1, y - 9, 3, 1).fill(0x48382e);
-  g.rect(x - 1, y - 8, 1, 1).fill(0x48382e);
+  g.rect(x + (right ? -1 : 1), y - 8, 1, 1).fill(0x48382e);
+  g.rect(x + (right ? 1 : -1), y - 7, 1, 1).fill(back ? 0xb99576 : 0x423e37);
 }

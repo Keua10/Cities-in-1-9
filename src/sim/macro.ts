@@ -1,4 +1,6 @@
 import { CHUNK_SIZE } from '../core/constants';
+import { Build } from '../world/build';
+import { JunctionIndex } from './traffic/junctions';
 import { chunkIndexOf, localIndexOf } from '../core/iso';
 import type { MacroState } from '../net/types';
 import type { Parcel, World } from '../world/world';
@@ -150,6 +152,7 @@ export class MacroSim {
     private world: World,
     private macro: MacroState,
   ) {
+    this.world.signalOverrides = this.macro.signalOverrides ?? {};
     this.disasters = new DisasterSim(macro.disasters, macro.tick);
     this.water.power = this.power;
     this.services.power = this.power;
@@ -796,6 +799,9 @@ export class MacroSim {
    * 그러면 초기화가 서버에 안 실리고, 새로고침하면 예전 도시가 그대로 돌아온다.
    */
   resetState(money: number, nowMs: number): void {
+    delete this.macro.signalOverrides;
+    this.world.signalOverrides = {};
+    this.world.signalRevision++;
     this.macro.money = money;
     this.macro.population = 0;
     this.macro.tick = 0;
@@ -815,6 +821,22 @@ export class MacroSim {
   spend(amount: number): boolean {
     if (this.macro.money < amount) return false;
     this.macro.money -= amount;
+    return true;
+  }
+
+  setRoadSignal(tx: number, ty: number, enabled: boolean): boolean {
+    if (this.world.getBuild(tx, ty) !== Build.Road) return false;
+    const index = new JunctionIndex();
+    index.build(this.world, tx - 24, ty - 24, tx + 24, ty + 24);
+    const junction = index.at(tx, ty);
+    if (junction)
+      for (let i = 0; i < junction.cells.length; i += 2) {
+        delete this.world.signalOverrides[`${junction.cells[i]},${junction.cells[i + 1]}`];
+      }
+    this.world.signalOverrides[`${tx},${ty}`] = enabled;
+    this.macro.signalOverrides = this.world.signalOverrides;
+    this.world.signalRevision++;
+    this.onMacroChange?.();
     return true;
   }
 }

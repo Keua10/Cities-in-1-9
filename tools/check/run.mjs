@@ -4,6 +4,7 @@ import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const checks = {
+  signalPolicy: 'tools/check/signalPolicyCheck.ts',
   movingPixel: 'tools/check/movingPixelCheck.ts',
   money: 'tools/check/moneyCheck.ts',
   minimapPointer: 'tools/check/minimapPointerCheck.ts',

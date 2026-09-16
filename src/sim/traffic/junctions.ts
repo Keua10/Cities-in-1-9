@@ -1,8 +1,7 @@
-import { WORLD_SEED } from '../../core/constants';
 import { Build, DIRS } from '../../world/build';
 import type { World } from '../../world/world';
-import { simHash } from '../buildings';
-import { JUNCTION_LEG_MIN_TILES, JUNCTION_LEG_SCAN_MAX, SIGNAL_CYCLE_MS } from '../simConstants';
+import { configureSignals } from './signalPolicy';
+import { JUNCTION_LEG_MIN_TILES, JUNCTION_LEG_SCAN_MAX } from '../simConstants';
 
 /**
  * 교차로 영역 검출 — "도로 폭에 상관없이" 진짜 교차로만 찾는다.
@@ -65,6 +64,7 @@ export interface Junction {
   signalized: boolean;
   /** 신호 주기 오프셋. 영역마다 고정이라 이웃 교차로가 동시에 열리지 않는다. */
   offsetMs: number;
+  green0Ms?: number;
   /** 가장 넓은 진입로 폭. 비신호 교차로의 "큰길" 판정에 쓴다. */
   maxLegWidth: number;
 }
@@ -255,12 +255,39 @@ export class JunctionIndex {
         legs: [],
         legMask: 0,
         signalized: false,
-        offsetMs: simHash(WORLD_SEED, minX, minY, 0x5a17) % SIGNAL_CYCLE_MS,
+        offsetMs: 0,
         maxLegWidth: 1,
       });
     }
 
+    // Manual controls may create a stop on a straight road as well as a junction.
+    for (const [key, enabled] of Object.entries(world.signalOverrides)) {
+      const [tx, ty] = key.split(',').map(Number);
+      if (
+        !enabled ||
+        !this.inBounds(tx, ty) ||
+        world.getBuild(tx, ty) !== Build.Road ||
+        this.at(tx, ty)
+      )
+        continue;
+      const id = this.list.length;
+      this.ids[(ty - this.y0) * this.w + tx - this.x0] = id;
+      this.list.push({
+        id,
+        cells: Int32Array.from([tx, ty]),
+        minX: tx,
+        maxX: tx,
+        minY: ty,
+        maxY: ty,
+        legs: [],
+        legMask: 0,
+        signalized: true,
+        offsetMs: 0,
+        maxLegWidth: 1,
+      });
+    }
     for (const junction of this.list) this.buildLegs(world, junction);
+    configureSignals(world, this.list);
     this.revision++;
   }
 
@@ -292,7 +319,7 @@ export class JunctionIndex {
         while (
           len < JUNCTION_LEG_SCAN_MAX &&
           world.roadsConnected(px - DIRS[d][0], py - DIRS[d][1], px, py) &&
-          this.idAt(px, py) !== junction.id
+          this.idAt(px, py) < 0
         ) {
           len++;
           px += DIRS[d][0];

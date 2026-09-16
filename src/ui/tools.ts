@@ -21,6 +21,8 @@ import type { World } from '../world/world';
 
 export type ToolId =
   | 'select'
+  | 'signalInstall'
+  | 'signalRemove'
   | 'road'
   | 'zoneR'
   | 'zoneC'
@@ -45,6 +47,8 @@ const TOOL_VALUE: Partial<Record<ToolId, number>> = {
 };
 
 export const TOOL_LABELS: Record<ToolId, string> = {
+  signalInstall: '신호등 설치',
+  signalRemove: '신호등 제거',
   select: '선택',
   road: '도로',
   zoneR: '주거',
@@ -82,7 +86,9 @@ export class Tools {
   ) {}
 
   isPainting(): boolean | 'tap' {
-    return this.tool === 'facility' ? 'tap' : this.tool !== 'select';
+    return this.tool === 'facility' || this.tool === 'signalInstall' || this.tool === 'signalRemove'
+      ? 'tap'
+      : this.tool !== 'select';
   }
 
   get cityLevel(): number {
@@ -215,6 +221,15 @@ export class Tools {
   }
 
   private apply(tx: number, ty: number): void {
+    if (this.tool === 'signalInstall' || this.tool === 'signalRemove') {
+      if (!this.sim.setRoadSignal(tx, ty, this.tool === 'signalInstall'))
+        this.note('신호등은 도로에서만 설치·제거할 수 있습니다.');
+      else
+        this.note(
+          this.tool === 'signalInstall' ? '신호등 설치 지정' : '신호등 제거 · 자동 설치 제외',
+        );
+      return;
+    }
     if (this.tool === 'select') return;
     if (this.tool === 'wire' || this.tool === 'wireErase') {
       if (!this.world.isExplored(chunkIndexOf(tx), chunkIndexOf(ty))) {

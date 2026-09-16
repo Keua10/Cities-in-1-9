@@ -5,6 +5,7 @@ import {
   WORLD_SEED,
 } from '../../core/constants';
 import { chunkIndexOf } from '../../core/iso';
+import { SignalCoordinator } from './signalPolicy';
 import { Build, DIRS, roadMask } from '../../world/build';
 import type { World } from '../../world/world';
 import type { AssignmentTable } from '../assignment';
@@ -116,6 +117,7 @@ export class TrafficSim {
   private lastMacroTick = -1;
 
   private junctionIndex = new JunctionIndex();
+  private signalCoordinator = new SignalCoordinator();
   private control = new IntersectionControl();
   private junctionsBuiltFor = '';
   private junctionRoadStamp = -1;
@@ -214,9 +216,13 @@ export class TrafficSim {
    * 도로를 놓거나 지울 때마다 다시 만들면 드래그 건설 한 번에 수백 번 돈다.
    * 활성 영역, 도로 타일 수, 도로 연결 revision이 바뀌었을 때 다시 만든다.
    */
+  refreshRoadControls(): void {
+    this.refreshJunctions();
+  }
+
   private refreshJunctions(force = false): void {
     const key = `${this.activeCx},${this.activeCy}`;
-    let stamp = this.world.roadRevision;
+    let stamp = this.world.roadRevision * 31 + this.world.signalRevision;
     for (let dy = -SIM_RADIUS_CHUNKS; dy <= SIM_RADIUS_CHUNKS; dy++) {
       for (let dx = -SIM_RADIUS_CHUNKS; dx <= SIM_RADIUS_CHUNKS; dx++) {
         const parcel = this.world.peekParcel(this.activeCx + dx, this.activeCy + dy);
@@ -231,6 +237,12 @@ export class TrafficSim {
     const centerX = this.activeCx * CHUNK_SIZE + CHUNK_SIZE / 2;
     const centerY = this.activeCy * CHUNK_SIZE + CHUNK_SIZE / 2;
     const margin = half + JUNCTION_MARGIN_TILES;
+    const plans = new Map(
+      this.junctionIndex.junctions.map((j) => [
+        `${j.minX},${j.minY},${j.maxX},${j.maxY}`,
+        { offsetMs: j.offsetMs, green0Ms: j.green0Ms },
+      ]),
+    );
     this.junctionIndex.build(
       this.world,
       Math.floor(centerX - margin),
@@ -240,6 +252,10 @@ export class TrafficSim {
     );
     // 교차로가 바뀌면 통행권과 경로 캐시를 전부 버린다. 남겨두면 사라진 교차로의
     // 예약을 영원히 쥔 차가 생긴다.
+    for (const j of this.junctionIndex.junctions) {
+      const plan = plans.get(`${j.minX},${j.minY},${j.maxX},${j.maxY}`);
+      if (plan) Object.assign(j, plan);
+    }
     this.control.reset();
     this.router.invalidateCache();
     this.readySpawns = this.readySpawns.filter((p) => {
@@ -271,6 +287,7 @@ export class TrafficSim {
     );
     this.refreshJunctions();
     this.timeMs += dtMs;
+    this.signalCoordinator.update(this.junctionIndex.junctions, this.vehicles, this.timeMs);
     this.sampleMs += dtMs;
     // 토큰 버킷. 상한이 작아야 "조용하다가 한꺼번에" 가 구조적으로 불가능하다.
     this.spawnTokens = Math.min(

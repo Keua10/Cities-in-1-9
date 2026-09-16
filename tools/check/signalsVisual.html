@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="ko">
+  <meta charset="utf-8" /><title>신호등 · 가림 · 보행 방향 검수</title>
+  <style>
+    body {
+      overflow: hidden;
+      margin: 0;
+      background: #203026;
+      color: #eee;
+      font: 14px system-ui;
+    }
+    header {
+      position: fixed;
+      top: 8px;
+      left: 8px;
+      background: #152328ed;
+      padding: 12px;
+      z-index: 1;
+    }
+    button {
+      padding: 8px;
+      margin: 4px;
+    }
+    canvas {
+      display: block;
+      image-rendering: pixelated;
+    }
+  </style>
+  <header>
+    실제 게임 렌더러 · 도로변 신호 · 건물 뒤 가림 · 보행 방향<br />
+    <button id="install">중앙 교차로 신호 설치</button
+    ><button id="remove">중앙 교차로 신호 제거</button><button id="pause">신호 정지/재생</button
+    ><br /><span id="result">준비 중</span>
+  </header>
+  <script type="module" src="./signalsVisual.ts"></script>
+</html>
