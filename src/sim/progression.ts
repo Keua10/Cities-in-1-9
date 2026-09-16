@@ -38,9 +38,7 @@ export const CITY_LEVELS = [
 export const BUILDING_UNLOCK_LEVEL = [1, 2, 4] as const;
 /** Existing 0~20 order stays fixed. New transport kinds 21~25 append only. */
 export const FACILITY_UNLOCK_LEVEL: readonly number[] = [
-  1, 1, 1, 1, 1, 2, 3, 1, 2, 1, 3, 1, 2, 3, 1, 2, 1,
-  2, 3, 3, 3,
-  3, 4, 5, 4, 5,
+  1, 1, 1, 1, 1, 2, 3, 1, 2, 1, 3, 1, 2, 3, 1, 2, 1, 2, 3, 3, 3, 3, 4, 5, 4, 5, 1,
 ];
 
 export function normalizeProsperity(value: unknown): number {

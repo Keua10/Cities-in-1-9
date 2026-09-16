@@ -133,7 +133,7 @@ export class Tools {
   activeMessage(now: number): string {
     if (this.metroMode && (!this.message || now - this.messageAt > MESSAGE_MS))
       return this.tool === 'metroTunnel'
-        ? '드래그: 터널 연결 · 역은 도로 아래/옆에 설치 · 지상 건물 유지'
+        ? '드래그: 터널 연결 · 역은 도로 옆 빈 땅에 설치 · 지상 건물 유지'
         : '지하철 지도 · 역을 연결한 뒤 노선을 지정합니다.';
     if ((!this.message || now - this.messageAt > MESSAGE_MS) && this.utilityMode !== 'off') {
       return this.utilityMode === 'power'
@@ -167,6 +167,8 @@ export class Tools {
     tx: number,
     ty: number,
   ): { tx: number; ty: number; kind: number; ok: boolean } | null {
+    if (this.tool === 'metroStation')
+      return { tx, ty, kind: 26, ok: this.sim.metro.canPlaceStation(tx, ty).ok };
     if (this.tool !== 'facility') return null;
     const kind = this.facilityKind;
     return { tx, ty, kind, ok: canPlaceFacility(this.world, tx, ty, kind, this.cityLevel).ok };

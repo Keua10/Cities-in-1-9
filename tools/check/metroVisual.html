@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="ko">
+  <meta charset="utf-8" /><title>지상 역 · 지하철 노선 검수</title
+  ><style>
+    body {
+      margin: 0;
+      background: #203026;
+      color: #eee;
+      font: 14px system-ui;
+      overflow: hidden;
+    }
+    body > header {
+      position: fixed;
+      top: 8px;
+      left: 8px;
+      z-index: 10;
+      background: #203943;
+      padding: 12px;
+    }
+    button {
+      padding: 8px;
+    }
+    canvas {
+      display: block;
+      image-rendering: pixelated;
+    }
+  </style>
+  <header>
+    실제 게임 렌더러 · 1×1 지상 역 · 노선 편집<br /><button id="surface">지상 보기</button
+    ><button id="underground">지하철 보기</button><button id="cut">중앙 터널 제거</button
+    ><button id="restore">중앙 터널 복구</button><button id="cancel-build" hidden>취소</button>
+  </header>
+  <script type="module" src="./metroVisual.ts"></script>
+</html>

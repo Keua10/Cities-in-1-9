@@ -9,7 +9,7 @@ import type { MacroState } from '../../src/net/types';
 // The shallow catalog must expose every existing tool and facility, without duplicates.
 assert.equal(BUILD_CATEGORIES.length, 7);
 assert.equal(new Set(BUILD_ITEMS.map((x) => x.id)).size, BUILD_ITEMS.length);
-assert.equal(BUILD_ITEMS.length, FACILITY_SPECS.length + 17);
+assert.equal(BUILD_ITEMS.length, FACILITY_SPECS.length + 16);
 for (const category of BUILD_CATEGORIES)
   assert.ok(BUILD_ITEMS.some((x) => x.category === category.id));
 for (const spec of FACILITY_SPECS) {
@@ -17,7 +17,7 @@ for (const spec of FACILITY_SPECS) {
   assert.equal(entries.length, 1, `${spec.name} must appear exactly once`);
   assert.equal(entries[0].cost, spec.cost);
   assert.equal(entries[0].unlock, spec.unlockLevel);
-  assert.equal(entries[0].tool, 'facility');
+  assert.equal(entries[0].tool, spec.kind === 26 ? 'metroStation' : 'facility');
 }
 assert.deepEqual(
   BUILD_ITEMS.filter((x) => x.kind === undefined)
@@ -33,7 +33,7 @@ assert.deepEqual(
     'signalInstall',
     'signalRemove',
     'metroTunnel',
-    'metroStation',
+
     'metroErase',
     'metroView',
     'wire',

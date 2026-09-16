@@ -18,7 +18,7 @@ export function facilityBandY(span: number): number {
 }
 /** Retain existing atlas coordinates/IDs for all 26 facilities. */
 export const FACILITY_ATLAS_COLUMN: readonly number[] = [
-  0, 1, 0, 1, 0, 2, 2, 3, 4, 5, 3, 6, 4, 5, 6, 7, 7, 1, 8, 9, 10, 11, 0, 0, 1, 1,
+  0, 1, 0, 1, 0, 2, 2, 3, 4, 5, 3, 6, 4, 5, 6, 7, 7, 1, 8, 9, 10, 11, 0, 0, 1, 1, 2,
 ];
 export const FACILITY_ATLAS_W = Math.max(
   ...FACILITY_SPECS.map((s) => (FACILITY_ATLAS_COLUMN[s.kind] + 1) * facilityCellSize(s.span)),
@@ -85,6 +85,10 @@ export async function paintFacilityThumbnail(
   kind: number,
 ): Promise<void> {
   const size = facilityCellSize(FACILITY_SPECS[kind].span);
+  if (kind === 26) {
+    facilityArt(kind).paint(ctx);
+    return;
+  }
   try {
     const image = await loadFacilitySpriteSheet();
     ctx.clearRect(0, 0, size, size);
@@ -120,6 +124,7 @@ export async function loadFacilityAtlas(source = FACILITY_SPRITE_SOURCE): Promis
     console.warn('시설 아틀라스를 읽지 못해 기존 코드 그림으로 대체합니다.', error);
     drawFacilityAtlas(ctx);
   }
+  facilityArt(26).paint(ctx, FACILITY_ATLAS_COLUMN[26] * 64, 0);
   const texture = Texture.from(canvas);
   texture.source.scaleMode = 'nearest';
   texture.source.autoGenerateMipmaps = false;

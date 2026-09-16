@@ -163,9 +163,12 @@ export function bindConstructionMenu(tools: Tools, onChange?: () => void): void 
     opener?.focus();
   });
   let level = tools.cityLevel;
+  let lastTool = tools.tool;
   window.setInterval(() => {
-    if (level !== tools.cityLevel) {
+    if (level !== tools.cityLevel || lastTool !== tools.tool) {
       level = tools.cityLevel;
+      lastTool = tools.tool;
+      if (tools.metroMode) selected = BUILD_ITEMS.find((i) => i.tool === tools.tool) ?? null;
       sync();
     }
   }, 1000);

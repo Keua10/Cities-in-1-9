@@ -82,10 +82,16 @@ tool(
   'metroStation',
   '지하철역',
   METRO_STATION_COST,
-  '도로 아래/옆에 설치 · 터널 포함 · 별도 출입구 없음',
+  '도로 옆 빈 땅 1×1 · 지상 역과 지하 승강장 동시 설치',
 );
 tool('transport', 'metroView', '지하철 보기', 0, '역과 터널 연결 확인 · 역을 눌러 정보 보기');
-tool('transport', 'metroErase', '지하철 철거', 0, '선택한 칸의 역·터널만 제거 · 지상 시설 유지');
+tool(
+  'transport',
+  'metroErase',
+  '지하철 철거',
+  0,
+  '선택한 역 건물·승강장·터널 제거 · 다른 시설 유지',
+);
 tool('transport', 'signalInstall', '신호등 설치', 0, '도로에만 설치 · 교차로는 영역 전체에 적용');
 tool('transport', 'signalRemove', '신호등 제거', 0, '도로에만 적용 · 해당 교차로 자동 설치도 해제');
 tool('transport', 'runway', '활주로', RUNWAY_COST, '일직선으로 설치 · 공항 등급별 최소 길이 필요');
@@ -97,6 +103,12 @@ tool('water', 'sewerPipe', '하수도관', PIPE_COST, '하수 반경 4칸 · 상
 tool('water', 'pipeErase', '배관 철거', 0, '배관만 제거 · 지상 건물 보존');
 for (const spec of FACILITY_SPECS) {
   const k = spec.kind;
+  if (k === 26) {
+    const entry = items.find((i) => i.tool === 'metroStation')!;
+    entry.kind = k;
+    entry.unlock = 1;
+    continue;
+  }
   const category: BuildCategory =
     k <= 3 || k === 20
       ? 'service'

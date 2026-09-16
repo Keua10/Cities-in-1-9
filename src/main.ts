@@ -227,7 +227,13 @@ async function boot(): Promise<void> {
       cursor = pickTile(world, wx, wy);
       renderer.setCursorTile(cursor);
       if (tools.metroMode) {
-        tools.metroSelection = `${cursor.tx},${cursor.ty}`;
+        metroPanel.selectStation(`${cursor.tx},${cursor.ty}`);
+        return;
+      }
+      const station = sim.metro.stationAtSurface(cursor.tx, cursor.ty);
+      if (station && tools.tool === 'select') {
+        tools.setTool('metroView');
+        metroPanel.selectStation(station);
         return;
       }
       if (cursor) {
@@ -359,7 +365,7 @@ async function boot(): Promise<void> {
     camera.applyTo(renderer.root);
     renderer.setFacilityPreview(cursor ? tools.facilityPreviewAt(cursor.tx, cursor.ty) : null);
     renderer.utilityMode = tools.utilityMode;
-    renderer.metroMode = tools.metroMode;
+    renderer.metroMode = tools.metroMode && tools.tool !== 'metroStation';
     renderer.metroSelection = tools.metroSelection;
     setPedestrianRenderZoom(camera.zoom);
     renderer.update(camera, now);

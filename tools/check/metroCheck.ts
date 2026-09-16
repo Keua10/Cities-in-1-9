@@ -1,8 +1,12 @@
 import { strict as assert } from 'node:assert';
+import { facCode } from '../../src/sim/buildings';
+import { facilityArt } from '../../src/render/facilityArt';
 import { World } from '../../src/world/world';
 import { Build } from '../../src/world/build';
 import { Terrain } from '../../src/world/terrain';
-import { CHUNK_SIZE } from '../../src/core/constants';
+import { CHUNK_SIZE, CHUNK_TILES } from '../../src/core/constants';
+import { decodeOverride, encodeOverride } from '../../src/net/codec';
+import type { ChunkOverride } from '../../src/world/world';
 import { tileToWorldX, tileToWorldY } from '../../src/core/iso';
 import { MetroNetwork, METRO_TUNNEL_COST, METRO_STATION_COST } from '../../src/sim/metro';
 import { MacroSim } from '../../src/sim/macro';
@@ -19,7 +23,7 @@ const metro = new MetroNetwork(world, state, () => changes++);
 for (let dx = 0; dx <= 8; dx++) {
   world.setTile(x + dx, y, Terrain.Grass);
   world.setHeight(x + dx, y, 0);
-  world.setBuild(x + dx, y, Build.Road, false);
+  world.setBuild(x + dx, y + 1, Build.Road, false);
 }
 assert.equal(state.metro, undefined, 'old city remains unchanged until first edit');
 assert.equal(metro.edit(x, y, 'station').ok, true);
@@ -34,9 +38,58 @@ for (let dx = 1; dx < 8; dx++) assert.equal(metro.edit(x + dx, y, 'tunnel').ok, 
 assert.equal(state.money, 1000000 - 2 * METRO_STATION_COST - 7 * METRO_TUNNEL_COST);
 assert.deepEqual(metro.connectedStations(`${x},${y}`), [`${x + 8},${y}`]);
 assert.equal(metro.path(`${x},${y}`, `${x + 8},${y}`)?.length, 9);
-assert.equal(world.getBuild(x, y), Build.Road, 'underground station preserves surface road');
+assert.equal(world.getBld(x, y), facCode(26), 'station owns real surface building');
+assert.equal(world.getBuild(x, y + 1), Build.Road, 'adjacent road preserved');
 const restoredState = JSON.parse(JSON.stringify(state));
 const restored = new MetroNetwork(world, restoredState, () => {});
+assert.equal(metro.stationAccess(`${x},${y}`), true);
+const line = metro.saveLine(null, '중앙선', '#68b6ac', [`${x},${y}`, `${x + 8},${y}`]);
+assert.equal(line.ok, true);
+assert.equal(metro.saveLine(null, '빈 노선', '#68b6ac', []).ok, false);
+assert.equal(metro.saveLine(null, '중복', '#68b6ac', [`${x},${y}`, `${x},${y}`]).ok, false);
+assert.equal(metro.saveLine(line.id!, '역순', '#ce9960', [`${x + 8},${y}`, `${x},${y}`]).ok, true);
+assert.equal(metro.state.lines?.length, 1);
+assert.equal(metro.linePath(metro.state.lines![0].stops)?.length, 9);
+const savedLines = new MetroNetwork(world, JSON.parse(JSON.stringify(state)), () => {});
+assert.equal(savedLines.state.lines?.[0].name, '역순');
+assert.equal(savedLines.stationAccess(`${x},${y}`), true);
+const chunks = new Map<string, ChunkOverride>();
+for (const c of world.takeDirty().chunks)
+  chunks.set(`${c.cx},${c.cy}`, {
+    ...c,
+    build: decodeOverride(encodeOverride(c.build), CHUNK_TILES),
+    bld: decodeOverride(encodeOverride(c.bld), CHUNK_TILES),
+  });
+const restoredWorld = new World(0);
+restoredWorld.setPersistedOverrides(chunks);
+const completeRestore = new MetroNetwork(
+  restoredWorld,
+  JSON.parse(JSON.stringify(state)),
+  () => {},
+);
+assert.equal(restoredWorld.getBld(x, y), facCode(26), 'new facility code survives RLE parcel save');
+assert.equal(
+  completeRestore.stationAccess(`${x},${y}`),
+  true,
+  'surface access survives full world and macro reload',
+);
+assert.equal(completeRestore.linePath(completeRestore.state.lines![0].stops)?.length, 9);
+restoredWorld.setBuild(x, y + 1, Build.None);
+assert.equal(
+  completeRestore.stationAccess(`${x},${y}`),
+  false,
+  'removed road closes passenger access',
+);
+const art = facilityArt(26);
+assert.equal(art.size, 64);
+assert.equal(art.clippedPixels, 0, 'station sprite stays inside native footprint canvas');
+assert.ok(
+  art.data.every((v, i) => i % 4 !== 3 || v === 0 || v === 255),
+  'binary pixel alpha',
+);
+assert.equal(metro.edit(x + 1, y + 1, 'station').ok, false, 'cannot replace road');
+world.setBuild(x + 3, y - 1, Build.ZoneR);
+assert.equal(metro.edit(x + 3, y - 1, 'station').ok, false, 'cannot replace zoned plot');
 assert.equal(
   restored.path(`${x},${y}`, `${x + 8},${y}`)?.length,
   9,
@@ -44,12 +97,39 @@ assert.equal(
 );
 metro.edit(x + 4, y, 'erase');
 assert.equal(
+  metro.linePath(metro.state.lines![0].stops),
+  null,
+  'broken route is not silently rerouted through absent track',
+);
+assert.equal(
+  metro.saveLine(line.id!, '연결 끊김', '#68b6ac', metro.state.lines![0].stops).ok,
+  false,
+);
+assert.equal(
   metro.path(`${x},${y}`, `${x + 8},${y}`),
   null,
   'removed middle tunnel disconnects network',
 );
-assert.equal(world.getBuild(x + 4, y), Build.Road, 'underground removal preserves road');
+assert.equal(world.getBuild(x + 4, y + 1), Build.Road, 'underground removal preserves road');
 metro.edit(x, y, 'erase');
+assert.equal(world.getBuild(x, y), Build.None, 'station removal removes its surface facility');
+assert.equal(
+  metro.state.lines?.[0].stops.length,
+  2,
+  'broken line retains stop references for explicit repair',
+);
+metro.deleteLine(line.id!);
+assert.equal(metro.state.lines?.length, 0);
+assert.ok(metro.state.stations[`${x + 8},${y}`], 'deleting route preserves station');
+delete metro.state.stations[`${x + 8},${y}`].surface;
+world.removeFacilityAt(x + 8, y);
+assert.equal(
+  metro.stationAccess(`${x + 8},${y}`),
+  false,
+  'legacy station is not falsely accessible',
+);
+assert.equal(metro.repairSurface(`${x + 8},${y}`).ok, true);
+assert.equal(metro.stationAccess(`${x + 8},${y}`), true);
 assert.equal(metro.state.stations[`${x},${y}`], undefined);
 assert.equal(
   restored.state.stations[`${x},${y}`].name,

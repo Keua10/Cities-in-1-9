@@ -69,6 +69,42 @@ export function facilityArt(kind: number): PixelArt {
   const n = FACILITY_SPAN[kind],
     a = new PixelArt(n * 64);
   a.ground(n, kind === 4 || kind === 5 || kind === 16);
+  if (kind === 26) {
+    // One native 64px tile, 2:1 footprint. Low station hall with covered stairs.
+    a.box(0.12, 0.12, 0.72, 0.55, 15, M.cream);
+    a.box(0.16, 0.16, 0.64, 0.47, 3, M.roof, 15);
+    for (let u = 0.22; u < 0.8; u += 0.12) a.line(a.p(u, 0.18, 18), a.p(u, 0.59, 18), 'roofDark');
+    a.box(0.26, 0.23, 0.16, 0.12, 2, M.steel, 18);
+    for (let z = 3; z < 15; z += 4) {
+      a.line(a.p(0.13, 0.67, z), a.p(0.83, 0.67, z), 'stone');
+      a.line(a.p(0.84, 0.13, z), a.p(0.84, 0.66, z), 'stoneDark');
+    }
+    a.windows(0.12, 0.12, 0.72, 0.55, 15);
+    a.poly(
+      [a.p(0.34, 0.68, 1), a.p(0.64, 0.68, 1), a.p(0.64, 0.68, 11), a.p(0.34, 0.68, 11)],
+      'ink',
+    );
+    a.slab(0.26, 0.61, 0.46, 0.19, 12, 'tealDark');
+    for (let i = 0; i < 3; i++)
+      a.line(
+        a.p(0.34, 0.72 + i * 0.06, 2 - i * 0.5),
+        a.p(0.64, 0.72 + i * 0.06, 2 - i * 0.5),
+        'stoneDark',
+      );
+    a.box(0.79, 0.8, 0.04, 0.04, 16, M.steel);
+    const sign = a.p(0.81, 0.82, 17);
+    a.rect(sign[0] - 4, sign[1] - 7, 9, 9, 'tealDark');
+    // M wayfinding sign, hand-pixelled rather than a font glyph.
+    a.line([sign[0] - 2, sign[1] - 1], [sign[0] - 2, sign[1] - 5], 'paper');
+    a.line([sign[0] + 2, sign[1] - 1], [sign[0] + 2, sign[1] - 5], 'paper');
+    a.dot(sign[0] - 1, sign[1] - 4, 'paper');
+    a.dot(sign[0], sign[1] - 3, 'paper');
+    a.dot(sign[0] + 1, sign[1] - 4, 'paper');
+    a.box(0.1, 0.76, 0.16, 0.12, 3, M.brick);
+    a.slab(0.1, 0.76, 0.16, 0.12, 4, 'leaf');
+    a.box(0.88, 0.25, 0.04, 0.27, 3, M.wood);
+    return a;
+  }
   if (kind === 0 || kind === 1) {
     const color = kind === 0 ? M.red : M.blue;
     office(a, 0.2, 0.18, 1.35, 0.9, 18, color);

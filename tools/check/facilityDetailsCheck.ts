@@ -21,7 +21,7 @@ import { alignFacilityFootprint } from '../art/facilityFootprint.mjs';
 const entries = JSON.parse(
   readFileSync('public/sprites/facilities-detailed/manifest.json', 'utf8'),
 );
-assert.equal(entries.length, FACILITY_COUNT);
+assert.equal(entries.length, FACILITY_COUNT - 1);
 const sheet = await loadImage('public/sprites/facilities-v2.png');
 assert.equal(sheet.width, FACILITY_ATLAS_W);
 assert.equal(sheet.height, FACILITY_ATLAS_H);
@@ -104,7 +104,7 @@ for (const e of entries) {
     }
   hashes.add(createHash('sha256').update(raster.data).digest('hex'));
 }
-assert.equal(hashes.size, FACILITY_COUNT);
+assert.equal(hashes.size, FACILITY_COUNT - 1);
 
 // Exercise the real async loader and catalog against native PNGs, plus missing-file fallback.
 const oldDocument = globalThis.document,
@@ -134,6 +134,15 @@ class TestImage {
 try {
   const atlas = await loadFacilityAtlas();
   assert.equal(atlas.placeholder, false);
+  const metroThumb = globalThis.document.createElement('canvas') as any;
+  metroThumb.width = metroThumb.height = 64;
+  await paintFacilityThumbnail(metroThumb.getContext('2d'), 26);
+  const liveCanvas = atlas.texture.source.resource as any;
+  assert.deepEqual(
+    metroThumb.getContext('2d').getImageData(0, 0, 64, 64).data,
+    liveCanvas.getContext('2d').getImageData(FACILITY_ATLAS_COLUMN[26] * 64, 0, 64, 64).data,
+    'native metro station menu/city parity',
+  );
   for (const e of entries) {
     assert.deepEqual(atlas.uv(e.kind), [
       e.x / sheet.width,

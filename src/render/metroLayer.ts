@@ -22,6 +22,14 @@ export class MetroLayer {
     this.stamp = stamp;
     const g = this.graphics;
     g.clear();
+    const edges = new Map<string, number>();
+    const edgeKey = (a: string, b: string) => [a, b].sort().join('|');
+    for (const route of metro.state.lines ?? []) {
+      const path = metro.linePath(route.stops);
+      if (path)
+        for (let i = 1; i < path.length; i++)
+          edges.set(edgeKey(path[i - 1], path[i]), parseInt(route.color.slice(1), 16));
+    }
     const point = (x: number, y: number): [number, number] => [
       Math.round(tileToWorldX(x, y)),
       Math.round(tileToWorldY(x, y, world.sampleHeight(x, y))),
@@ -56,7 +64,8 @@ export class MetroLayer {
           const end = point(x + dx, y + dy);
           line(p, end, 9, 0x14262e);
           line(p, end, 5, 0x729a9b);
-          line(p, end, 1, 0xc0cec0);
+          const color = edges.get(edgeKey(key, `${x + dx},${y + dy}`));
+          line(p, end, color === undefined ? 1 : 3, color ?? 0xc0cec0);
         }
       g.rect(p[0] - 3, p[1] - 3, 6, 6).fill(0x729a9b);
       if (metro.state.stations[key]) {
