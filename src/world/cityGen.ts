@@ -150,10 +150,11 @@ interface Section {
 }
 
 /**
- * 새로 심은 도시의 시작 자금.
+ * 관리자 도구가 심은 대도시의 시작 자금.
  *
- * 이미 인구 수만 명짜리 도시를 받아 든 상태라 START_MONEY(6만) 로 시작하면
- * 첫날 유지비에 눌린다. 도시 규모에 맞춘 금고를 열어 준다.
+ * 이미 인구 수만 명짜리 도시를 받아 든 상태라 START_MONEY 로 시작하면 첫날
+ * 유지비에 눌린다. 도시 규모에 맞춘 금고를 열어 준다. 빈 땅에서 시작하는
+ * 보통의 새 도시는 이 값이 아니라 START_MONEY 를 받는다.
  */
 export const SEEDED_CITY_MONEY = 300_000;
 
@@ -172,13 +173,18 @@ function defaultSeed(world: World): number {
 /**
  * 아직 아무것도 안 지어진 도시에만 큰 도시를 심는다.
  * 저장된 도로/지구가 하나라도 있으면 절대 손대지 않는다.
+ *
+ * **비어 있다는 것만으로는 부르지 않는다.** 새 학생의 도시는 빈 땅에서
+ * 시작하는 것이 기본이고, 대도시는 관리자 도구가 명시적으로 요청했을 때만
+ * 만들어진다(main.ts 의 `macro.metropolisRequest`). 이 함수의 빈 도시 검사는
+ * 그 요청이 이미 심어 놓은 도시를 두 번 덮어쓰지 않게 막는 안전장치다.
  */
 export function seedCityIfEmpty(world: World, bornDay = 0, seed?: number): SeededCity | null {
   if (world.developedParcels().length > 0) return null;
   return generateCity(world, bornDay, seed);
 }
 
-/** 조건 없이 새로 만든다. "맵 초기화" 버튼이 부른다. */
+/** 조건 없이 새로 만든다. 관리자 도구의 "대도시 생성" 이 부른다. */
 export function generateCity(world: World, bornDay = 0, seed?: number): SeededCity | null {
   const actual = seed === undefined ? defaultSeed(world) : seed >>> 0;
   const center = new CityBuilder(world, bornDay, actual).run();

@@ -790,7 +790,8 @@ export class MacroSim {
   }
 
   /**
-   * "맵 초기화" 가 부른다. 저장에 실리는 도시 상태를 새 도시의 것으로 되돌린다.
+   * 관리자 도구의 초기화가 부른다. 저장에 실리는 도시 상태를 새 도시의 것으로
+   * 되돌린다.
    *
    * macro 객체는 CityDoc 의 것을 그대로 들고 있으므로, 여기서 고치면 다음
    * 저장에 그대로 실린다(saveManager 가 city.macro 를 복사해 보낸다).
@@ -813,6 +814,10 @@ export class MacroSim {
     delete this.macro.sanitationStartTick;
     delete this.macro.policies;
     delete this.macro.transport;
+    // 생성 관련 필드도 여기서 비운다. 초기화된 도시는 "아직 아무것도 만들지
+    // 않은 도시" 이고, 대도시를 원하면 호출부가 이 뒤에 다시 적는다.
+    delete this.macro.genSeed;
+    delete this.macro.metropolisRequest;
     this.services.budget = 1;
     this.onMacroChange?.();
   }

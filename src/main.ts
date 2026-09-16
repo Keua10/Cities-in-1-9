@@ -35,7 +35,12 @@ import { SaveBadge } from './ui/saveBadge';
 import { bindToolbar } from './ui/toolbar';
 import { bindToolButtons, Tools } from './ui/tools';
 import { TransportHubPanel } from './ui/transportHubPanel';
-import { randomCitySeed, seedCityIfEmpty, SEEDED_CITY_MONEY } from './world/citySeed';
+import {
+  randomCitySeed,
+  seedCityIfEmpty,
+  SEEDED_CITY_MONEY,
+  type SeededCity,
+} from './world/citySeed';
 import { findDryTileNearBase } from './world/spawn';
 import type { ChunkOverride } from './world/world';
 import { World } from './world/world';
@@ -85,23 +90,38 @@ async function boot(): Promise<void> {
     macro.legacyTerrainChunks = city ? [...new Set([...city.explored, ...overrides.keys()])] : [];
   }
   world.preserveTerrainChunks(macro.legacyTerrainChunks!);
-  // 씨앗을 저장해 둔다. 같은 도시를 다시 열면 같은 도시가 나오고, "맵 초기화"
-  // 는 새 씨앗을 적고 새로고침하므로 누를 때마다 다른 도시가 나온다.
+  // 대도시는 **관리자 도구가 요청했을 때만** 만든다. 그 밖의 새 도시는 도로 한
+  // 칸 없는 빈 땅에 시작 자금(START_MONEY)만 들고 시작한다 — 도시를 세우는 게
+  // 이 게임이므로, 다 지어진 도시를 받아 들고 시작하면 배울 것이 남지 않는다.
   //
-  // 저장이 없는 둘러보기 모드에서는 macro 가 새로고침마다 새로 만들어지므로
-  // 씨앗이 사라진다. 그래서 초기화가 넘겨준 씨앗을 sessionStorage 에서도 받는다.
-  const seededCenter = seedCityIfEmpty(
-    world,
-    Math.floor(macro.tick / 24),
-    macro.genSeed ?? takeResetSeed(),
-  );
+  // 요청은 새로고침을 한 번 건너야 한다. 관리자 도구가 도시를 지우고 새로고침
+  // 하면 그 다음 부팅인 여기서 생성기가 돈다. 로그인한 학생은 요청이
+  // macro.metropolisRequest 로 서버에 실려 가고, 저장이 없는 둘러보기 모드에서는
+  // macro 가 새로고침마다 새로 만들어지므로 sessionStorage 쪽 씨앗으로 받는다.
+  const tabSeed = takeMetropolisRequest();
+  const requestedSeed = macro.metropolisRequest
+    ? (macro.genSeed ?? tabSeed ?? randomCitySeed())
+    : tabSeed;
   let seedChanged = false;
-  if (seededCenter) {
-    if (macro.genSeed !== seededCenter.seed) {
-      macro.genSeed = seededCenter.seed;
+  let seededCenter: SeededCity | null = null;
+  if (requestedSeed !== undefined) {
+    seededCenter = seedCityIfEmpty(world, Math.floor(macro.tick / 24), requestedSeed);
+    // 요청은 한 번만 쓰인다. 지우지 않으면 다음 새로고침마다 대도시를 다시
+    // 만들려 든다(빈 도시 검사에 걸려 실패할 뿐이지만, 그 상태가 저장에 남는다).
+    if (macro.metropolisRequest !== undefined) {
+      delete macro.metropolisRequest;
       seedChanged = true;
     }
-    if (macro.money < SEEDED_CITY_MONEY) macro.money = SEEDED_CITY_MONEY;
+    if (seededCenter) {
+      if (macro.genSeed !== seededCenter.seed) {
+        macro.genSeed = seededCenter.seed;
+        seedChanged = true;
+      }
+      if (macro.money < SEEDED_CITY_MONEY) {
+        macro.money = SEEDED_CITY_MONEY;
+        seedChanged = true;
+      }
+    }
   }
 
   const app = new Application();
@@ -255,22 +275,26 @@ async function boot(): Promise<void> {
           '자금은 현재 화면에 적용됐지만 서버 저장은 완료되지 않았습니다. 저장 상태를 확인하세요.',
         );
     },
-    resetCity: async () => {
+    resetCity: async (mode) => {
       if (saver.status === 'saving' || saver.status === 'conflict')
         throw new Error('저장 중이거나 다른 기기와 충돌했습니다. 저장 상태를 확인하세요.');
       app.ticker.stop();
       transportPanel.hide();
       world.clearBuilt();
-      // 새 씨앗. 이게 없으면 초기화해도 똑같은 도시가 다시 만들어진다.
-      // sessionStorage 에도 적어 둔다 — 둘러보기 모드에는 저장이 없다.
-      const seed = randomCitySeed();
-      macro.genSeed = seed;
-      rememberResetSeed(seed);
       // transport 를 비우는 것까지 여기서 하지 않는다. resetState 가 선택 필드를
       // 전부 **키째로** 지운다. `= undefined` 로 두면 Firestore 가 그 저장을
       // 거부하고, 그러면 초기화가 서버에 안 실려서 새로고침 뒤에 예전 도시가
-      // 그대로 돌아온다.
-      sim.resetState(SEEDED_CITY_MONEY, Date.now());
+      // 그대로 돌아온다. genSeed·metropolisRequest 도 거기서 지워지므로,
+      // 대도시 요청은 반드시 resetState **뒤에** 적는다.
+      sim.resetState(mode === 'metropolis' ? SEEDED_CITY_MONEY : START_MONEY, Date.now());
+      if (mode === 'metropolis') {
+        // 새 씨앗. 이게 없으면 다시 눌러도 똑같은 도시가 만들어진다.
+        // sessionStorage 에도 적어 둔다 — 둘러보기 모드에는 저장이 없다.
+        const seed = randomCitySeed();
+        macro.genSeed = seed;
+        macro.metropolisRequest = true;
+        rememberMetropolisRequest(seed);
+      } else forgetMetropolisRequest();
       try {
         await saver.saveNow();
         if (session && saver.status !== 'saved' && saver.status !== 'idle')
@@ -347,29 +371,38 @@ async function boot(): Promise<void> {
 }
 
 /**
- * "맵 초기화" 가 뽑은 씨앗을 새로고침 너머로 넘긴다.
+ * 관리자 도구의 "대도시 생성" 요청을 새로고침 너머로 넘긴다.
  *
- * 로그인한 학생은 씨앗이 `macro.genSeed` 로 서버에 저장되므로 이게 없어도 된다.
- * 저장이 없는 둘러보기 모드에서는 macro 가 새로고침마다 새로 만들어져 씨앗이
- * 사라지고, 그러면 초기화를 눌러도 기본 씨앗으로 **같은 도시** 가 다시 나온다.
+ * 값이 있다는 것 자체가 곧 요청이고, 값은 그 도시를 만들 씨앗이다. 로그인한
+ * 학생은 요청이 `macro.metropolisRequest` 로 서버에 저장되므로 이게 없어도
+ * 되지만, 저장이 없는 둘러보기 모드에서는 macro 가 새로고침마다 새로 만들어져
+ * 요청이 사라진다 — 그러면 버튼을 눌러도 빈 도시만 나온다.
  *
  * sessionStorage 는 탭을 닫으면 사라지고 쓸 수 없는 환경(사생활 보호 모드)도
  * 있으므로, 실패해도 조용히 넘어간다. 값은 한 번만 쓰고 지운다.
  */
-const RESET_SEED_KEY = 'cities19.resetSeed';
+const METROPOLIS_SEED_KEY = 'cities19.metropolisSeed';
 
-function rememberResetSeed(seed: number): void {
+function rememberMetropolisRequest(seed: number): void {
   try {
-    sessionStorage.setItem(RESET_SEED_KEY, String(seed));
+    sessionStorage.setItem(METROPOLIS_SEED_KEY, String(seed));
   } catch {
-    /* 저장할 수 없으면 그냥 기본 씨앗으로 간다 */
+    /* 저장할 수 없으면 서버에 실린 macro.metropolisRequest 쪽으로 간다 */
   }
 }
 
-function takeResetSeed(): number | undefined {
+function forgetMetropolisRequest(): void {
   try {
-    const raw = sessionStorage.getItem(RESET_SEED_KEY);
-    sessionStorage.removeItem(RESET_SEED_KEY);
+    sessionStorage.removeItem(METROPOLIS_SEED_KEY);
+  } catch {
+    /* 지울 수 없어도 요청은 부팅 때 한 번 읽히고 사라진다 */
+  }
+}
+
+function takeMetropolisRequest(): number | undefined {
+  try {
+    const raw = sessionStorage.getItem(METROPOLIS_SEED_KEY);
+    sessionStorage.removeItem(METROPOLIS_SEED_KEY);
     const seed = Number(raw);
     return raw !== null && Number.isFinite(seed) ? seed >>> 0 : undefined;
   } catch {

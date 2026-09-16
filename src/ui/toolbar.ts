@@ -1,7 +1,7 @@
 import { signOut } from '../net/auth';
 import type { AnySaveManager } from '../net/saveManager';
 import type { WorldRenderer } from '../render/worldRenderer';
-import { bindAdminPanel } from './adminPanel';
+import { bindAdminPanel, type CityResetMode } from './adminPanel';
 
 interface ToolbarDeps {
   centerCamera: () => void;
@@ -10,8 +10,12 @@ interface ToolbarDeps {
   loggedIn: boolean;
   getMoney: () => number;
   setMoney: (amount: number) => Promise<void>;
-  /** 도시를 통째로 지우고 새 대도시를 심는다. 되돌릴 수 없다. */
-  resetCity: () => Promise<void>;
+  /**
+   * 도시를 통째로 지우고 다시 시작한다. 되돌릴 수 없다.
+   *   'metropolis' — 다 자란 대도시를 심는다.
+   *   'empty'      — 빈 땅 + 시작 자금. 학생이 실제로 시작하는 상태다.
+   */
+  resetCity: (mode: CityResetMode) => Promise<void>;
 }
 
 export function bindToolbar(deps: ToolbarDeps): void {
