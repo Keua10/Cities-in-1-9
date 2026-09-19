@@ -155,11 +155,13 @@ const sim = new MacroSim(world, state),
 for (let dy = -8; dy <= 8; dy++)
   for (let dx = -8; dx <= 12; dx++) world.setHeight(x + dx, y + dy, 0);
 tools.setTool('metroTunnel');
-assert.equal(tools.isPainting(), true);
-tools.beginPaint(tileToWorldX(x, y), tileToWorldY(x, y));
-tools.movePaint(tileToWorldX(x + 3, y), tileToWorldY(x + 3, y));
-tools.endPaint();
-assert.ok(sim.metro.path(`${x},${y}`, `${x + 3},${y}`), 'real drag brush builds continuous tunnel');
+// 터널도 두 점 + 확정이다. 드래그는 언제나 지도 이동으로 간다.
+assert.equal(tools.isPainting(), 'tap');
+tools.tapAtWorld(tileToWorldX(x, y), tileToWorldY(x, y));
+tools.tapAtWorld(tileToWorldX(x + 3, y), tileToWorldY(x + 3, y));
+assert.equal(sim.metro.path(`${x},${y}`, `${x + 3},${y}`), null, 'nothing is built before ✓');
+tools.confirmPlacement();
+assert.ok(sim.metro.path(`${x},${y}`, `${x + 3},${y}`), 'two taps build a continuous tunnel');
 tools.setTool('metroStation');
 assert.equal(tools.isPainting(), 'tap');
 tools.setTool('metroErase');

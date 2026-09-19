@@ -41,7 +41,7 @@ export function pickTile(world: World, wx: number, wy: number): { tx: number; ty
    * 후보 범위. 고도 한 단계는 화면에서 HEIGHT_UNIT(=TILE_HH) 만큼 올라가고
    * 그 만큼은 타일 좌표로 (+0.5, +0.5) 다. 그래서 고도 MAX_HEIGHT 짜리 타일의
    * 윗면까지 보려면 뒤로 MAX_HEIGHT / 2 칸이면 되고, 반올림 여유로 한 칸 더 본다.
-   * 경사 도로는 자기 고도보다 반 단계까지 솟을 수 있으므로 앞으로도 한 칸 본다.
+   * 경사 도로는 자기 고도보다 한 단계까지 솟을 수 있으므로 앞으로도 한 칸 본다.
    */
   const back = Math.ceil(MAX_HEIGHT / 2) + 1;
   const front = 1;
@@ -68,7 +68,7 @@ function hitsTile(world: World, tx: number, ty: number, wx: number, wy: number):
   const base = tileToWorldY(tx, ty);
   /*
    * 옆면은 이웃 지면까지만 내려간다. 고도 0 마름모의 아래 꼭짓점이 그 한계인데,
-   * 경사 도로면은 자기 고도보다 반 단계까지 내려앉으므로 그만큼 여유를 둔다.
+   * 경사 도로 옆의 절벽은 한 단계를 더 내려갈 수 있으므로 그만큼 여유를 둔다.
    */
   if (wy > base + TILE_HH + HEIGHT_UNIT) return false;
 

@@ -62,9 +62,9 @@ export function bindConstructionMenu(tools: Tools, onChange?: () => void): void 
       tools.tool === 'metroView'
         ? '지하철 보기 · 역을 눌러 연결 확인'
         : tools.tool === 'bulldoze'
-          ? '철거 · 지도를 눌러 제거'
+          ? '철거 · 두 점으로 범위를 정한 뒤 ✓'
           : selected
-            ? `${selected.name} · ${formatMoney(selected.cost, true)} · 지도에 배치`
+            ? `${selected.name} · ${formatMoney(selected.cost, true)}`
             : '';
     onChange?.();
   };

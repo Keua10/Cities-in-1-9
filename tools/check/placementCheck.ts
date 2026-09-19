@@ -9,12 +9,12 @@ import { FAC_FIRE } from '../../src/sim/facilities';
 import { findWalkPath, PedestrianPool, walkEdgeCost } from '../../src/sim/pedestrians';
 import { roadDistancesFrom, RoadField, roadTileCapacity, tileKey } from '../../src/sim/roadGraph';
 import { ServiceField } from '../../src/sim/services';
-import { COST_ROAD, ROAD_DIST_UNREACHABLE } from '../../src/sim/simConstants';
+import { COST_ROAD, COST_ZONE, ROAD_DIST_UNREACHABLE } from '../../src/sim/simConstants';
 import { JunctionIndex } from '../../src/sim/traffic/junctions';
 import { Router, type Route } from '../../src/sim/traffic/router';
 import { Tools } from '../../src/ui/tools';
 import { Build, canConnectRoads, roadMask } from '../../src/world/build';
-import { surfaceAt } from '../../src/world/slope';
+import { edgeWallAt, surfaceAt, type TileSurface } from '../../src/world/slope';
 import { Terrain } from '../../src/world/terrain';
 import { World, type ChunkOverride } from '../../src/world/world';
 
@@ -49,14 +49,18 @@ function fixture() {
   tools.setTool('road');
   const point = (dx: number, dy: number) =>
     [tileToWorldX(x + dx, y + dy), tileToWorldY(x + dx, y + dy)] as const;
+  /*
+   * 두 점 건설. 한 칸만 놓을 때도 같은 자리를 한 번 찍고 확정한다 —
+   * 예전 "클릭 한 번에 한 칸" 과 결과가 같아야 한다.
+   */
   const click = (dx: number, dy: number) => {
-    tools.beginPaint(...point(dx, dy));
-    tools.endPaint();
+    tools.tapAtWorld(...point(dx, dy));
+    tools.confirmPlacement();
   };
   const drag = (a: number, b: number, c: number, d: number) => {
-    tools.beginPaint(...point(a, b));
-    tools.movePaint(...point(c, d));
-    tools.endPaint();
+    tools.tapAtWorld(...point(a, b));
+    tools.tapAtWorld(...point(c, d));
+    tools.confirmPlacement();
   };
   return {
     world,
@@ -258,5 +262,118 @@ check('보행자 가림: 뒤쪽은 불투명 그림에 가리고 앞쪽·투명 
   assert(!pedestrianHidden({ x: 5, y: 1 }, 10, 12, b));
   pixels.data.fill(0);
   assert(!pedestrianHidden({ x: 1, y: 1 }, 10, 12, b));
+});
+check('램프는 낮은 칸 하나가 통째로 지고 높은 칸·지형은 평평하다', () => {
+  const g = fixture(),
+    { world, x, y } = g;
+  world.setHeight(x + 2, y, 1);
+  world.setHeight(x + 3, y, 1);
+  g.tools.tapTile(x, y);
+  g.tools.tapTile(x + 3, y);
+  g.tools.confirmPlacement();
+  // 언덕 위 도로는 자기 고도로 완전히 평평하다 — 예전 평균 규칙이 여기서 반 칸 내려앉았다.
+  assert.deepEqual(surfaceAt(world, x + 2, y), { zc: 1, dzx: 0, dzy: 0 });
+  // 한 단계를 낮은 칸 하나가 다 진다.
+  assert.deepEqual(surfaceAt(world, x + 1, y), { zc: 0.5, dzx: 1, dzy: 0 });
+  assert.deepEqual(surfaceAt(world, x, y), { zc: 0, dzx: 0, dzy: 0 });
+  // 도로가 아닌 이웃 지형은 절대 기울지 않는다.
+  assert.deepEqual(surfaceAt(world, x + 1, y + 1), { zc: 0, dzx: 0, dzy: 0 });
+  // 램프 위·아래 변이 이웃과 정확히 만난다.
+  const ramp = surfaceAt(world, x + 1, y);
+  assert.equal(ramp.zc - ramp.dzx / 2, 0);
+  assert.equal(ramp.zc + ramp.dzx / 2, 1);
+});
+check('한 칸에서 양쪽으로 올라가는 도로는 거부된다', () => {
+  const g = fixture(),
+    { world, x, y } = g;
+  world.setHeight(x, y, 1);
+  world.setHeight(x + 2, y, 1);
+  g.tools.tapTile(x, y);
+  g.tools.tapTile(x + 2, y);
+  g.tools.confirmPlacement();
+  assert.equal(world.getBuild(x + 2, y), Build.None);
+  assert.deepEqual(surfaceAt(world, x + 1, y), { zc: 0.5, dzx: -1, dzy: 0 });
+});
+check('선 도구는 일직선으로 스냅되고 원래 있던 것을 덮지 않는다', () => {
+  const g = fixture(),
+    { world, x, y } = g;
+  world.setBuild(x + 3, y, Build.ZoneR);
+  g.tools.setTool('road');
+  g.tools.tapTile(x, y);
+  g.tools.tapTile(x + 6, y + 2);
+  const plan = g.tools.plan()!;
+  assert.equal(plan.tiles.length, 7);
+  assert(plan.tiles.every((t) => t.ty === y));
+  assert.equal(plan.tiles[3].state, 'blocked');
+  assert.equal(plan.buildCount, 6);
+  g.tools.confirmPlacement();
+  assert.equal(world.getBuild(x + 3, y), Build.ZoneR);
+  assert.equal(world.getBuild(x + 2, y), Build.Road);
+  assert.equal(world.getBuild(x + 4, y), Build.Road);
+  assert(!g.tools.hasSelection());
+});
+check('확정을 눌러야 지어지고, 취소하면 아무 일도 없다', () => {
+  const g = fixture(),
+    { world, x, y } = g;
+  world.setBuild(x + 1, y + 1, Build.ZoneC);
+  const before = g.money();
+  g.tools.setTool('zoneR');
+  g.tools.tapTile(x, y);
+  g.tools.tapTile(x + 2, y + 2);
+  assert.equal(world.getBuild(x, y), Build.None);
+  assert.equal(g.money(), before);
+  g.tools.cancelPlacement();
+  assert(!g.tools.hasSelection());
+  assert.equal(world.getBuild(x, y), Build.None);
+
+  g.tools.tapTile(x, y);
+  g.tools.tapTile(x + 2, y + 2);
+  g.tools.confirmPlacement();
+  // 3x3 가운데 한 칸은 이미 다른 지구라 교체되지 않는다.
+  assert.equal(world.getBuild(x + 1, y + 1), Build.ZoneC);
+  assert.equal(world.getBuild(x, y), Build.ZoneR);
+  assert.equal(world.getBuild(x + 2, y + 2), Build.ZoneR);
+  assert.equal(before - g.money(), 8 * COST_ZONE);
+});
+check('램프 옆으로 지면이 뚫리지 않는다', () => {
+  const g = fixture(),
+    { world, x, y } = g;
+  // 언덕 하나를 만들고 그 위로 도로를 올린다. 양옆·아래는 평지로 남겨둔다.
+  for (let dx = 2; dx <= 6; dx++)
+    for (let dy = -2; dy <= 2; dy++) world.setHeight(x + dx, y + dy, 1);
+  g.tools.tapTile(x, y);
+  g.tools.tapTile(x + 6, y);
+  g.tools.confirmPlacement();
+  const cz = (s: TileSurface, sx: number, sy: number) => s.zc + s.dzx * sx + s.dzy * sy;
+  /*
+   * 아이소메트릭에서 눈에 보이는 이음매는 +tx · +ty 두 면뿐이다. 자기 지면이
+   * 이웃 지면보다 높은 자리에는 반드시 벽이 서야 한다 — 안 서면 그 틈으로
+   * 배경이 비친다. 램프가 반 칸씩 걸치는 자리가 특히 위험하다.
+   */
+  for (let dy = -3; dy <= 3; dy++) {
+    for (let dx = -1; dx <= 7; dx++) {
+      const tx = x + dx,
+        ty = y + dy;
+      for (const [ddx, ddy] of [
+        [1, 0],
+        [0, 1],
+      ]) {
+        const self = surfaceAt(world, tx, ty);
+        const near = surfaceAt(world, tx + ddx, ty + ddy);
+        const [sA, sB, nA, nB] =
+          ddx === 1
+            ? [cz(self, 0.5, 0.5), cz(self, 0.5, -0.5), cz(near, -0.5, 0.5), cz(near, -0.5, -0.5)]
+            : [cz(self, -0.5, 0.5), cz(self, 0.5, 0.5), cz(near, -0.5, -0.5), cz(near, 0.5, -0.5)];
+        const wall = edgeWallAt(world, tx, ty, ddx, ddy);
+        if (Math.max(sA - nA, sB - nB) > 0.05)
+          assert(wall.steps > 0, `${tx},${ty} 방향 ${ddx},${ddy} 에 벽이 없다`);
+        if (wall.steps > 0) {
+          assert.equal(wall.topA, sA);
+          assert.equal(wall.topB, sB);
+          assert(wall.botA <= nA + 1e-9 && wall.botB <= nB + 1e-9);
+        }
+      }
+    }
+  }
 });
 console.log(`1단계 집중 검사 ${checks}개 통과`);

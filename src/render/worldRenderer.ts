@@ -22,6 +22,7 @@ import type { DisasterSim } from '../sim/disasters';
 import { FACILITY_SPECS } from '../sim/facilities';
 import type { TrafficSim } from '../sim/traffic/trafficSim';
 import type { Vehicle } from '../sim/traffic/vehicles';
+import type { PlacementPreview } from '../ui/tools';
 import { Build, DIRS, makeTopResolver, type TopResolver } from '../world/build';
 import { makeSlopeSampler, surfaceAt, type SlopeSampler } from '../world/slope';
 import type { World } from '../world/world';
@@ -95,6 +96,8 @@ export class WorldRenderer {
   private cursorLayer = new Graphics();
   /** 시설 배치 미리보기 사각형. 커서 레이어와 따로 둬야 서로 지우지 않는다. */
   private previewLayer = new Graphics();
+  /** 두 점 건설의 안내선·선택 범위. */
+  private placementLayer = new Graphics();
   private facilityFocusLayer = new Graphics();
   private signalLayer = new SignalLayer();
   metro: MetroNetwork | null = null;
@@ -121,6 +124,8 @@ export class WorldRenderer {
   private lastZoom = -1;
   private cursorTile: { tx: number; ty: number } | null = null;
   private preview: FacilityPreview | null = null;
+  private placement: PlacementPreview | null = null;
+  private placementKey = '';
   private facilityFocus: { tx: number; ty: number; span: number } | null = null;
 
   showFog = true;
@@ -153,6 +158,7 @@ export class WorldRenderer {
       this.waterLayer.graphics,
       this.metroLayer.graphics,
       this.cursorLayer,
+      this.placementLayer,
       this.previewLayer,
       this.facilityFocusLayer,
     );
@@ -329,6 +335,7 @@ export class WorldRenderer {
       this.lastZoom = camera.zoom;
       this.drawGrid(range, camera.zoom);
       this.drawCursor();
+      this.drawPlacement();
     }
     // 시설 찾기 표식은 선택된 한 곳만 갱신한다. 전체 건물 메시를 다시 굽지
     // 않고도 멀리서 위치가 읽히며, 확대·축소 때도 화면 픽셀 두께를 유지한다.
@@ -357,6 +364,58 @@ export class WorldRenderer {
     this.stats.foggedChunks = fogged;
     this.stats.visibleBuildings = buildingsShown;
     this.stats.visibleFacilities = facilitiesShown;
+  }
+
+  /**
+   * 두 점 건설의 선택 범위를 바닥에 칠한다.
+   *
+   * 초록 = 지어진다 · 회색 = 이미 그렇게 되어 있어 그냥 지나간다 ·
+   * 빨강 = 못 짓는다(그 자리만 비우고 나머지는 지어진다).
+   * 옅은 노랑 안내선은 pos1 만 찍은 상태에서 "끝점을 여기까지 찍을 수 있다" 는 표시다.
+   *
+   * 매 프레임 1,000칸을 다시 그리면 태블릿이 버틸 수 없으므로, 그림이 실제로
+   * 달라졌을 때만(key 비교) 다시 칠한다.
+   */
+  setPlacement(preview: PlacementPreview | null): void {
+    const key = preview?.key ?? '';
+    if (key === this.placementKey) return;
+    this.placementKey = key;
+    this.placement = preview;
+    this.drawPlacement();
+  }
+
+  private drawPlacement(): void {
+    const g = this.placementLayer;
+    g.clear();
+    const p = this.placement;
+    if (!p) return;
+    const px = Math.max(1, 1 / (this.lastZoom > 0 ? this.lastZoom : 1));
+
+    for (const t of p.guide) {
+      const poly = surfaceDiamond(this.world, t.tx, t.ty, tileToWorldX(t.tx, t.ty));
+      g.poly(poly);
+      g.fill({ color: 0xf1d185, alpha: 0.1 });
+    }
+
+    for (const t of p.tiles) {
+      const color = t.state === 'build' ? 0x6fd3b8 : t.state === 'skip' ? 0xb9c6c2 : 0xe25f5f;
+      const poly = surfaceDiamond(this.world, t.tx, t.ty, tileToWorldX(t.tx, t.ty));
+      g.poly(poly);
+      g.fill({ color, alpha: t.state === 'skip' ? 0.16 : 0.3 });
+      g.poly(poly);
+      g.stroke({ width: px, color, alpha: t.state === 'skip' ? 0.5 : 0.85 });
+    }
+
+    if (p.anchor) {
+      const poly = surfaceDiamond(
+        this.world,
+        p.anchor.tx,
+        p.anchor.ty,
+        tileToWorldX(p.anchor.tx, p.anchor.ty),
+      );
+      g.poly(poly);
+      g.stroke({ width: px * 2.5, color: 0xffd36e, alpha: 1 });
+    }
   }
 
   /**

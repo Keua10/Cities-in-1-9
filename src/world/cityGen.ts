@@ -238,6 +238,13 @@ class CityBuilder {
   private links = new Uint8Array(SPAN * SPAN);
   /** 비탈 간선만 모은 비트. 비탈 규칙 검사에 쓴다. */
   private slopeBits = new Uint8Array(SPAN * SPAN);
+  /**
+   * 그중 **올라가는** 간선만 모은 비트. 램프는 낮은 칸 하나가 통째로 지므로
+   * (slope.ts) 한 칸이 두 방향으로 올라갈 수 없다 — build.ts 의 canConnectRoads
+   * 와 같은 판정을 계획 단계에서도 걸어, 나중에 연결이 통째로 거부되는 자리를
+   * 애초에 만들지 않는다.
+   */
+  private upBits = new Uint8Array(SPAN * SPAN);
   /** 이 칸이 속한 섹션 번호. -1 은 도시 밖. */
   private owner = new Int16Array(SPAN * SPAN).fill(-1);
   /** 도로에서의 거리(0 = 도로, 255 = 멀거나 도달 불가). */
@@ -833,12 +840,14 @@ class CityBuilder {
           this.road[i] = 0;
           this.links[i] = 0;
           this.slopeBits[i] = 0;
+          this.upBits[i] = 0;
           const nx = x + DIRS[only][0];
           const ny = y + DIRS[only][1];
           const ni = this.idx(nx, ny);
           const back = (only + 2) & 3;
           this.links[ni] &= ~(1 << back);
           this.slopeBits[ni] &= ~(1 << back);
+          this.upBits[ni] &= ~(1 << back);
           removed++;
         }
       }
@@ -854,8 +863,13 @@ class CityBuilder {
     if (dh !== 0) {
       if (!slopeLegal(this.slopeBits[a] | (1 << d))) return false;
       if (!slopeLegal(this.slopeBits[b] | (1 << back))) return false;
+      const upA = dh > 0 ? this.upBits[a] | (1 << d) : this.upBits[a];
+      const upB = dh < 0 ? this.upBits[b] | (1 << back) : this.upBits[b];
+      if (!singleUp(upA) || !singleUp(upB)) return false;
       this.slopeBits[a] |= 1 << d;
       this.slopeBits[b] |= 1 << back;
+      this.upBits[a] = upA;
+      this.upBits[b] = upB;
     }
     this.links[a] |= 1 << d;
     this.links[b] |= 1 << back;
@@ -1634,6 +1648,14 @@ function mod(a: number, m: number): number {
 function slopeLegal(mask: number): boolean {
   if ((mask & (mask - 1)) === 0) return true;
   return mask === 5 || mask === 10;
+}
+
+/**
+ * 올라가는 방향이 하나뿐인가. 낮은 칸 하나가 램프를 통째로 지므로 두 방향으로
+ * 동시에 올라가는 칸은 그릴 수 없다. build.ts 의 같은 규칙과 짝이다.
+ */
+function singleUp(mask: number): boolean {
+  return (mask & (mask - 1)) === 0;
 }
 
 /** Build.ZoneR/C/I -> ZONE_R/C/I. 지구가 아니면 -1. */

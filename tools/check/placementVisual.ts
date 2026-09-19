@@ -1,6 +1,7 @@
 import { Application } from 'pixi.js';
 import { Camera } from '../../src/core/camera';
 import { CHUNK_SIZE } from '../../src/core/constants';
+import { pickTile } from '../../src/core/pick';
 import { attachInput } from '../../src/core/input';
 import { tileToWorldX, tileToWorldY } from '../../src/core/iso';
 import { loadTileAtlas } from '../../src/render/atlas';
@@ -40,9 +41,9 @@ tools.setTool('road');
 const point = (x: number, y: number) =>
   [tileToWorldX(ox + x, oy + y), tileToWorldY(ox + x, oy + y)] as const;
 const drag = (x: number, y: number, nx: number, ny: number) => {
-  tools.beginPaint(...point(x, y));
-  tools.movePaint(...point(nx, ny));
-  tools.endPaint();
+  tools.tapAtWorld(...point(x, y));
+  tools.tapAtWorld(...point(nx, ny));
+  tools.confirmPlacement();
 };
 function setup() {
   world.clearBuilt();
@@ -78,9 +79,8 @@ camera.centerOnWorld(...point(6, 6));
 // 실제 게임의 동일한 포인터 입력과 도로 도구를 사용한다.
 attachInput(app.canvas, camera, {
   isPainting: () => tools.isPainting(),
-  onPaintStart: (x, y) => tools.beginPaint(x, y),
-  onPaintMove: (x, y) => tools.movePaint(x, y),
-  onPaintEnd: () => tools.endPaint(),
+  onPaintStart: (x, y) => tools.tapAtWorld(x, y),
+  onHover: (x, y) => tools.hoverTile(pickTile(world, x, y)),
 });
 document.getElementById('connect')!.onclick = () => drag(6, 0, 6, 1);
 document.getElementById('restore')!.onclick = setup;

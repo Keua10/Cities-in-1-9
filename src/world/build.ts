@@ -99,7 +99,8 @@ function exploredOk(world: World, tx: number, ty: number): boolean {
 
 export function canPlaceRoad(world: World, tx: number, ty: number): PlaceResult {
   if (!exploredOk(world, tx, ty)) return { ok: false, reason: '아직 개척하지 않은 땅입니다' };
-  if (isWater(world.getTile(tx, ty))) return { ok: false, reason: '물 위에는 도로를 놓을 수 없습니다' };
+  if (isWater(world.getTile(tx, ty)))
+    return { ok: false, reason: '물 위에는 도로를 놓을 수 없습니다' };
   if (world.getBuild(tx, ty) === Build.Road) return SILENT;
   return OK;
 }
@@ -116,11 +117,31 @@ export function canPlaceAirfieldSurface(
 ): PlaceResult {
   if (value !== Build.Runway && value !== Build.Taxiway) return SILENT;
   if (!exploredOk(world, tx, ty)) return { ok: false, reason: '아직 개척하지 않은 땅입니다' };
-  if (isWater(world.getTile(tx, ty))) return { ok: false, reason: '물 위에는 공항 시설을 놓을 수 없습니다' };
+  if (isWater(world.getTile(tx, ty)))
+    return { ok: false, reason: '물 위에는 공항 시설을 놓을 수 없습니다' };
   const cur = world.getBuild(tx, ty);
   if (cur === value) return SILENT;
   if (cur !== Build.None) return { ok: false, reason: '빈 땅에만 놓을 수 있습니다' };
   return OK;
+}
+
+/**
+ * 도로와 그 연결을 어떻게 볼 것인가.
+ *
+ * 기본은 지금 세계 그대로다. 미리보기는 **아직 짓지 않은 계획선**까지 도로로
+ * 쳐야 하므로(안 그러면 선 전체가 "여긴 도로가 아니다" 로 조용히 통과해서,
+ * 초록불을 보고 확정한 뒤에야 비탈 때문에 안 지어진다) 그때만 다른 걸 넘긴다.
+ */
+export interface RoadProbe {
+  road(tx: number, ty: number): boolean;
+  linked(ax: number, ay: number, bx: number, by: number): boolean;
+}
+
+export function worldRoadProbe(world: World): RoadProbe {
+  return {
+    road: (tx, ty) => world.getBuild(tx, ty) === Build.Road,
+    linked: (ax, ay, bx, by) => world.roadsConnected(ax, ay, bx, by),
+  };
 }
 
 /** 아직 빈 도착 칸도 가상 도로로 검사해 배치/과금 전에 거부한다. */
@@ -130,9 +151,9 @@ export function canConnectRoads(
   ay: number,
   bx: number,
   by: number,
+  probe: RoadProbe = worldRoadProbe(world),
 ): PlaceResult {
-  if (Math.abs(ax - bx) + Math.abs(ay - by) !== 1 || world.getBuild(ax, ay) !== Build.Road)
-    return SILENT;
+  if (Math.abs(ax - bx) + Math.abs(ay - by) !== 1 || !probe.road(ax, ay)) return SILENT;
   if (!exploredOk(world, ax, ay) || !exploredOk(world, bx, by))
     return { ok: false, reason: '아직 개척하지 않은 땅입니다' };
   if (Math.abs(world.sampleHeight(ax, ay) - world.sampleHeight(bx, by)) > 1)
@@ -143,24 +164,32 @@ export function canConnectRoads(
   ]) {
     const h = world.sampleHeight(x, y);
     let slopes = 0;
+    let ups = 0;
     for (let d = 0; d < 4; d++) {
       const dx = x + DIRS[d][0],
         dy = y + DIRS[d][1];
-      if (
-        ((dx === nx && dy === ny) || world.roadsConnected(x, y, dx, dy)) &&
-        world.sampleHeight(dx, dy) !== h
-      )
-        slopes |= 1 << d;
+      if (!((dx === nx && dy === ny) || probe.linked(x, y, dx, dy))) continue;
+      const dh = world.sampleHeight(dx, dy) - h;
+      if (dh === 0) continue;
+      slopes |= 1 << d;
+      if (dh > 0) ups++;
     }
     if (slopes && slopes & (slopes - 1) && slopes !== 5 && slopes !== 10)
       return { ok: false, reason: '한 칸이 여러 방향으로 비탈질 수 없습니다' };
+    /*
+     * 램프는 낮은 칸 하나가 통째로 진다(slope.ts). 그래서 한 칸이 두 방향으로
+     * **올라갈** 수는 없다 — 그릇 바닥 모양은 한 평면으로 그릴 수 없고, 그리면
+     * 도로 한복판이 다시 계단이 된다. 마주 보는 두 방향이라도 한쪽은 내려가야 한다.
+     */
+    if (ups > 1) return { ok: false, reason: '한 칸에서 양쪽으로 올라갈 수 없습니다' };
   }
   return OK;
 }
 
 export function canPlaceZone(world: World, tx: number, ty: number, zone: number): PlaceResult {
   if (!exploredOk(world, tx, ty)) return { ok: false, reason: '아직 개척하지 않은 땅입니다' };
-  if (isWater(world.getTile(tx, ty))) return { ok: false, reason: '물 위에는 지구를 지정할 수 없습니다' };
+  if (isWater(world.getTile(tx, ty)))
+    return { ok: false, reason: '물 위에는 지구를 지정할 수 없습니다' };
   const cur = world.getBuild(tx, ty);
   if (cur === Build.Road || cur === Build.Runway || cur === Build.Taxiway || cur === Build.Civic)
     return { ok: false, reason: '기존 시설을 먼저 철거해야 합니다' };

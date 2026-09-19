@@ -1,4 +1,4 @@
-import { Build } from './build';
+import { Build, DIRS } from './build';
 import type { World } from './world';
 
 /**
@@ -19,16 +19,26 @@ import type { World } from './world';
  * 만든 것인데, 정작 **비탈을 그리는 코드가 없었다.** 그게 이번 버그다.
  *
  * ---------------------------------------------------------------
- * 지면 모형: 변의 높이는 두 타일의 평균
+ * 지면 모형: 램프는 **낮은 칸 하나**가 통째로 진다
  * ---------------------------------------------------------------
- * 도로 타일 하나의 윗면을 평면 하나로 본다. 그 평면은
+ * 지형은 건드리지 않는다. 평평한 땅은 끝까지 평평하고 절벽도 그대로 있다.
+ * 움직이는 것은 **도로뿐**이다 — 테오타운의 비탈 도로, 마인크래프트의 오르막
+ * 레일과 같다. 한 단계 높은 도로와 이으려고 낮은 쪽 도로가 몸을 일으킨다.
  *
- *     맞닿은 두 도로 타일의 고도가 다르면, 그 변의 높이 = 두 고도의 평균
- *     그 밖의 변(지형·건물과 닿는 변)의 높이 = 자기 고도 그대로
+ *     낮은 도로 칸: 아래쪽 변 = 자기 고도 h, 위쪽 변 = h + 1
+ *     높은 도로 칸: 언제나 자기 고도로 평평하다
  *
- * 이 규칙 하나로 도로면이 **틈 없이 이어진다.** 고도 0-1 로 맞닿은 두 도로는
- * 양쪽 모두 맞닿는 변이 0.5 라 정확히 붙고, 0-1-2 로 이어지는 곧은 비탈길의
- * 가운데 칸은 0.5 에서 1.5 로 올라가는 완전한 램프가 된다.
+ * 한 칸 안에서 한 단계를 전부 오르므로 **높은 칸은 손대지 않는다.** 예전
+ * 규칙(변의 높이 = 두 고도의 평균)은 비탈을 두 칸에 반씩 나눠 졌고, 그래서
+ * 언덕 위의 평평해야 할 도로까지 반 칸 내려앉아 **지형이 기울어 보였다.**
+ * 그게 이번에 고친 것이다.
+ *
+ * 0-1-2 로 이어지는 곧은 비탈길은 칸마다 한 단계씩 올라 그대로 이어진다.
+ * 고도 0 칸의 위쪽 변(=1)과 고도 1 칸의 아래쪽 변(=1)이 정확히 만난다.
+ *
+ * 한 칸이 두 방향으로 오를 수는 없다(그릇 모양). build.ts 의 canConnectRoads
+ * 가 그런 연결을 애초에 거부하고, 여기서는 혹시 예전 저장본에 남아 있더라도
+ * 평평하게 두어 예전처럼 절벽으로 보이게 한다.
  *
  * 평면이므로 타일 하나는 (중심 높이, tx 방향 기울기, ty 방향 기울기) 세 수로
  * 끝난다. 아이소메트릭 투영에서 이 평면은 정점 4개의 y 만 움직이면 나온다 —
@@ -66,40 +76,42 @@ export function rampJoins(world: World, ax: number, ay: number, bx: number, by: 
 }
 
 /**
- * (tx, ty) 변의 높이. dx, dy 는 변의 방향(4방향 중 하나).
- * 램프로 이어지는 변만 두 고도의 평균이 되고, 나머지는 자기 고도다.
+ * 이 도로 칸이 램프로 **올라가는** 방향(DIRS 번호). 램프가 아니면 -1.
+ *
+ * 올라갈 곳이 있어야 램프다 — 내려가는 쪽은 그 아래 칸이 자기 몫으로 진다.
+ * 두 방향으로 동시에 올라가야 하는 칸(그릇 바닥)은 한 평면으로 그릴 수 없으므로
+ * -1 을 준다. 그런 자리는 canConnectRoads 가 막아서 새로 생기지 않는다.
  */
-function edgeHeight(
-  world: World,
-  tx: number,
-  ty: number,
-  h: number,
-  dx: number,
-  dy: number,
-): number {
-  const nx = tx + dx;
-  const ny = ty + dy;
-  if (!rampJoins(world, tx, ty, nx, ny)) return h;
-  return (h + world.sampleHeight(nx, ny)) / 2;
+export function rampUpDir(world: World, tx: number, ty: number): number {
+  if (world.sampleBuild(tx, ty) !== Build.Road) return -1;
+  const h = world.sampleHeight(tx, ty);
+  let found = -1;
+  for (let d = 0; d < 4; d++) {
+    const nx = tx + DIRS[d][0];
+    const ny = ty + DIRS[d][1];
+    if (world.sampleHeight(nx, ny) <= h) continue;
+    if (!rampJoins(world, tx, ty, nx, ny)) continue;
+    if (found >= 0) return -1;
+    found = d;
+  }
+  return found;
 }
 
-/** 타일 하나의 윗면 평면. 도로가 아니면 언제나 평평하다. */
+/**
+ * 타일 하나의 윗면 평면.
+ *
+ * 도로가 아니면 언제나 평평하다 — **지형은 이 파일 때문에 절대 기울지 않는다.**
+ * 도로라도 평평한 것이 기본이고, 한 단계 높은 도로로 이어지는 칸만 그 한 칸
+ * 안에서 한 단계를 올라간다.
+ */
 export function surfaceAt(world: World, tx: number, ty: number): TileSurface {
   const h = world.sampleHeight(tx, ty);
-  if (world.sampleBuild(tx, ty) !== Build.Road) return flatSurface(h);
+  const d = rampUpDir(world, tx, ty);
+  if (d < 0) return flatSurface(h);
 
-  const px = edgeHeight(world, tx, ty, h, 1, 0);
-  const mx = edgeHeight(world, tx, ty, h, -1, 0);
-  const py = edgeHeight(world, tx, ty, h, 0, 1);
-  const my = edgeHeight(world, tx, ty, h, 0, -1);
-
-  // 중심은 네 변의 평균이다. 한쪽만 비탈진 "비탈의 시작" 칸은 자기 고도에서
-  // 0.25 만 올라가고, 그 덕에 아래 칸과 맞닿는 변이 정확히 0.5 로 떨어진다.
-  return {
-    zc: (px + mx) / 2 + (py + my) / 2 - h,
-    dzx: px - mx,
-    dzy: py - my,
-  };
+  // 중심이 반 단계, 양 끝 변이 h 와 h + RAMP_STEP 이 된다.
+  const [dx, dy] = DIRS[d];
+  return { zc: h + RAMP_STEP / 2, dzx: dx * RAMP_STEP, dzy: dy * RAMP_STEP };
 }
 
 /** 이 타일이 평평하지 않은가. 도로를 놓았을 때 메시를 다시 구울지 판단한다. */

@@ -34,6 +34,7 @@ import { requireSession } from './ui/loginScreen';
 import { Minimap } from './ui/minimap';
 import { SaveBadge } from './ui/saveBadge';
 import { bindToolbar } from './ui/toolbar';
+import { bindPlacementBar } from './ui/placementBar';
 import { bindToolButtons, Tools } from './ui/tools';
 import { TransportHubPanel } from './ui/transportHubPanel';
 import {
@@ -219,6 +220,8 @@ async function boot(): Promise<void> {
   };
 
   const tools = new Tools(world, renderer, sim);
+  // 확정 바의 Escape 처리가 건설 메뉴·패널 닫기보다 먼저 와야 한다.
+  const placementBar = bindPlacementBar(tools);
   const metroPanel = new MetroPanel(sim.metro, tools);
   const transportPanel = new TransportHubPanel(world, transport);
 
@@ -230,8 +233,14 @@ async function boot(): Promise<void> {
         metroPanel.selectStation(`${cursor.tx},${cursor.ty}`);
         return;
       }
+      /*
+       * 건설 도구를 든 탭은 **점을 찍는 동작**이다(onPaintStart 가 받는다).
+       * 그 탭으로 건물 정보 패널까지 열리면, 두 점을 찍는 내내 패널이 떴다
+       * 닫혔다 하면서 지도를 가린다.
+       */
+      if (tools.tool !== 'select') return;
       const station = sim.metro.stationAtSurface(cursor.tx, cursor.ty);
-      if (station && tools.tool === 'select') {
+      if (station) {
         tools.setTool('metroView');
         metroPanel.selectStation(station);
         return;
@@ -246,24 +255,21 @@ async function boot(): Promise<void> {
     onHover: (wx, wy) => {
       cursor = pickTile(world, wx, wy);
       renderer.setCursorTile(cursor);
+      tools.hoverTile(cursor);
     },
     onHoverEnd: () => {
       cursor = null;
       renderer.setCursorTile(null);
+      tools.hoverTile(null);
     },
     isPainting: () => tools.isPainting(),
+    // 모든 건설 도구가 'tap' 이므로 여기는 짧은 탭에서만 불린다.
+    // 드래그는 언제나 지도 이동으로 간다.
     onPaintStart: (wx, wy) => {
       cursor = pickTile(world, wx, wy);
       renderer.setCursorTile(cursor);
-      tools.beginPaint(wx, wy);
-    },
-    onPaintMove: (wx, wy) => {
-      cursor = pickTile(world, wx, wy);
-      renderer.setCursorTile(cursor);
-      tools.movePaint(wx, wy);
-    },
-    onPaintEnd: () => {
-      tools.endPaint();
+      tools.hoverTile(cursor);
+      tools.tapAtWorld(wx, wy);
     },
   });
 
@@ -364,6 +370,8 @@ async function boot(): Promise<void> {
     camera.update(ticker.deltaMS);
     camera.applyTo(renderer.root);
     renderer.setFacilityPreview(cursor ? tools.facilityPreviewAt(cursor.tx, cursor.ty) : null);
+    renderer.setPlacement(tools.placementPreview());
+    placementBar.update();
     renderer.utilityMode = tools.utilityMode;
     renderer.metroMode = tools.metroMode && tools.tool !== 'metroStation';
     renderer.metroSelection = tools.metroSelection;
