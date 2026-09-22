@@ -1,9 +1,6 @@
 import { strict as assert } from 'node:assert';
 import { CHUNK_SIZE } from '../../src/core/constants';
-import {
-  AIRPORT_SPECS,
-  HARBOR_SPECS,
-} from '../../src/sim/config/transport';
+import { AIRPORT_SPECS, HARBOR_SPECS } from '../../src/sim/config/transport';
 import {
   FAC_AIRPORT,
   FAC_AIRPORT_L2,
@@ -19,7 +16,11 @@ import { Terrain } from '../../src/world/terrain';
 import { World } from '../../src/world/world';
 
 assert.deepEqual(
-  [HARBOR_SPECS[FAC_HARBOR].maxShips, HARBOR_SPECS[FAC_HARBOR_HYBRID_L2].maxShips, HARBOR_SPECS[FAC_HARBOR_HYBRID_L3].maxShips],
+  [
+    HARBOR_SPECS[FAC_HARBOR].maxShips,
+    HARBOR_SPECS[FAC_HARBOR_HYBRID_L2].maxShips,
+    HARBOR_SPECS[FAC_HARBOR_HYBRID_L3].maxShips,
+  ],
   [2, 5, 13],
   '항구 3/5/7칸 선박 상한',
 );
@@ -28,12 +29,20 @@ assert.equal(HARBOR_SPECS[FAC_HARBOR_CARGO].mode, 'cargo');
 assert.equal(HARBOR_SPECS[FAC_HARBOR_HYBRID_L2].mode, 'hybrid');
 assert.equal(HARBOR_SPECS[FAC_HARBOR_HYBRID_L3].mode, 'hybrid');
 assert.deepEqual(
-  [AIRPORT_SPECS[FAC_AIRPORT].maxPlanes, AIRPORT_SPECS[FAC_AIRPORT_L2].maxPlanes, AIRPORT_SPECS[FAC_AIRPORT_L3].maxPlanes],
+  [
+    AIRPORT_SPECS[FAC_AIRPORT].maxPlanes,
+    AIRPORT_SPECS[FAC_AIRPORT_L2].maxPlanes,
+    AIRPORT_SPECS[FAC_AIRPORT_L3].maxPlanes,
+  ],
   [2, 6, 14],
   '공항 단계별 항공기 상한',
 );
 assert.deepEqual(
-  [AIRPORT_SPECS[FAC_AIRPORT].minRunwayTiles, AIRPORT_SPECS[FAC_AIRPORT_L2].minRunwayTiles, AIRPORT_SPECS[FAC_AIRPORT_L3].minRunwayTiles],
+  [
+    AIRPORT_SPECS[FAC_AIRPORT].minRunwayTiles,
+    AIRPORT_SPECS[FAC_AIRPORT_L2].minRunwayTiles,
+    AIRPORT_SPECS[FAC_AIRPORT_L3].minRunwayTiles,
+  ],
   [6, 10, 14],
   '공항 단계별 최소 활주로',
 );

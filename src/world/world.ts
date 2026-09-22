@@ -105,6 +105,20 @@ export interface Chunk {
 }
 
 /** 건물 한 채를 읽어낸 결과. 3.3단계부터 시설도 여기로 나온다. */
+/**
+ * 구조물 변화 알림 (수정사항 2).
+ *
+ *   build     플레이어가 도로·지구·배관 같은 한 칸을 놓았다
+ *   grow      건물이나 시설이 섰다 (올라오는 애니메이션)
+ *   demolish  헐렸다
+ */
+export interface StructureEvent {
+  kind: 'build' | 'grow' | 'demolish';
+  tx: number;
+  ty: number;
+  span: number;
+}
+
 export interface BuildingInfo {
   /** 앵커 타일(왼쪽 위). */
   tx: number;
@@ -186,6 +200,15 @@ export class World {
 
   /** 저장할 게 생겼을 때 불린다. SaveManager 가 여기에 물린다. */
   onDirty: (() => void) | null = null;
+
+  /**
+   * 구조물이 서거나 헐릴 때 한 번 불린다 (수정사항 2).
+   *
+   * 애니메이션과 효과음이 여기에 붙는다. **월드는 소리도 그림도 모른다** —
+   * 무슨 일이 일어났는지만 알려주고, 어떻게 보여줄지는 렌더러가 정한다.
+   * 저장·시뮬레이션 경로에는 아무 영향이 없다(구독자가 없으면 아무 일도 없다).
+   */
+  onStructureEvent: ((e: StructureEvent) => void) | null = null;
 
   /** 이 클라이언트가 조종하는 도시의 base 청크 왼쪽 위 좌표. */
   baseCx = 0;
@@ -602,6 +625,7 @@ export class World {
    */
   placeBuilding(tx: number, ty: number, zone: number, level: number, bornDay: number): void {
     this.walkRevision++;
+    this.onStructureEvent?.({ kind: 'grow', tx, ty, span: level });
     const p = this.getParcel(chunkIndexOf(tx), chunkIndexOf(ty));
     if (!p.bld) {
       p.bld = new Uint8Array(CHUNK_TILES).fill(BLD_NONE);
@@ -653,6 +677,7 @@ export class World {
    */
   placeFacility(tx: number, ty: number, kind: number, bornDay: number): void {
     const span = facilitySpan(kind);
+    this.onStructureEvent?.({ kind: 'grow', tx, ty, span });
 
     // 1) footprint 전 칸에 build = Build.Civic.
     //    setBuild 를 쓴다 — 기존 건물이 있으면 내부의 demolishAt 이 알아서 헌다.
@@ -760,6 +785,7 @@ export class World {
     const info = this.buildingCovering(tx, ty);
     if (!info) return null;
     this.walkRevision++;
+    this.onStructureEvent?.({ kind: 'demolish', tx: info.tx, ty: info.ty, span: info.span });
 
     const touched = new Set<Parcel>();
     for (let dy = 0; dy < info.span; dy++) {

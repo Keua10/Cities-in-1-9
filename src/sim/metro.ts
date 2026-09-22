@@ -82,7 +82,10 @@ export class MetroNetwork {
     const [x, y] = key.split(',').map(Number);
     const candidate = [[x, y], ...DIRS.map(([dx, dy]) => [x + dx, y + dy])].find(([a, b]) => {
       const owner = this.stationAtSurface(a, b);
-      return (!owner || owner === key) && canPlaceFacility(this.world, a, b, METRO_FACILITY, 1).ok;
+      // 복구는 **도로에 닿은** 자리만 고른다. 경고가 붙은 자리(도로 비접)를
+      // 자동으로 고르면 복구해도 역이 여전히 안 돌아간다.
+      const res = canPlaceFacility(this.world, a, b, METRO_FACILITY, 1);
+      return (!owner || owner === key) && res.ok && !res.warning;
     });
     if (!candidate)
       return { ok: false, message: '역 칸 또는 바로 옆에 도로와 접한 빈 육지가 필요합니다.' };

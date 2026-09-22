@@ -88,6 +88,11 @@ export function hasRoadAccess(world: World, tx: number, ty: number): boolean {
 export interface PlaceResult {
   ok: boolean;
   reason: string;
+  /**
+   * 지을 수는 있지만 제대로 돌아가지 않을 때의 경고 (수정사항 3).
+   * 예: 도로에 닿지 않은 시설은 세워지되 가동되지 않는다.
+   */
+  warning?: string;
 }
 
 const OK: PlaceResult = { ok: true, reason: '' };
@@ -164,11 +169,13 @@ export function canConnectRoads(
   ]) {
     const h = world.sampleHeight(x, y);
     let slopes = 0;
+    let links = 0;
     let ups = 0;
     for (let d = 0; d < 4; d++) {
       const dx = x + DIRS[d][0],
         dy = y + DIRS[d][1];
       if (!((dx === nx && dy === ny) || probe.linked(x, y, dx, dy))) continue;
+      links |= 1 << d;
       const dh = world.sampleHeight(dx, dy) - h;
       if (dh === 0) continue;
       slopes |= 1 << d;
@@ -176,6 +183,19 @@ export function canConnectRoads(
     }
     if (slopes && slopes & (slopes - 1) && slopes !== 5 && slopes !== 10)
       return { ok: false, reason: '한 칸이 여러 방향으로 비탈질 수 없습니다' };
+    /*
+     * 비탈진 칸은 **기울어진 축으로만** 이어진다 (수정사항 9).
+     *
+     * 램프는 한 칸이 통째로 한 축을 따라 기운 평면이다. 그 옆(직각 방향)으로
+     * 길을 붙이면 두 도로의 높이가 칸 한복판에서 어긋나고, 화면에서는 길이
+     * 공중에 떠 있거나 땅에 파묻힌 것으로 보인다. 그래서 램프 칸의 연결은
+     * 기울기 축(동서 또는 남북) 위에서만 허용한다.
+     */
+    if (slopes) {
+      const axis = slopes & 0b0101 ? 0b0101 : 0b1010;
+      if (links & ~axis)
+        return { ok: false, reason: '비탈진 도로는 기울어진 방향으로만 이을 수 있습니다' };
+    }
     /*
      * 램프는 낮은 칸 하나가 통째로 진다(slope.ts). 그래서 한 칸이 두 방향으로
      * **올라갈** 수는 없다 — 그릇 바닥 모양은 한 평면으로 그릴 수 없고, 그리면

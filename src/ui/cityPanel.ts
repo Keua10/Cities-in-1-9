@@ -1,3 +1,4 @@
+import { audio } from '../audio/audio';
 import { LEVEL_COUNT, TIER_NAMES, ZONE_C, ZONE_I, ZONE_NAMES, ZONE_R } from '../sim/buildings';
 import { formatMoney } from './money';
 import type { MacroSim } from '../sim/macro';
@@ -35,6 +36,8 @@ export class CityPanel {
   private dateEl: HTMLElement;
   private occupancyEl: HTMLElement;
   private occupancyFillEl: HTMLElement;
+  private envEl: HTMLElement;
+  private envFillEl: HTMLElement;
   private noteEl: HTMLElement;
   private bars: HTMLElement[][] = [];
   /** 3.3단계: kind 0~3 커버율 게이지. */
@@ -76,6 +79,25 @@ export class CityPanel {
     this.dateEl = must(el, '.cp-date');
     this.occupancyEl = must(el, '.cp-occupancy-value');
     this.occupancyFillEl = must(el, '.cp-occupancy-fill');
+    /*
+     * 소리 조절 (수정사항 2). 교실에서는 대개 꺼 두므로 눈에 띄는 자리에 둔다.
+     * 값은 audio 가 localStorage 에 남긴다 — 다음에 들어와도 그대로다.
+     */
+    const music = must(el, '.cp-music') as HTMLInputElement;
+    const sfx = must(el, '.cp-sfx') as HTMLInputElement;
+    music.value = String(Math.round(audio.musicVolume * 100));
+    sfx.value = String(Math.round(audio.sfxVolume * 100));
+    music.addEventListener('input', () => {
+      audio.resume();
+      audio.setMusicVolume(Number(music.value) / 100);
+    });
+    sfx.addEventListener('input', () => {
+      audio.resume();
+      audio.setSfxVolume(Number(sfx.value) / 100);
+      audio.play('select');
+    });
+    this.envEl = must(el, '.cp-env-value');
+    this.envFillEl = must(el, '.cp-env-fill');
     this.noteEl = must(el, '.cp-note');
 
     for (let z = 0; z < 3; z++) {
@@ -130,24 +152,45 @@ export class CityPanel {
     this.occupancyFillEl.classList.toggle('warning', occupancy < 0.75);
     this.occupancyFillEl.classList.toggle('critical', occupancy < 0.5);
 
+    // 수정사항 4: 환경도는 입주율 바로 아래에 둔다. 둘은 늘 같이 읽힌다.
+    const environment = Math.max(0, Math.min(1, sim.stats.environment));
+    setText(this.envEl, `${Math.round(environment * 100)}%`);
+    this.envFillEl.style.width = `${Math.round(environment * 100)}%`;
+    this.envFillEl.classList.toggle('warning', environment < 0.6);
+    this.envFillEl.classList.toggle('critical', environment < 0.4);
+
     const day = sim.day;
     const hour = sim.tick % TICKS_PER_DAY;
     setText(this.dateEl, `${day}일차 ${String(hour).padStart(2, '0')}시`);
 
+    /*
+     * 상대 수요 (수정사항 5).
+     *
+     * 절대값 -1~+1 을 그대로 그리면 왼쪽 절반(마이너스)이 통째로 쓸모가 없다.
+     * 수요가 -0.3 이든 -0.9 든 플레이어가 할 일은 똑같이 "여긴 지금 짓지 마라"
+     * 하나뿐이기 때문이다. 대신 **지금 열려 있는 계층 중 가장 센 수요** 를
+     * 100% 로 잡고 나머지를 그 비율로 그린다. 그러면 막대가 곧바로
+     * "다음에 뭘 깔아야 하는가" 를 가리킨다.
+     */
+    let peak = 0;
+    for (let z = 0; z < 3; z++) {
+      for (let t = 0; t < sim.maxBuildingTier; t++) peak = Math.max(peak, sim.demand[z][t]);
+    }
     for (let z = 0; z < 3; z++) {
       for (let t = 0; t < LEVEL_COUNT; t++) {
         const v = sim.demand[z][t];
         const bar = this.bars[z][t];
+        const cell = bar.parentElement!;
         const locked = t >= sim.maxBuildingTier;
-        bar.parentElement!.classList.toggle('locked', locked);
-        bar.parentElement!.title = locked
+        cell.classList.toggle('locked', locked);
+        const relative = peak > 0 ? Math.max(0, v) / peak : 0;
+        cell.title = locked
           ? `도시 레벨 ${BUILDING_UNLOCK_LEVEL[t]}에서 잠금해제`
-          : `${TIER_NAMES[t]} 수요`;
-        // 왼쪽이 마이너스, 오른쪽이 플러스. 가운데가 0.
-        const pct = Math.min(50, Math.abs(v) * 50);
-        bar.style.width = `${pct}%`;
-        bar.style.left = v >= 0 ? '50%' : `${50 - pct}%`;
-        bar.classList.toggle('neg', v < 0);
+          : relative > 0
+            ? `${TIER_NAMES[t]} 수요 ${Math.round(relative * 100)}% (가장 센 수요 대비)`
+            : `${TIER_NAMES[t]} 수요 없음 · 지금 지어도 비어 있습니다`;
+        cell.classList.toggle('idle', !locked && relative <= 0);
+        bar.style.width = `${Math.round(relative * 96)}%`;
       }
     }
 
@@ -329,11 +372,19 @@ function template(): string {
       <div class="cp-occupancy-head"><span>공실률</span><b class="cp-occupancy-value">100%</b></div>
       <div class="cp-occupancy-track" aria-hidden="true"><i class="cp-occupancy-fill"></i></div>
       <div class="cp-occupancy-scale"><span>공실 많음</span><span>입주 안정</span></div>
+      <div class="cp-occupancy-head"><span>환경도</span><b class="cp-env-value">0%</b></div>
+      <div class="cp-occupancy-track" aria-hidden="true"><i class="cp-env-fill"></i></div>
+      <div class="cp-occupancy-scale"><span>공원·소음·오염·교통·접근성</span><span>쾌적</span></div>
     </div>
     <div class="cp-demand">
       <div class="cp-section-title">건물 수요</div>
       <div class="cp-legend"><span>저소득</span><span>중산층</span><span>고소득</span></div>
       ${rows}
+    </div>
+    <div class="cp-audio">
+      <div class="cp-section-title">소리</div>
+      <label class="cp-audio-row"><span>배경음</span><input class="cp-music" type="range" min="0" max="100" step="5"></label>
+      <label class="cp-audio-row"><span>효과음</span><input class="cp-sfx" type="range" min="0" max="100" step="5"></label>
     </div>
     <div class="cp-services">
       <div class="cp-section-title">서비스 · 복지</div>

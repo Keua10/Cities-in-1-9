@@ -10,7 +10,12 @@ import {
 } from './buildings';
 import { FACILITY_SPECS, touchesRoadTiles } from './facilities';
 import { edgeNeighbors } from './roadGraph';
-import { AMENITY_SCORE_SCALE, OVERLOAD_SLOPE, SERVICE_FIELD_MAX_DIST } from './simConstants';
+import {
+  AMENITY_SCORE_SCALE,
+  LOAD_SMOOTH,
+  OVERLOAD_SLOPE,
+  SERVICE_FIELD_MAX_DIST,
+} from './simConstants';
 import {
   FAC_INCINERATOR,
   FAC_CREMATORIUM,
@@ -330,7 +335,8 @@ export class ServiceField {
   settleLoads(): void {
     for (const f of this.facilities) {
       const spec = FACILITY_SPECS[f.kind];
-      this.load[f.index] = this.pending[f.index];
+      // 즉시 대입하지 않고 목표 부하 쪽으로 조금씩 움직인다(수정사항 7: 진동 억제).
+      this.load[f.index] += (this.pending[f.index] - this.load[f.index]) * LOAD_SMOOTH;
       if (spec.welfare || spec.capacity <= 0) {
         // 복지에는 용량도, 부하 적립도, 한 틱 지연도 없다. 순환 문제가 애초에
         // 생기지 않는다 — 복지 점수는 인구와 무관하게 시설 배치만으로 정해진다.

@@ -109,9 +109,18 @@ export function canPlaceFacility(
     }
   }
 
-  if (spec.needsRoad && !touchesRoadTiles(world, tx, ty, span)) {
-    return { ok: false, reason: '도로에 닿아야 합니다' };
-  }
+  /*
+   * 도로 비접은 **금지가 아니라 경고** 다 (수정사항 3).
+   *
+   * 도로 옆에만 놓을 수 있게 막으면 플레이어는 "왜 안 놓이지" 만 보고 이유를
+   * 화면에서 읽지 못한다. 세워두되 가동이 안 되게 하면 원인이 건물 위에 그대로
+   * 보이고, 도로를 한 칸 이으면 곧바로 켜진다 — 테오타운·시티즈가 같은 방식이다.
+   * 가동 여부는 이미 services / power / water 가 hasRoad 로 판정하고 있다.
+   */
+  const roadWarning =
+    spec.needsRoad && !touchesRoadTiles(world, tx, ty, span)
+      ? '도로에 닿지 않아 가동되지 않습니다 · 도로를 이어주세요'
+      : '';
 
   if (WATER_SPECS[kind]?.needsWater && !touchesWater(world, tx, ty, span)) {
     return { ok: false, reason: '하천에 바로 닿은 평평한 육지에 지어야 합니다' };
@@ -121,7 +130,7 @@ export function canPlaceFacility(
     return { ok: false, reason: '항구는 수역에 바로 닿은 평평한 육지에 지어야 합니다' };
   }
 
-  return OK;
+  return roadWarning ? { ok: true, reason: '', warning: roadWarning } : OK;
 }
 
 export function touchesRoadTiles(world: World, tx: number, ty: number, span: number): boolean {

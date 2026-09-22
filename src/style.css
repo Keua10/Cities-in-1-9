@@ -629,6 +629,7 @@ body.clean-view #minimap-shell {
   background: rgba(255, 157, 138, 0.28);
 }
 
+.cp-env-fill,
 .cp-occupancy-fill {
   display: block;
   width: 0;
@@ -640,10 +641,12 @@ body.clean-view #minimap-shell {
     background-color 200ms ease;
 }
 
+.cp-env-fill.warning,
 .cp-occupancy-fill.warning {
   background: #e0bc6a;
 }
 
+.cp-env-fill.critical,
 .cp-occupancy-fill.critical {
   background: #ff9d8a;
 }
@@ -700,8 +703,12 @@ body.clean-view #minimap-shell {
 }
 
 /*
- * 수요 막대. 가운데가 0 이고 오른쪽이 플러스, 왼쪽이 마이너스다.
- * 폭과 위치만 바꾸므로 갱신할 때 DOM 을 새로 만들지 않는다.
+ * 수요 막대. **상대 수요** 라 왼쪽에서 오른쪽으로만 찬다 (수정사항 5).
+ *
+ * 예전에는 가운데가 0 이고 왼쪽이 마이너스였는데, 수요가 0 아래로 내려가도
+ * 플레이어가 할 수 있는 일이 없어서 왼쪽 절반이 통째로 쓸모가 없었다. 지금은
+ * "지금 가장 필요한 것이 무엇인가" 만 보여준다 — 가장 센 수요가 꽉 찬 막대다.
+ * 폭만 바꾸므로 갱신할 때 DOM 을 새로 만들지 않는다.
  */
 .cp-bar {
   position: relative;
@@ -712,31 +719,20 @@ body.clean-view #minimap-shell {
   overflow: hidden;
 }
 
-.cp-bar::before {
-  content: '';
-  position: absolute;
-  left: 50%;
-  top: 0;
-  bottom: 0;
-  width: 1px;
-  background: rgba(231, 238, 242, 0.22);
-}
-
 .cp-bar i {
   position: absolute;
   top: 2px;
   bottom: 2px;
-  left: 50%;
+  left: 2px;
   width: 0;
   border-radius: 2px;
   background: currentColor;
-  transition:
-    width 200ms ease,
-    left 200ms ease;
+  transition: width 200ms ease;
 }
 
-.cp-bar i.neg {
-  opacity: 0.55;
+/** 수요가 0 이하인 계층. 막대를 비워두되 칸 자체는 남겨 위치를 읽게 한다. */
+.cp-bar.idle {
+  opacity: 0.4;
 }
 
 .cp-z0 .cp-bar {
@@ -1187,4 +1183,24 @@ body.clean-view #minimap-shell {
 }
 #btn-tool-wire {
   color: #ffdf55;
+}
+
+/* 소리 조절 (수정사항 2). 패널 안의 다른 줄들과 같은 리듬으로 둔다. */
+.cp-audio-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0;
+  font-size: 11px;
+  color: var(--ink-dim);
+}
+
+.cp-audio-row > span {
+  width: 48px;
+  flex: none;
+}
+
+.cp-audio-row > input {
+  flex: 1;
+  accent-color: #6fb4e8;
 }

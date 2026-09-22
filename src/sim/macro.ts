@@ -30,6 +30,7 @@ import { RoadField } from './roadGraph';
 import { WaterField } from './water';
 import { PowerField } from './power';
 import { utilityPenalty } from './config/infrastructure';
+import { essentialCeiling, essentialGate } from './config/essentials';
 import { normalizePolicies, taxRate, taxSatisfactionPenalty, type CityPolicies } from './policies';
 import { FAC_INCINERATOR, FAC_CREMATORIUM } from './config/sanitation';
 import { WATER_GRACE_DAYS, WATER_RAMP_DAYS } from './config/water';
@@ -40,6 +41,15 @@ import {
   initializeProsperity,
   normalizeProsperity,
 } from './progression';
+import {
+  ENVIRONMENT_WARNING,
+  EMPTY_ENVIRONMENT,
+  environmentParts,
+  environmentScore,
+  type BuildingAlert,
+  type EnvironmentParts,
+} from './environment';
+import { FAC_FIRE, FAC_HOSPITAL, FAC_POLICE } from './facilities';
 import { graceFactor, satisfaction } from './satisfaction';
 import { SERVICE_KIND_COUNT, ServiceField } from './services';
 import {
@@ -48,6 +58,7 @@ import {
   AMENITY_NEED_BY_TIER,
   AMENITY_SURPLUS_MAX,
   DEMAND_SCALE,
+  GRACE_SMOOTH,
   DEMAND_SMOOTH,
   EXPORT_PER_SQRT_POP,
   GROWTH_PRESSURE,
@@ -108,6 +119,8 @@ export class MacroSim {
     roads: 0,
     occupancy: 0,
     strandedBuildings: 0,
+    utilityStarvedBuildings: 0,
+    environment: 0,
     dailyIncome: 0,
     dailyUpkeep: 0,
     ...emptyFacilityStats(),
@@ -219,6 +232,14 @@ export class MacroSim {
     };
   }
 
+  /** grace 의 완만한 이동 평균. 인구 <-> 감점 되먹임의 진동을 막는다(수정사항 7). */
+  private graceLevel = 0;
+
+  /** 필지별 환경도 0~255. 입주율과 같은 파생값이라 저장하지 않는다(수정사항 4). */
+  private env = new Map<string, Uint8Array>();
+  /** 필지별 환경도 항목. 건물을 눌렀을 때 "왜 낮은지" 를 보여주기 위한 것이다. */
+  private envParts = new Map<string, EnvironmentParts>();
+
   get prosperity(): number {
     return normalizeProsperity(this.macro.prosperity);
   }
@@ -245,6 +266,53 @@ export class MacroSim {
   }
 
   /**
+   * 필수 인프라 게이트 강도 0~1 (수정사항 1 · 13).
+   * 상수도와 전기 중 **늦게 열린 쪽** 을 기준으로 유예를 잰다.
+   */
+  private get essentialGateFactor(): number {
+    const start = Math.max(
+      this.macro.waterStartTick ?? this.tick,
+      this.macro.powerStartTick ?? this.tick,
+    );
+    return essentialGate((this.tick - start) / TICKS_PER_DAY);
+  }
+
+  /**
+   * 빈 부지의 필수 인프라 준비도 0~1. 신축·재개발 판정에 쓴다.
+   * 건물이 아직 없으므로 배관·전선 커버리지로 본다.
+   */
+  private plotEssentials(tx: number, ty: number, span: number, gate: number): number {
+    if (gate <= 0) return 1;
+    /*
+     * 전기는 **도시 전체의 발전 여유** 로 본다. 타일별 전력 커버리지로 막으면
+     * 도시가 자기 발밑에서만 자란다 — 전력은 건물을 타고 전달되므로, 아직
+     * 건물이 없는 땅에는 전력 커버리지가 영영 생기지 않고, 전선을 손으로 깔지
+     * 않은 구역은 통째로 죽는다. 실제로 이 판정을 타일별로 걸었을 때 같은
+     * 시나리오의 인구가 8,000 에서 3,600 으로 반토막 났다.
+     *
+     * 대신 지어진 뒤에도 전기가 안 닿으면 **입주 상한이 0** 이라 사람이 안 들어온다
+     * (evaluate 의 essentialCeiling). 플레이어는 그때 전선을 잇는다 — 테오타운과
+     * 시티즈가 똑같이 하는 방식이고, 화면에 경고가 뜨므로 원인도 바로 읽힌다.
+     */
+    const cap = this.power.summary.capacity;
+    const load = this.power.summary.demand;
+    let power = load <= 0 ? (cap > 0 ? 1 : 0) : Math.min(1, cap / load);
+    let supply = 0;
+    let drainage = 0;
+    for (let dy = 0; dy < span; dy++) {
+      for (let dx = 0; dx < span; dx++) {
+        const k = `${tx + dx},${ty + dy}`;
+        const w = this.water.coverage.get(k);
+        if (w) {
+          supply = Math.max(supply, w.supply);
+          drainage = Math.max(drainage, w.drainage);
+        }
+      }
+    }
+    return essentialCeiling({ supply, drainage }, power, gate);
+  }
+
+  /**
    * 해당 타일을 덮는 건물의 현재 입주율. 물리 건물과 달리 저장하지 않는 파생값이다.
    * 건물이 없으면 null, 건물은 있지만 만족도 기준 미달이면 0을 돌려준다.
    */
@@ -257,6 +325,55 @@ export class MacroSim {
     if (!values) return 0;
     const i = localIndexOf(info.ty) * CHUNK_SIZE + localIndexOf(info.tx);
     return values[i] / 255;
+  }
+
+  /**
+   * 건물 한 채에 지금 떠야 할 경고들 (수정사항 14).
+   *
+   * 테오타운·시티즈는 문제가 있는 건물 위에 아이콘을 띄운다. 그게 없으면
+   * 플레이어는 도시 전체 통계만 보고 **어느 건물이** 문제인지 찾지 못한다.
+   * 판정은 전부 이미 돌고 있는 값에서 읽는다 — 화면용 근사치를 만들지 않는다.
+   *
+   * 급한 것부터 돌려준다. 화면에는 첫 번째 하나만 띄운다.
+   */
+  buildingAlerts(tx: number, ty: number): BuildingAlert[] {
+    const info = this.world.buildingCovering(tx, ty);
+    if (!info || info.kind !== null) return [];
+    const out: BuildingAlert[] = [];
+    if (this.roadField.commuteFor(tx, ty, info.level, info.zone) >= ROAD_DIST_UNREACHABLE)
+      out.push('road');
+    if (this.power.supplyAt(info.tx, info.ty) <= 0) out.push('power');
+    const water = this.water.statusAt(info.tx, info.ty);
+    if (water.supply <= 0) out.push('water');
+    if (water.drainage <= 0) out.push('sewer');
+    if (water.contamination > 0 && water.supply > 0) out.push('pollution');
+    for (const kind of [FAC_FIRE, FAC_POLICE, FAC_HOSPITAL]) {
+      if (this.services.ownerFor(tx, ty, info.level, kind) < 0) {
+        out.push(kind === FAC_FIRE ? 'fire' : kind === FAC_POLICE ? 'police' : 'health');
+        break;
+      }
+    }
+    const env = this.environmentAt(tx, ty);
+    if (env !== null && env < ENVIRONMENT_WARNING) out.push('environment');
+    return out;
+  }
+
+  /** 해당 타일을 덮는 건물의 환경도 0~1. 건물이 없으면 null. */
+  environmentAt(tx: number, ty: number): number | null {
+    const info = this.world.buildingCovering(tx, ty);
+    if (!info) return null;
+    const p = this.world.peekParcel(chunkIndexOf(info.tx), chunkIndexOf(info.ty));
+    if (!p) return 0;
+    const values = this.env.get(p.key);
+    if (!values) return 0;
+    return values[localIndexOf(info.ty) * CHUNK_SIZE + localIndexOf(info.tx)] / 255;
+  }
+
+  /** 해당 타일을 덮는 건물의 환경도 항목. 화면에 이유를 적기 위한 것이다. */
+  environmentPartsAt(tx: number, ty: number): EnvironmentParts | null {
+    const info = this.world.buildingCovering(tx, ty);
+    if (!info) return null;
+    return this.envParts.get(`${info.tx},${info.ty}`) ?? EMPTY_ENVIRONMENT;
   }
 
   /** 시간대(0~23). 3.2단계에서 출퇴근 러시를 만들 때 쓴다. */
@@ -413,6 +530,9 @@ export class MacroSim {
   private grow(): void {
     if (this.macro.money <= 0) return;
 
+    this.power.ensure(this.world);
+    this.water.ensure(this.world);
+    const gate = this.essentialGateFactor;
     const ctx: GrowthContext = {
       maxBuildingTier: this.maxBuildingTier,
       demand: this.demand,
@@ -421,6 +541,7 @@ export class MacroSim {
       tick: this.macro.tick,
       money: this.macro.money,
       blocksRebuild: (tx, ty, span) => this.disasters.blocksRebuild(tx, ty, span, this.world),
+      essentialsAt: (tx, ty, span) => this.plotEssentials(tx, ty, span, gate),
     };
 
     for (const p of this.world.developedParcels()) {
@@ -457,6 +578,8 @@ export class MacroSim {
     let buildings = 0;
     let roads = 0;
     let stranded = 0;
+    let starved = 0;
+    let environmentSum = 0;
     let capacityTotal = 0;
     let filledTotal = 0;
     let wasteServed = 0,
@@ -464,6 +587,7 @@ export class MacroSim {
       funeralServed = 0,
       funeralDemand = 0;
     const policies = this.policies;
+    const essentialGateNow = this.essentialGateFactor;
     const sanitationAge =
       (this.tick - (this.macro.sanitationStartTick ?? this.tick)) / TICKS_PER_DAY;
     const sanitationRamp = Math.max(0, Math.min(1, (sanitationAge - 30) / 30));
@@ -480,7 +604,8 @@ export class MacroSim {
      * 인구가 grace 를 낮춰 감점을 줄인다. 음의 되먹임이라 어딘가에서 평형에
      * 닿고, 도시는 작아질 뿐 사라지지 않는다.
      */
-    const grace = graceFactor(this.stats.population);
+    this.graceLevel += (graceFactor(this.stats.population) - this.graceLevel) * GRACE_SMOOTH;
+    const grace = this.graceLevel;
     const coveredByKind = new Array<number>(SERVICE_KIND_COUNT).fill(0);
     let homesCounted = 0;
     let homesFulfilled = 0;
@@ -493,6 +618,11 @@ export class MacroSim {
       if (!occArr || occArr.length !== p.bld.length) {
         occArr = new Uint8Array(p.bld.length);
         this.occ.set(p.key, occArr);
+      }
+      let envArr = this.env.get(p.key);
+      if (!envArr || envArr.length !== p.bld.length) {
+        envArr = new Uint8Array(p.bld.length);
+        this.env.set(p.key, envArr);
       }
       const nui = this.nuisance.get(p.key) ?? 0;
       const baseX = p.cx * CHUNK_SIZE;
@@ -580,6 +710,15 @@ export class MacroSim {
                 sanitationRamp,
           );
 
+          /* ---------- 수정사항 4: 환경도 ---------- */
+          // 만족도에 다시 곱하지 않는다. 같은 항을 두 번 세지 않기 위해서다.
+          // 여기서는 **이미 돌고 있는 값을 읽을 수 있게** 모으기만 한다.
+          const parts = environmentParts(dist, nui, congestion, fulfil, water.contamination);
+          const env = environmentScore(parts);
+          envArr[i] = Math.round(env * 255);
+          this.envParts.set(`${tx},${ty}`, parts);
+          environmentSum += env;
+
           const incidentPenalty = this.disasters.penaltyAt(tx, ty);
           const sat =
             incidentPenalty >= 1
@@ -594,7 +733,15 @@ export class MacroSim {
                   ),
                 );
           const floor = SATISFACTION_FLOOR[level - 1];
-          const target = sat <= floor ? 0 : Math.min(1, (sat - floor) / Math.max(0.05, 1 - floor));
+          let target = sat <= floor ? 0 : Math.min(1, (sat - floor) / Math.max(0.05, 1 - floor));
+
+          // 필수 인프라 게이트(수정사항 1 · 13). 만족도와 **곱해지는 상한** 이다.
+          // 전기나 상수가 아예 안 닿으면 상한이 0 이라 살던 사람도 빠져나간다.
+          const ceiling = essentialCeiling(water, this.power.supplyAt(tx, ty), essentialGateNow);
+          if (ceiling < 1) {
+            if (target > ceiling) starved++;
+            target = Math.min(target, ceiling);
+          }
 
           // 입주율은 저장된 과거값에 의존하지 않는 완전한 파생값이다. 같은 물리 상태,
           // 도로망, 수요 입력이면 재접속·오프라인 계산에서도 항상 같은 결과가 나온다.
@@ -644,6 +791,8 @@ export class MacroSim {
       roads,
       occupancy: capacityTotal === 0 ? 0 : filledTotal / capacityTotal,
       strandedBuildings: stranded,
+      utilityStarvedBuildings: starved,
+      environment: buildings === 0 ? 0 : environmentSum / buildings,
       dailyIncome: this.stats.dailyIncome,
       dailyUpkeep: this.stats.dailyUpkeep,
       facilityUpkeep: this.services.dailyUpkeep(),

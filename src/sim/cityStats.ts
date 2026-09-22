@@ -18,6 +18,10 @@ export interface CityStats {
   occupancy: number;
   /** 도로에 닿지 않아 아무도 못 들어오는 건물 수. */
   strandedBuildings: number;
+  /** 전기·상수·하수가 모자라 입주가 막힌 건물 수 (수정사항 1 · 13). */
+  utilityStarvedBuildings: number;
+  /** 도시 평균 환경도 0~1 (수정사항 4). */
+  environment: number;
   /** 하루 수지. 표시용. */
   dailyIncome: number;
   dailyUpkeep: number;

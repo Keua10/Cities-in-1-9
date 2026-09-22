@@ -118,6 +118,19 @@ export const FACILITY_CAPACITY_IS_BUILDINGS: readonly boolean[] = [
 
 export const OVERLOAD_SLOPE = 0.8;
 
+/**
+ * 시설 부하를 갱신할 때 **직전 부하에서 목표 부하 쪽으로 움직이는 비율** (수정사항 7).
+ *
+ * 1.0(= 즉시 대입)이 기본이었는데, 그 값에서는 품질이 한 평가 늦게 반영되는
+ * 구조와 맞물려 2주기 진동이 생긴다.
+ *
+ *   입주 높음 -> 부하 높음 -> 품질 낮음 -> 입주 낮음 -> 부하 낮음 -> 품질 높음 -> ...
+ *
+ * 실제로 같은 도시의 입주율이 평가마다 48% 와 95% 를 오갔다. 비율을 1 보다
+ * 작게 두면 되먹임 이득이 1 아래로 내려가 진동이 스스로 잦아든다.
+ */
+export const LOAD_SMOOTH = 0.3;
+
 export const FACILITY_STRENGTH: readonly number[] = [
   0, 0, 0, 0, 0.65, 1.5, 1.6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 ];
@@ -133,6 +146,15 @@ export const TIER_SERVICE_MUL: readonly number[] = [0.7, 1.0, 1.35];
 export const SERVICE_PENALTY_MAX = 0.45;
 export const SERVICE_GRACE_POP = 400;
 export const SERVICE_FULL_POP = 2_000;
+/**
+ * grace 를 직전 평가값에서 목표값 쪽으로 움직이는 비율 (수정사항 7).
+ *
+ * grace 는 인구의 함수이고 인구는 grace 의 함수라 되먹임 고리가 닫혀 있다.
+ * 1.0 이면 고리 이득이 1 을 넘어 **2주기 진동** 이 생긴다 — 같은 도시의 인구가
+ * 하루 만에 1,891 명과 975 명을 오갔다. 이득을 낮추면 평형점은 그대로 둔 채
+ * 진동만 잦아든다. 하강 나선의 바닥(음의 되먹임)은 그대로 남는다.
+ */
+export const GRACE_SMOOTH = 0.25;
 export const SERVICE_FIELD_MAX_DIST = 64;
 
 export const AMENITY_NEED_BY_TIER: readonly number[] = [0.35, 0.9, 1.8];

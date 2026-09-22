@@ -14,6 +14,7 @@ import {
   zoneOfBuild,
   zoneOfCode,
 } from './buildings';
+import { BUILD_READINESS_MIN } from './config/essentials';
 import { touchesRoadTiles } from './facilities';
 import type { RoadField } from './roadGraph';
 import {
@@ -54,6 +55,13 @@ export interface GrowthContext {
   money: number;
   /** 사건 처리 중인 건물을 재건축해 사건을 지우지 않는다. */
   blocksRebuild?: (tx: number, ty: number, span: number) => boolean;
+  /**
+   * 부지의 필수 인프라 준비도 0~1 (수정사항 13).
+   *
+   * 전기·상수·하수가 닿지 않는 땅에는 수요가 있어도 건물이 서지 않는다.
+   * 미지정이면 항상 1 로 본다 — 테스트와 구버전 호출부가 그대로 돈다.
+   */
+  essentialsAt?: (tx: number, ty: number, span: number) => number;
 }
 
 export interface GrowthResult {
@@ -293,6 +301,8 @@ function buildPass(world: World, p: Parcel, ctx: GrowthContext): GrowthResult {
     const ty = baseY + ly;
 
     if (!plotFits(world, tx, ty, 1, zone)) continue;
+    // 필수 인프라가 없는 땅은 건너뛴다. 지어봐야 바로 공실이 된다.
+    if ((ctx.essentialsAt?.(tx, ty, 1) ?? 1) < BUILD_READINESS_MIN) continue;
 
     const roll = simRandom(WORLD_SEED, ctx.tick, tx, ty);
     let level = pickLevel(ctx.demand[zone], roll, ctx.maxBuildingTier ?? 1);
@@ -367,6 +377,7 @@ function rebuildPass(world: World, p: Parcel, ctx: GrowthContext): GrowthResult 
         continue;
       }
       if (!rebuildFits(world, tx, ty, target, zone, ctx.today)) continue;
+      if ((ctx.essentialsAt?.(tx, ty, target) ?? 1) < BUILD_READINESS_MIN) continue;
       if (ctx.blocksRebuild?.(tx, ty, target)) continue;
 
       const cost = Math.round(BUILD_COST[target - 1] * REBUILD_SURCHARGE);

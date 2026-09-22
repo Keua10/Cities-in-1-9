@@ -74,13 +74,29 @@ const ownerA = services.ownerFor(x + 12, y - 1, 1, CREMA);
 const ownerB = services.ownerFor(x + 29, y - 1, 1, CREMA);
 assert.equal(services.facilityList()[ownerA].kind, CREMA);
 assert.equal(services.facilityList()[ownerB].kind, CEMETERY, 'cemetery is a funeral alternative');
-services.accrueSanitation(x + 12, y - 1, 1, 2000, true);
-services.accrueSanitation(x + 29, y - 1, 1, 1000, true);
-services.accrueSanitation(x + 29, y - 1, 1, 500, false);
-services.settleLoads();
-assert.equal(services.loadOf(ownerA), 2000);
-assert.equal(services.loadOf(ownerB), 1000, 'commercial demand must not consume funeral service');
-assert.equal(services.loadOf(services.ownerFor(x + 12, y - 1, 1, WASTE)), 3500);
+/**
+ * 부하는 한 번에 대입되지 않고 LOAD_SMOOTH 만큼씩 목표로 다가간다(진동 억제).
+ * 그래서 같은 입력을 여러 번 적립해 수렴한 값을 본다.
+ */
+const settleUntilSteady = (accrue: () => void, times = 80): void => {
+  for (let i = 0; i < times; i++) {
+    accrue();
+    services.settleLoads();
+  }
+};
+const steadyDemand = () => {
+  services.accrueSanitation(x + 12, y - 1, 1, 2000, true);
+  services.accrueSanitation(x + 29, y - 1, 1, 1000, true);
+  services.accrueSanitation(x + 29, y - 1, 1, 500, false);
+};
+settleUntilSteady(steadyDemand);
+const near = (a: number, b: number) => Math.abs(a - b) < 1;
+assert.ok(near(services.loadOf(ownerA), 2000), `${services.loadOf(ownerA)}`);
+assert.ok(
+  near(services.loadOf(ownerB), 1000),
+  'commercial demand must not consume funeral service',
+);
+assert.ok(near(services.loadOf(services.ownerFor(x + 12, y - 1, 1, WASTE)), 3500));
 assert.equal(services.qualityOf(ownerA), 1);
 const upkeep = services.dailyUpkeep();
 services.budget = 0.5;
@@ -90,8 +106,7 @@ services.budget = 1.5;
 assert.equal(services.capacityOfKind(CREMA), 9000);
 assert.equal(services.qualityOf(ownerA), 1);
 services.budget = 1;
-services.accrueSanitation(x + 12, y - 1, 1, 10000, true);
-services.settleLoads();
+settleUntilSteady(() => services.accrueSanitation(x + 12, y - 1, 1, 10000, true));
 assert.ok(services.qualityOf(ownerA) < 0.5, 'overload reduces quality');
 services.power = { supplyAt: () => 0 };
 assert.equal(services.qualityOf(ownerA), 0, 'no electricity means no service');

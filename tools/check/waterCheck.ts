@@ -7,6 +7,7 @@ import {
   FAC_RIVER_PUMP,
   FAC_OUTFALL,
   FAC_TREATMENT,
+  WATER_SPECS,
 } from '../../src/sim/config/water';
 import { canPlaceFacility } from '../../src/sim/facilities';
 import { WaterField } from '../../src/sim/water';
@@ -41,8 +42,8 @@ for (let dy = 4; dy <= 6; dy++) pipe(6, dy, 2);
 const field = new WaterField();
 field.ensure(world);
 assert.deepEqual(field.statusAt(x + 6, y + 3), { supply: 1, drainage: 1, contamination: 0 });
-assert.equal(field.summary.waterCapacity, 1000);
-assert.equal(field.summary.sewerCapacity, 1500);
+assert.equal(field.summary.waterCapacity, WATER_SPECS[FAC_GROUNDWATER].capacity);
+assert.equal(field.summary.sewerCapacity, WATER_SPECS[FAC_OUTFALL].capacity);
 assert.ok(!isWelfareKind(FAC_TREATMENT));
 
 pipe(4, 3, 2); // adjacent, different pipe
@@ -62,7 +63,11 @@ for (let dx = 1; dx <= 5; dx++) pipe(dx, 2, 1);
 world.setBuild(x, y - 1, Build.None);
 field.ensure(world);
 assert.equal(field.statusAt(x + 6, y + 3).supply, 0, 'roadless pump stops');
+// 수정사항 12: 꺼진 이유가 한 가지로 좁혀져 나온다. 네 가지를 늘어놓지 않는다.
+assert.match(field.facilityStatus(x, y), /가동 중지: 도로 미접/);
 world.setBuild(x, y - 1, Build.Road, false);
+field.ensure(world);
+assert.match(field.facilityStatus(x, y), /^가동 ·/);
 
 // 하천 취수와 방류의 근접 오염. 처리장으로 교체하면 줄어든다.
 world.setBuild(x + 10, y + 5, Build.Road, false);
@@ -81,7 +86,7 @@ assert.ok(canPlaceFacility(world, x + 6, y + 6, FAC_TREATMENT, 3).ok);
 world.placeFacility(x + 6, y + 6, FAC_TREATMENT, 0);
 field.ensure(world);
 assert.ok(field.contaminationAt(x + 6, y + 3) < untreated * 0.2);
-assert.equal(field.summary.sewerCapacity, 5000);
+assert.equal(field.summary.sewerCapacity, WATER_SPECS[FAC_TREATMENT].capacity);
 
 // Two chunks containing only pipes must survive codec, snapshots, unload and reload.
 const bx = (world.baseCx + 1) * CHUNK_SIZE;
@@ -144,7 +149,10 @@ for (let i = 0; i < 8; i++) {
 const loadedField = new WaterField();
 loadedField.ensure(loadedWorld);
 assert.equal(loadedField.summary.demand, 1080);
-assert.equal(loadedField.statusAt(x, y + 3).supply, 1000 / 1080);
+assert.equal(
+  loadedField.statusAt(x, y + 3).supply,
+  Math.min(1, WATER_SPECS[FAC_GROUNDWATER].capacity / 1080),
+);
 loadedWorld.setBuild(x + 36, y - 1, Build.Road, false);
 loadedWorld.placeFacility(x + 36, y, FAC_GROUNDWATER, 0);
 loadedField.ensure(loadedWorld);

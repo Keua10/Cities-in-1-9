@@ -147,7 +147,17 @@ world.setTile(x + 4, y, Terrain.Water);
 assert.equal(metro.edit(x + 4, y, 'station').ok, false);
 assert.equal(metro.edit(x + 4, y, 'tunnel').ok, true, 'underwater tunnel permitted');
 world.setTile(x + 2, y + 4, Terrain.Grass);
-assert.equal(metro.edit(x + 2, y + 4, 'station').ok, false, 'station needs road access');
+// 수정사항 3: 도로에 닿지 않아도 세울 수는 있다. 대신 가동되지 않는다는 경고가 붙는다.
+{
+  const placed = metro.edit(x + 2, y + 4, 'station');
+  assert.equal(placed.ok, true, 'station can be built away from a road');
+  assert.equal(
+    metro.stationAccess(`${x + 2},${y + 4}`),
+    false,
+    'a roadless station is built but does not operate',
+  );
+  metro.edit(x + 2, y + 4, 'erase');
+}
 assert.ok(changes >= 10, 'changes notify saving');
 
 const sim = new MacroSim(world, state),

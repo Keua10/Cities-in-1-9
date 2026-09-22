@@ -15,8 +15,8 @@ export const FAC_TREATMENT = 10;
 export const WATER_SPECS: Readonly<
   Record<number, { pipe: number; capacity: number; pollution: number; needsWater: boolean }>
 > = {
-  [FAC_GROUNDWATER]: { pipe: PIPE_WATER, capacity: 1000, pollution: 0, needsWater: false },
-  [FAC_RIVER_PUMP]: { pipe: PIPE_WATER, capacity: 4000, pollution: 0, needsWater: true },
-  [FAC_OUTFALL]: { pipe: PIPE_SEWER, capacity: 1500, pollution: 1, needsWater: true },
-  [FAC_TREATMENT]: { pipe: PIPE_SEWER, capacity: 5000, pollution: 0.15, needsWater: true },
+  [FAC_GROUNDWATER]: { pipe: PIPE_WATER, capacity: 2800, pollution: 0, needsWater: false },
+  [FAC_RIVER_PUMP]: { pipe: PIPE_WATER, capacity: 11000, pollution: 0, needsWater: true },
+  [FAC_OUTFALL]: { pipe: PIPE_SEWER, capacity: 4200, pollution: 1, needsWater: true },
+  [FAC_TREATMENT]: { pipe: PIPE_SEWER, capacity: 14000, pollution: 0.15, needsWater: true },
 };

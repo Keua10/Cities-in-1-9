@@ -41,7 +41,11 @@ import { MetroLayer } from './metroLayer';
 import type { MetroNetwork } from '../sim/metro';
 import type { VehicleAtlas } from './vehicleAtlas';
 import { VehicleMesh } from './vehicleMesh';
+import { BuildingAlertLayer } from './buildingAlertLayer';
+import { EffectLayer } from './effectLayer';
+import { PollutionLayer } from './pollutionLayer';
 import { UtilityLayer, type UtilityMode } from './utilityLayer';
+import type { MacroSim } from '../sim/macro';
 import type { PowerField } from '../sim/power';
 import type { WaterField } from '../sim/water';
 
@@ -89,6 +93,15 @@ export class WorldRenderer {
   powerField: PowerField | null = null;
   waterField: WaterField | null = null;
   private waterLayer = new UtilityLayer();
+  /** 오염 범위 (수정사항 11). 도구와 무관하게 항상 켜 둔다. */
+  private pollutionLayer = new PollutionLayer();
+  showPollution = true;
+  /** 설치·철거·신축 애니메이션 (수정사항 2). */
+  readonly effects = new EffectLayer();
+  /** 문제 건물 위 경고 아이콘 (수정사항 14). */
+  private alertLayer = new BuildingAlertLayer();
+  showAlerts = true;
+  private macro: MacroSim | null = null;
   readonly root = new Container();
   private groundLayer = new Container();
   private fogLayer = new Container();
@@ -155,7 +168,11 @@ export class WorldRenderer {
       this.signalLayer.graphics,
       this.incidentLayer.graphics,
       this.gridLayer,
+      // 오염은 지형 바로 위, 급수/전력 오버레이 아래에 덧댄다.
+      this.pollutionLayer.graphics,
       this.waterLayer.graphics,
+      this.effects.graphics,
+      this.alertLayer.graphics,
       this.metroLayer.graphics,
       this.cursorLayer,
       this.placementLayer,
@@ -185,6 +202,10 @@ export class WorldRenderer {
     this.facilityFocus = f;
     this.drawFacilityFocus(0);
   }
+  attachMacro(sim: MacroSim): void {
+    this.macro = sim;
+  }
+
   attachDisasters(sim: DisasterSim): void {
     this.disasters = sim;
   }
@@ -281,6 +302,13 @@ export class WorldRenderer {
     view.maxY += MAX_HEIGHT * HEIGHT_UNIT;
     const range = visibleChunkRange(view);
     this.waterLayer.update(this.world, this.waterField, this.powerField, this.utilityMode, range);
+    this.effects.update(this.world, now);
+    this.pollutionLayer.update(
+      this.world,
+      this.waterField,
+      range,
+      this.showPollution && !this.metroMode,
+    );
     this.scene.setOpacity(this.metroMode ? 0.16 : this.utilityMode === 'off' ? 1 : 0.22);
     this.metroLayer.draw(this.world, this.metro, this.metroMode, range, this.metroSelection);
     this.signalLayer.graphics.visible = !this.metroMode;
@@ -357,6 +385,8 @@ export class WorldRenderer {
         this.pedestrianLayer.maskFor(tx, ty, x, y),
       );
       if (this.disasters) this.incidentLayer.draw(this.world, this.disasters, range);
+      if (this.macro)
+        this.alertLayer.draw(this.world, this.macro, range, this.showAlerts && !this.metroMode);
     }
 
     this.stats.visibleChunks = visible;

@@ -329,11 +329,11 @@ check('확정을 눌러야 지어지고, 취소하면 아무 일도 없다', () 
   g.tools.tapTile(x, y);
   g.tools.tapTile(x + 2, y + 2);
   g.tools.confirmPlacement();
-  // 3x3 가운데 한 칸은 이미 다른 지구라 교체되지 않는다.
-  assert.equal(world.getBuild(x + 1, y + 1), Build.ZoneC);
+  // 수정사항 8: 다른 지구 위에 바로 덮어쓴다. 철거를 한 번 더 들 이유가 없다.
+  assert.equal(world.getBuild(x + 1, y + 1), Build.ZoneR);
   assert.equal(world.getBuild(x, y), Build.ZoneR);
   assert.equal(world.getBuild(x + 2, y + 2), Build.ZoneR);
-  assert.equal(before - g.money(), 8 * COST_ZONE);
+  assert.equal(before - g.money(), 9 * COST_ZONE);
 });
 check('램프 옆으로 지면이 뚫리지 않는다', () => {
   const g = fixture(),

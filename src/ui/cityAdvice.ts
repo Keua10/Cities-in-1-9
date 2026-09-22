@@ -10,6 +10,8 @@ export interface CityAdviceInput {
     | 'buildings'
     | 'occupancy'
     | 'strandedBuildings'
+    | 'utilityStarvedBuildings'
+    | 'environment'
     | 'overloadedFacilities'
     | 'serviceCoverage'
     | 'amenityFulfilled'
@@ -38,6 +40,10 @@ export function cityAdvice(input: CityAdviceInput): CityAdvice {
     issues.push(`수질 오염 ${w.contaminatedBuildings}채 · 상수관과 하수관의 접촉을 확인하세요.`);
   if (s.strandedBuildings > 0)
     issues.push(`도로 미연결 ${s.strandedBuildings}채 · 건물에서 도로까지 연결하세요.`);
+  if (s.utilityStarvedBuildings > 0)
+    issues.push(
+      `전기·상하수 부족으로 입주가 막힌 건물 ${s.utilityStarvedBuildings}채 · 발전소·배관을 먼저 연결하세요.`,
+    );
   if (p.unpoweredBuildings > 0 || p.supply < 0.999)
     issues.push(`전력 공급 ${percent(p.supply)}% · 발전 용량과 전력망 연결을 확인하세요.`);
   if (w.supply < 0.999 || w.drainage < 0.999)
@@ -56,6 +62,10 @@ export function cityAdvice(input: CityAdviceInput): CityAdvice {
   if (s.overloadedFacilities > 0)
     issues.push(
       `시설 ${s.overloadedFacilities}곳 과부하 · 서비스 예산 또는 시설 배치를 확인하세요.`,
+    );
+  if (s.environment < 0.6)
+    issues.push(
+      `환경도 ${percent(s.environment)}% · 공원·소음·오염·정체·접근성 중 무엇이 깎는지 건물을 눌러 확인하세요.`,
     );
   if (s.amenityFulfilled < 0.75)
     issues.push(

@@ -89,7 +89,15 @@ const LINE_TOOLS: ReadonlySet<string> = new Set<ToolId>([
   'metroTunnel',
 ]);
 
-const AREA_TOOLS: ReadonlySet<string> = new Set<ToolId>(['zoneR', 'zoneC', 'zoneI', 'bulldoze']);
+const AREA_TOOLS: ReadonlySet<string> = new Set<ToolId>([
+  'zoneR',
+  'zoneC',
+  'zoneI',
+  'bulldoze',
+  // 지형 수정도 면이다 (수정사항 10). 두 점이 직사각형의 마주 보는 모서리가 된다.
+  'terrainRaise',
+  'terrainLower',
+]);
 
 const SINGLE_TOOLS: ReadonlySet<string> = new Set<ToolId>([
   'facility',

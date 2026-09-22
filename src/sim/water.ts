@@ -51,6 +51,8 @@ interface Plant {
   kind: number;
   networks: number[];
   active: boolean;
+  /** 꺼져 있는 이유. 비어 있으면 가동 중이다 (수정사항 12). */
+  missing: string[];
 }
 export interface WaterStatus {
   supply: number;
@@ -125,12 +127,29 @@ export class WaterField {
           const span = FACILITY_SPECS[kind].span;
           const networks = this.touching(x, y, span, spec.pipe === PIPE_WATER ? 'water' : 'sewer');
           const power = this.power?.supplyAt(x, y) ?? 1;
-          const active =
-            power > 0 &&
-            touchesRoadTiles(world, x, y, span) &&
-            (!spec.needsWater || touchesWater(world, x, y, span)) &&
-            networks.length > 0;
-          this.plants.push({ x, y, kind, networks, active, output: spec.capacity * power });
+          /*
+           * 꺼진 이유를 **하나씩** 기록한다 (수정사항 12).
+           *
+           * 예전에는 "가동 중지: 전기·도로·배관·하천 연결 확인" 한 줄이라
+           * 네 가지 중 무엇이 문제인지 플레이어가 하나씩 지워가며 찾아야 했다.
+           * 실제로 전선이 안 닿아 꺼진 방류구를 배관 문제로 오해하기 쉽다.
+           */
+          const missing: string[] = [];
+          if (power <= 0) missing.push('전기 미연결');
+          if (!touchesRoadTiles(world, x, y, span)) missing.push('도로 미접');
+          if (spec.needsWater && !touchesWater(world, x, y, span)) missing.push('하천 미접');
+          if (networks.length === 0)
+            missing.push(spec.pipe === PIPE_WATER ? '상수관 미연결' : '하수관 미연결');
+          const active = missing.length === 0;
+          this.plants.push({
+            x,
+            y,
+            kind,
+            networks,
+            active,
+            missing,
+            output: spec.capacity * power,
+          });
           if (!active) continue;
           // 여러 독립 관망에 닿으면 용량을 나눠 연결한다. 용량을 중복 지급하지 않는다.
           const groups = spec.pipe === PIPE_WATER ? this.water : this.sewer;
@@ -285,6 +304,26 @@ export class WaterField {
     };
   }
 
+  /**
+   * 하천으로 실제 오수를 내보내고 있는 지점들 (수정사항 11).
+   * 오염 범위를 화면에 그리는 쪽에서 쓴다 — 시뮬레이션과 같은 값을 본다.
+   */
+  dischargePoints(): Array<{ x: number; y: number; span: number; strength: number }> {
+    const out: Array<{ x: number; y: number; span: number; strength: number }> = [];
+    for (const plant of this.plants) {
+      const spec = WATER_SPECS[plant.kind];
+      if (!plant.active || spec.pipe !== PIPE_SEWER || spec.pollution <= 0) continue;
+      if (!plant.networks.some((id) => this.sewer[id].load > 0)) continue;
+      out.push({
+        x: plant.x,
+        y: plant.y,
+        span: FACILITY_SPECS[plant.kind].span,
+        strength: spec.pollution,
+      });
+    }
+    return out;
+  }
+
   contaminationAt(tx: number, ty: number): number {
     const s = this.statusAt(tx, ty);
     return s.contamination * s.supply;
@@ -297,7 +336,8 @@ export class WaterField {
 
   facilityStatus(tx: number, ty: number): string {
     const plant = this.plants.find((p) => p.x === tx && p.y === ty);
-    if (!plant || !plant.active) return '가동 중지: 전기·도로·배관·하천 연결 확인';
+    if (!plant) return '가동 중지';
+    if (!plant.active) return `가동 중지: ${plant.missing.join(' · ')}`;
     const spec = WATER_SPECS[plant.kind];
     const groups = spec.pipe === PIPE_WATER ? this.water : this.sewer;
     const load = plant.networks.reduce((sum, id) => sum + groups[id].load, 0);

@@ -42,6 +42,8 @@ import {
   FAC_SPORTS,
   FACILITY_SPECS,
 } from '../../src/sim/facilities';
+import { FAC_GROUNDWATER, FAC_OUTFALL } from '../../src/sim/config/water';
+import { FAC_WIND } from '../../src/sim/config/power';
 import { graceFactor, MacroSim } from '../../src/sim/macro';
 import { ServiceField } from '../../src/sim/services';
 import {
@@ -93,8 +95,8 @@ function flatWorld(size = 40): { world: World; ox: number; oy: number } {
   const world = new World(0);
   const ox = world.baseCx * CHUNK_SIZE + 4;
   const oy = world.baseCy * CHUNK_SIZE + 4;
-  for (let y = -2; y < size + 2; y++) {
-    for (let x = -2; x < size + 2; x++) {
+  for (let y = -8; y < size + 8; y++) {
+    for (let x = -8; x < size + 24; x++) {
       world.setTile(ox + x, oy + y, Terrain.Grass);
       world.setHeight(ox + x, oy + y, 0);
     }
@@ -170,6 +172,46 @@ function placeReserved(
     placed++;
   }
   return placed;
+}
+
+/**
+ * 필수 인프라(전기·상수·하수)를 도시 위쪽 여백에 통째로 깐다.
+ *
+ * STEP 5 에서 필수 인프라가 입주 상한이 되었으므로(config/essentials.ts),
+ * **장기 주행 시나리오는 인프라가 있어야 의미가 있다.** 없으면 인구가 0 으로
+ * 수렴하는 게 정상 동작이고, 그건 별도 시나리오에서 따로 잰다.
+ *
+ * 배관 배치 규칙: 상수관과 하수관은 **절대 맞닿으면 안 된다**(맞닿으면
+ * water.ts 가 오염 1 을 매긴다). 그래서 상수는 x ≡ 0 (mod 6) 세로줄 + y = -1
+ * 가로줄, 하수는 x ≡ 3 (mod 6) 세로줄 + y = size+1 가로줄로 항상 3칸 이상
+ * 떨어뜨린다.
+ */
+function addUtilities(world: World, ox: number, oy: number, size: number): void {
+  // 시설이 붙을 도로 한 줄과, 방류구가 붙을 하천 한 줄.
+  roadRow(world, ox, oy, -1, -1, size + 18);
+  for (let x = -1; x <= size + 18; x++) {
+    world.setTile(ox + x, oy - 4, Terrain.WaterShallow);
+    world.setHeight(ox + x, oy - 4, 0);
+  }
+
+  // 상수: y = -1 간선 + x ≡ 0 (mod 6) 지선
+  for (let x = -1; x <= size + 18; x++) world.setPipe(ox + x, oy - 1, 1);
+  for (let x = 0; x <= size; x += 6)
+    for (let y = -1; y <= size - 1; y++) world.setPipe(ox + x, oy + y, 1);
+
+  // 하수: y = size + 1 간선 + x ≡ 3 (mod 6) 지선
+  for (let x = -1; x <= size; x++) world.setPipe(ox + x, oy + size + 1, 2);
+  for (let x = 3; x <= size; x += 6)
+    for (let y = 1; y <= size + 1; y++) world.setPipe(ox + x, oy + y, 2);
+
+  // 시설은 전부 y = -3 줄(도로 y = -1 에 접함, 하천 y = -4 에 접함).
+  const place = (rx: number, kind: number) => {
+    if (canPlaceFacility(world, ox + rx, oy - 3, kind, 5).ok)
+      world.placeFacility(ox + rx, oy - 3, kind, 0);
+  };
+  for (const rx of [2, 8, 14]) place(rx, FAC_OUTFALL); // 하수 지선 위에 정확히 걸친다
+  for (const rx of [18, 21, 24, 27, 30, 33]) place(rx, FAC_GROUNDWATER);
+  for (const rx of [size + 1, size + 4, size + 7, size + 10]) place(rx, FAC_WIND);
 }
 
 function newSim(world: World, money = START_MONEY): MacroSim {
@@ -257,13 +299,13 @@ console.log('1. 배치 · 철거');
     occupied.reason,
   );
 
-  // 도로 비인접
+  // 도로 비인접: 수정사항 3 이후로 **거부가 아니라 경고** 다. 세워지되 가동되지 않는다.
   const far = canPlaceFacility(world, ox + 5, oy + 8, FAC_FIRE);
-  check('1 도로 비인접 거부', !far.ok && far.reason === '도로에 닿아야 합니다', far.reason);
+  check('1 도로 비인접은 경고와 함께 허용', far.ok && !!far.warning, far.warning ?? '');
 
-  // **단 소공원은 도로 비인접에서 거부되지 않는다**
+  // **단 소공원은 도로 자체가 필요 없어 경고도 붙지 않는다**
   const mini = canPlaceFacility(world, ox + 5, oy + 8, FAC_MINIPARK);
-  check('1 소공원은 도로 비인접에서도 허용', mini.ok, mini.reason);
+  check('1 소공원은 도로 비인접에서도 경고 없이 허용', mini.ok && !mini.warning, mini.reason);
   check('1 FACILITY_NEEDS_ROAD[4] === false', FACILITY_SPECS[FAC_MINIPARK].needsRoad === false);
 }
 
@@ -414,6 +456,7 @@ console.log('2. 격리 — isAnchor 를 안 고쳤는가');
   ] as const;
   const { world, ox, oy } = gridCity(30, 6, spots);
   placeReserved(world, ox, oy, spots);
+  addUtilities(world, ox, oy, 30);
 
   const sim = newSim(world);
   runTicks(sim, 3000);
@@ -532,9 +575,12 @@ console.log('4. 용량 · 만족도');
   field.rebuild(world);
 
   const spec = FACILITY_SPECS[FAC_POLICE];
-  // 정원의 2배를 한 번에 적립한다. 건물 좌표는 도로에 접한 아무 칸이면 된다.
-  field.accrueLoad(ox + 4, oy + 1, 1, spec.capacity * 2);
-  field.settleLoads();
+  // 정원의 2배를 계속 적립한다. 부하는 LOAD_SMOOTH 만큼씩 목표로 다가가므로
+  // (수정사항 7: 진동 억제) 수렴할 때까지 여러 번 돌린다.
+  for (let i = 0; i < 80; i++) {
+    field.accrueLoad(ox + 4, oy + 1, 1, spec.capacity * 2);
+    field.settleLoads();
+  }
   const q = field.qualityAt(ox + 4, oy + 1, 1, FAC_POLICE);
   check(
     '13 정원 2배에서 품질 = 1 - OVERLOAD_SLOPE',
@@ -899,6 +945,7 @@ console.log('6. 통합');
     [8, 2, FAC_MINIPARK],
   ] as const;
   const { world, ox, oy } = gridCity(36, 6, spots);
+  addUtilities(world, ox, oy, 36);
   const sim = newSim(world, 400_000);
   placeReserved(world, ox, oy, spots);
   runTicks(sim, TICKS_PER_DAY * 220);
@@ -939,14 +986,21 @@ console.log('6. 통합');
     [25, 7, FAC_MINIPARK],
   ] as const;
   const { world, ox, oy } = gridCity(36, 6, spots);
+  addUtilities(world, ox, oy, 36);
   const sim = newSim(world, 2_000_000);
   placeReserved(world, ox, oy, spots);
   runTicks(sim, TICKS_PER_DAY * 120);
   const peak = sim.stats.population;
   console.log(`     시설을 갖춘 도시가 인구 ${peak.toFixed(0)} 까지 자랐다. 이제 전부 철거한다.`);
 
-  // 시설을 전부 철거한다. 여기서부터 하강 나선이 시작된다.
-  for (const f of [...sim.services.facilityList()]) world.removeFacilityAt(f.tx, f.ty);
+  // 서비스·복지 시설만 철거한다. 여기서부터 하강 나선이 시작된다.
+  // 전기·상하수는 남긴다 — 그걸 끊는 건 하강 나선이 아니라 **즉시 퇴거** 이고,
+  // 그 동작은 essentials 게이트가 따로 담당한다.
+  const UTILITY_KINDS = new Set<number>([FAC_GROUNDWATER, FAC_OUTFALL, FAC_WIND]);
+  for (const f of [...sim.services.facilityList()]) {
+    if (UTILITY_KINDS.has(f.kind)) continue;
+    world.removeFacilityAt(f.tx, f.ty);
+  }
   check('25b 철거 뒤 시설이 하나도 남지 않는다', sim.services.facilityCount() >= 0);
 
   console.log('     50일마다 인구 · 자금 · 평균 grace:');

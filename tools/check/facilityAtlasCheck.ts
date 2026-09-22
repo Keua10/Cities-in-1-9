@@ -66,4 +66,6 @@ for (const spec of FACILITY_SPECS.slice(7)) {
 }
 
 assert.ok(FACILITY_ATLAS_H > 384, '5x5/7x7 시설 밴드가 기존 아틀라스 아래에 확장됨');
-console.log(`시설 아틀라스: ${FACILITY_SPECS.length}종, 기존 셀 보존 + 5x5/7x7 교통시설 런타임 아트 통과`);
+console.log(
+  `시설 아틀라스: ${FACILITY_SPECS.length}종, 기존 셀 보존 + 5x5/7x7 교통시설 런타임 아트 통과`,
+);

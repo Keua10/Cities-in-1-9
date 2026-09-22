@@ -1,3 +1,4 @@
+import { audio } from './audio/audio';
 import { Application } from 'pixi.js';
 import { Camera } from './core/camera';
 import { BASE_CHUNK_SPAN, CHUNK_SIZE, DEFAULT_ZOOM, TILE_HH, TILE_HW } from './core/constants';
@@ -195,6 +196,20 @@ async function boot(): Promise<void> {
   installPedestrianSystemPatch(traffic);
   renderer.attachTraffic(traffic, vehicleAtlas);
   renderer.attachDisasters(sim.disasters);
+  renderer.attachMacro(sim);
+
+  /*
+   * 구조물이 서거나 헐리면 화면과 소리로 알린다 (수정사항 2).
+   * 시뮬레이션이 스스로 세운 건물도 여기로 들어온다 — 도시가 자라는 게 보인다.
+   */
+  world.onStructureEvent = (e) => {
+    renderer.effects.push(e, performance.now());
+    audio.play(e.kind === 'demolish' ? 'demolish' : 'grow');
+  };
+  // 브라우저는 사용자가 한 번 누르기 전에는 소리를 내주지 않는다.
+  const wakeAudio = () => audio.resume();
+  window.addEventListener('pointerdown', wakeAudio, { once: false });
+  window.addEventListener('keydown', wakeAudio, { once: false });
 
   const cityPanel = new CityPanel();
   const facilityFinder = new FacilityFinder(world, sim, (f) => {

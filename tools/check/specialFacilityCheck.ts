@@ -23,7 +23,7 @@ import { Build } from '../../src/world/build';
 import { Terrain } from '../../src/world/terrain';
 import { World } from '../../src/world/world';
 
-assert.equal(FACILITY_COUNT, 26);
+assert.equal(FACILITY_COUNT, 27); // 지하철역(26)까지 포함한다
 assert.deepEqual(
   [FAC_COMM_TOWER, FAC_AIRPORT, FAC_HARBOR, FAC_PRISON],
   [17, 18, 19, 20],
@@ -39,13 +39,21 @@ for (let kind = 17; kind < FACILITY_COUNT; kind++) {
   assert.equal(isFacilityAnchor(facCode(kind)), true);
   assert.equal(FACILITY_SPECS[kind].kind, kind);
 }
-assert.deepEqual(FACILITY_UNLOCK_LEVEL.slice(17), [2, 3, 3, 3, 3, 4, 5, 4, 5]);
+assert.deepEqual(FACILITY_UNLOCK_LEVEL.slice(17), [2, 3, 3, 3, 3, 4, 5, 4, 5, 1]); // 끝은 지하철역
 assert.deepEqual(
-  [FACILITY_SPECS[FAC_HARBOR].span, FACILITY_SPECS[FAC_HARBOR_HYBRID_L2].span, FACILITY_SPECS[FAC_HARBOR_HYBRID_L3].span],
+  [
+    FACILITY_SPECS[FAC_HARBOR].span,
+    FACILITY_SPECS[FAC_HARBOR_HYBRID_L2].span,
+    FACILITY_SPECS[FAC_HARBOR_HYBRID_L3].span,
+  ],
   [3, 5, 7],
 );
 assert.deepEqual(
-  [FACILITY_SPECS[FAC_AIRPORT].span, FACILITY_SPECS[FAC_AIRPORT_L2].span, FACILITY_SPECS[FAC_AIRPORT_L3].span],
+  [
+    FACILITY_SPECS[FAC_AIRPORT].span,
+    FACILITY_SPECS[FAC_AIRPORT_L2].span,
+    FACILITY_SPECS[FAC_AIRPORT_L3].span,
+  ],
   [3, 5, 7],
 );
 assert.equal(FACILITY_SPECS[FAC_COMM_TOWER].upkeepPerDay, 0);
@@ -57,7 +65,16 @@ assert.equal(isHarborFacility(FAC_HARBOR_HYBRID_L3), true);
 assert.equal(isHybridHarbor(FAC_HARBOR), false);
 assert.equal(isHybridHarbor(FAC_HARBOR_HYBRID_L2), true);
 assert.equal(isAirportFacility(FAC_AIRPORT_L3), true);
-for (const kind of [FAC_AIRPORT, FAC_AIRPORT_L2, FAC_AIRPORT_L3, FAC_HARBOR, FAC_HARBOR_CARGO, FAC_HARBOR_HYBRID_L2, FAC_HARBOR_HYBRID_L3, FAC_PRISON]) {
+for (const kind of [
+  FAC_AIRPORT,
+  FAC_AIRPORT_L2,
+  FAC_AIRPORT_L3,
+  FAC_HARBOR,
+  FAC_HARBOR_CARGO,
+  FAC_HARBOR_HYBRID_L2,
+  FAC_HARBOR_HYBRID_L3,
+  FAC_PRISON,
+]) {
   assert.ok(facilityPowerDemand(kind) > 0, `kind ${kind} power demand`);
 }
 assert.ok(FACILITY_SPECS[FAC_PRISON].capacity > 0);

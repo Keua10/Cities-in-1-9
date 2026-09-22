@@ -1,3 +1,4 @@
+import { audio } from '../audio/audio';
 import { pickTile } from '../core/pick';
 import type { WorldRenderer } from '../render/worldRenderer';
 import { canPlaceFacility, FACILITY_SPECS } from '../sim/facilities';
@@ -7,8 +8,9 @@ import { POWER_SPECS, WIRE_COST } from '../sim/config/power';
 import { RUNWAY_COST, TAXIWAY_COST } from '../sim/config/transport';
 import { METRO_TUNNEL_COST } from '../sim/metro';
 import type { UtilityMode } from '../render/utilityLayer';
+import { MAX_HEIGHT } from '../core/constants';
 import { chunkIndexOf } from '../core/iso';
-import { COST_ROAD, COST_ZONE } from '../sim/simConstants';
+import { COST_ROAD, COST_ZONE, TERRAIN_COST, TERRAIN_SOFT_TILES } from '../sim/simConstants';
 import {
   Build,
   canConnectRoads,
@@ -25,6 +27,7 @@ import {
   areaTiles,
   guideTiles,
   lineTiles,
+  MAX_AREA_SIDE,
   placementShape,
   type PlacementPlan,
   type PlacementShape,
@@ -53,7 +56,9 @@ export type ToolId =
   | 'sewerPipe'
   | 'pipeErase'
   | 'wire'
-  | 'wireErase';
+  | 'wireErase'
+  | 'terrainRaise'
+  | 'terrainLower';
 
 const TOOL_VALUE: Partial<Record<ToolId, number>> = {
   road: Build.Road,
@@ -85,6 +90,8 @@ export const TOOL_LABELS: Record<ToolId, string> = {
   pipeErase: '배관 철거',
   wire: '전선',
   wireErase: '전선 철거',
+  terrainRaise: '지형 높이기',
+  terrainLower: '지형 낮추기',
 };
 
 const MESSAGE_MS = 2500;
@@ -483,6 +490,21 @@ export class Tools {
    * 칸 하나의 판정 — 미리보기가 거짓말하지 않게 실제 규칙만 쓴다
    * ---------------------------------------------------------------- */
 
+  /**
+   * 지형 수정 한 칸의 값. **이번에 고르는 넓이** 에 따라 오른다 (수정사항 10).
+   * 넓이는 지금 선택 중인 직사각형에서 읽는다 — 미리보기와 실제 과금이 같다.
+   */
+  private terrainUnitCost(): number {
+    const end = this.pos2 ?? this.hover ?? this.pos1;
+    let n = 1;
+    if (this.pos1 && end) {
+      const w = Math.min(MAX_AREA_SIDE, Math.abs(end.tx - this.pos1.tx) + 1);
+      const h = Math.min(MAX_AREA_SIDE, Math.abs(end.ty - this.pos1.ty) + 1);
+      n = w * h;
+    }
+    return Math.round(TERRAIN_COST * (1 + (n - 1) / TERRAIN_SOFT_TILES));
+  }
+
   private verdict(tx: number, ty: number): TileVerdict {
     if (!this.world.isExplored(chunkIndexOf(tx), chunkIndexOf(ty)))
       return blocked('아직 개척하지 않은 땅입니다');
@@ -512,13 +534,29 @@ export class Tools {
         const value = TOOL_VALUE[this.tool]!;
         const cur = this.world.getBuild(tx, ty);
         if (cur === value) return SKIP;
-        // 이미 다른 지구로 지정된 칸은 덮어쓰지 않는다. 지구를 바꾸면 그 위의
-        // 건물이 헐리므로, 바꾸고 싶으면 철거를 먼저 하게 한다.
-        if (cur === Build.ZoneR || cur === Build.ZoneC || cur === Build.ZoneI)
-          return blocked('이미 다른 지구입니다 · 철거 후 다시 지정하세요');
+        // 다른 지구 위에 바로 덮어쓸 수 있다 (수정사항 8). 그 위의 건물은
+        // setBuild 가 알아서 헐어준다 — 철거 도구를 한 번 더 들 이유가 없다.
         const r = canPlaceZone(this.world, tx, ty, value);
         if (!r.ok) return blocked(r.reason || '여기에는 지정할 수 없습니다');
         return buildable(COST_ZONE);
+      }
+      case 'terrainRaise':
+      case 'terrainLower': {
+        /*
+         * 지형 수정 (수정사항 10).
+         *
+         * 이미 무언가 지어진 칸은 손대지 않는다. 도로·건물 밑의 고도를 바꾸면
+         * 비탈 규칙이 통째로 깨지고, 학생 눈에는 길이 공중에 뜬다. 먼저 철거하면
+         * 그만이다 — 막는 것이 아니라 순서를 정해 주는 것이다.
+         */
+        if (this.world.getBuild(tx, ty) !== Build.None)
+          return blocked('먼저 철거해야 지형을 고칠 수 있습니다');
+        if (isWater(this.world.getTile(tx, ty))) return blocked('물 위의 지형은 고칠 수 없습니다');
+        const h = this.world.getHeight(tx, ty);
+        const next = h + (this.tool === 'terrainRaise' ? 1 : -1);
+        if (next < 0) return blocked('더 낮출 수 없습니다');
+        if (next > MAX_HEIGHT) return blocked('더 높일 수 없습니다');
+        return buildable(this.terrainUnitCost());
       }
       case 'bulldoze':
         return this.world.getBuild(tx, ty) === Build.None ? SKIP : buildable(0);
@@ -597,6 +635,7 @@ export class Tools {
         return false;
       }
       this.world.setWire(tx, ty, present);
+      this.feedback(tx, ty, present ? 'build' : 'demolish');
       return true;
     }
     if (this.tool === 'waterPipe' || this.tool === 'sewerPipe' || this.tool === 'pipeErase') {
@@ -611,8 +650,23 @@ export class Tools {
         return false;
       }
       this.world.setPipe(tx, ty, mask);
+      this.feedback(tx, ty, mask === 0 ? 'demolish' : 'build');
       if (mask === 3)
         this.note('상·하수도관이 교차 연결되어 물이 오염됩니다. 배관 철거로 분리하세요.');
+      return true;
+    }
+
+    if (this.tool === 'terrainRaise' || this.tool === 'terrainLower') {
+      const h = this.world.getHeight(tx, ty);
+      const next = h + (this.tool === 'terrainRaise' ? 1 : -1);
+      if (next < 0 || next > MAX_HEIGHT) return false;
+      if (!this.sim.spend(this.terrainUnitCost())) {
+        this.note('돈이 모자랍니다');
+        return false;
+      }
+      this.world.setHeight(tx, ty, next);
+      this.refresh(tx, ty);
+      this.feedback(tx, ty, 'build');
       return true;
     }
 
@@ -625,6 +679,7 @@ export class Tools {
       } else {
         this.refresh(tx, ty);
       }
+      this.feedback(tx, ty, 'demolish');
       return true;
     }
 
@@ -659,6 +714,7 @@ export class Tools {
 
     this.world.setBuild(tx, ty, value);
     this.refresh(tx, ty);
+    this.feedback(tx, ty, 'build');
     return true;
   }
 
@@ -672,6 +728,7 @@ export class Tools {
       if (result.reason) this.note(result.reason);
       return;
     }
+    if (result.warning) this.note(result.warning);
     if (!this.sim.spend(spec.cost)) {
       this.note('돈이 모자랍니다');
       return;
@@ -689,6 +746,13 @@ export class Tools {
     }
   }
 
+  /** 한 칸을 놓았을 때의 소리와 애니메이션 (수정사항 2). */
+  private feedback(tx: number, ty: number, kind: 'build' | 'demolish'): void {
+    // 검사 스크립트는 렌더러를 흉내만 내므로 이 레이어가 없을 수 있다.
+    this.renderer.effects?.push({ kind, tx, ty, span: 1 }, performance.now());
+    audio.play(kind);
+  }
+
   private refresh(tx: number, ty: number): void {
     this.renderer.invalidateTile(tx, ty);
     for (const dir of DIRS) {
@@ -699,6 +763,8 @@ export class Tools {
   private note(text: string): void {
     this.message = text;
     this.messageAt = performance.now();
+    // 실패는 소리로 먼저 안다. 메시지는 읽기 전에 사라지기도 한다.
+    if (text) audio.play('deny');
   }
 }
 

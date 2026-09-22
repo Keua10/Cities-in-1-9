@@ -2,7 +2,7 @@ import type { ToolId } from './tools';
 import { METRO_TUNNEL_COST, METRO_STATION_COST } from '../sim/metro';
 import { formatMoney } from './money';
 import { FACILITY_SPECS } from '../sim/facilities';
-import { COST_ROAD, COST_ZONE } from '../sim/simConstants';
+import { COST_ROAD, COST_ZONE, TERRAIN_COST } from '../sim/simConstants';
 import { PIPE_COST, WATER_SPECS } from '../sim/config/water';
 import { POWER_SPECS, WIRE_COST } from '../sim/config/power';
 import { RUNWAY_COST, TAXIWAY_COST } from '../sim/config/transport';
@@ -101,6 +101,20 @@ tool('power', 'wireErase', '전선 철거', 0, '전선만 제거 · 지상 건�
 tool('water', 'waterPipe', '상수도관', PIPE_COST, '급수 반경 4칸 · 하수도관과 한 칸 이상 간격');
 tool('water', 'sewerPipe', '하수도관', PIPE_COST, '하수 반경 4칸 · 상수도관과 한 칸 이상 간격');
 tool('water', 'pipeErase', '배관 철거', 0, '배관만 제거 · 지상 건물 보존');
+tool(
+  'environment',
+  'terrainRaise',
+  '지형 높이기',
+  TERRAIN_COST,
+  '빈 땅만 · 넓게 고칠수록 칸당 값이 가파르게 오릅니다',
+);
+tool(
+  'environment',
+  'terrainLower',
+  '지형 낮추기',
+  TERRAIN_COST,
+  '빈 땅만 · 넓게 고칠수록 칸당 값이 가파르게 오릅니다',
+);
 for (const spec of FACILITY_SPECS) {
   const k = spec.kind;
   if (k === 26) {

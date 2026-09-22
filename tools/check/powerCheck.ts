@@ -5,8 +5,8 @@ import { Build } from '../../src/world/build';
 import { ZONE_R } from '../../src/sim/buildings';
 import { PowerField } from '../../src/sim/power';
 import { WaterField } from '../../src/sim/water';
-import { FAC_WIND } from '../../src/sim/config/power';
-import { FAC_GROUNDWATER } from '../../src/sim/config/water';
+import { FAC_WIND, POWER_REACH, POWER_SPECS } from '../../src/sim/config/power';
+import { FAC_GROUNDWATER, WATER_SPECS } from '../../src/sim/config/water';
 import { seedCityIfEmpty } from '../../src/world/citySeed';
 import { decodeOverride, encodeOverride } from '../../src/net/codec';
 
@@ -19,25 +19,32 @@ const house = (dx: number, dy = 0) => {
   w.setBuild(x + dx, y + dy, Build.ZoneR, false);
   w.placeBuilding(x + dx, y + dy, ZONE_R, 1, 0);
 };
+// 사슬 간격은 POWER_REACH 에서 파생시킨다. 상수를 바꿔도 테스트 의도가 유지된다.
+const BREAK = 10 + POWER_REACH + 1;
+const WIRE = 10 + Math.ceil((POWER_REACH + 1) / 2);
 house(4);
 house(7);
 house(10);
-house(14);
+house(BREAK);
 const power = new PowerField();
 power.ensure(w);
 assert.equal(power.supplyAt(x + 10, y), 1, 'chain of nearby buildings conducts without wires');
-assert.equal(power.supplyAt(x + 14, y), 0, 'four tile gap breaks chain');
-assert.equal(power.coverage.get(`${x + 13},${y}`), 1, 'range extends exactly three tiles');
-assert.equal(power.coverage.has(`${x + 14},${y}`), false, 'empty coverage cannot relay');
+assert.equal(power.supplyAt(x + BREAK, y), 0, 'a gap wider than POWER_REACH breaks the chain');
+assert.equal(
+  power.coverage.get(`${x + 10 + POWER_REACH},${y}`),
+  1,
+  'range extends exactly POWER_REACH tiles',
+);
+assert.equal(power.coverage.has(`${x + BREAK},${y}`), false, 'empty coverage cannot relay');
 w.demolishAt(x + 7, y);
 power.ensure(w);
 assert.equal(power.supplyAt(x + 10, y), 0, 'demolished bridge building disconnects descendants');
 house(7);
 power.ensure(w);
 assert.equal(power.supplyAt(x + 10, y), 1);
-w.setWire(x + 12, y, true);
+w.setWire(x + WIRE, y, true);
 power.ensure(w);
-assert.equal(power.supplyAt(x + 14, y), 1, 'wire joins building relay networks');
+assert.equal(power.supplyAt(x + BREAK, y), 1, 'wire joins building relay networks');
 w.setBuild(x, y - 1, Build.None);
 power.ensure(w);
 assert.equal(power.supplyAt(x + 4, y), 0, 'generator needs road');
@@ -51,7 +58,10 @@ for (let i = 0; i < 16; i++) {
 }
 power.ensure(w);
 assert.equal(power.summary.demand, 16 * 135 + 4 * 8);
-assert.equal(power.supplyAt(x + 4, y), 2000 / power.summary.demand);
+assert.equal(
+  power.supplyAt(x + 4, y),
+  Math.min(1, POWER_SPECS[FAC_WIND].capacity / power.summary.demand),
+);
 w.setBuild(x + 20, y + 2, Build.Road, false);
 w.placeFacility(x + 20, y + 3, FAC_GROUNDWATER, 0);
 w.setPipe(x + 20, y + 4, 1);
@@ -62,10 +72,13 @@ assert.equal(water.summary.waterCapacity, 0, 'unpowered pump cannot produce wate
 for (let dx = 14; dx <= 20; dx++) w.setWire(x + dx, y, true);
 power.ensure(w);
 water.ensure(w);
-assert.ok(
-  water.summary.waterCapacity > 0 && water.summary.waterCapacity < 1000,
-  'brownout scales pump output',
+// 펌프 출력은 그 자리의 전력 공급률에 그대로 비례한다.
+assert.equal(
+  water.summary.waterCapacity,
+  WATER_SPECS[FAC_GROUNDWATER].capacity * power.supplyAt(x + 20, y + 3),
+  'pump output scales with local power supply',
 );
+assert.ok(water.summary.waterCapacity > 0, 'wired pump produces water');
 const border = (w.baseCx + 1) * CHUNK_SIZE;
 w.setWire(border - 1, y + 25, true);
 w.setWire(border, y + 25, true);
