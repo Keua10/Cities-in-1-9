@@ -36,3 +36,11 @@ for (const delta of [16, 64, 100, 200, 400]) {
 console.log(
   'Daily life: shared 50-second hour, 07:30–08:00 departures, full motion time at every speed.',
 );
+
+const { daylightAt } = await import('../../src/render/dayNight');
+const atHour = (hour: number) => ({ ...sessionDaytimeAt(0, 0), hour });
+assert.equal(daylightAt(atHour(12)), 1);
+assert.equal(daylightAt(atHour(0)), 0);
+assert.equal(daylightAt(atHour(6)), 0.5);
+assert.equal(daylightAt(atHour(18)), 0.5);
+assert(daylightAt(atHour(5.75)) < daylightAt(atHour(6.25)));

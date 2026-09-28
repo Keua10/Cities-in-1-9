@@ -76,3 +76,16 @@ assert.equal(
 console.log(
   'PASS real Pixi geometry: constant screen size, paused bob/pulse, issue cycling, toggle, stale alert/overlay removal',
 );
+
+// Hit testing uses the same world transform, zoom cancellation and bob as drawing.
+world.placeBuilding(20, 20, ZONE_R, 1, 0);
+for (const zoom of [0.2, 0.55, 1, 3]) {
+  camera.zoom = zoom;
+  layer.draw(world, sim, range, true, camera, 500);
+  const wy = tileToWorldY(20, 20, 0) - 16 * 1.6 - 12 / zoom + layer.graphics.position.y;
+  assert.deepEqual(layer.hitTest(0, wy)?.alerts, ['power', 'water', 'sewer']);
+  assert.equal(layer.hitTest(100 / zoom, wy), null);
+  layer.draw(world, sim, range, false, camera, 500);
+  assert.equal(layer.hitTest(0, wy), null);
+}
+console.log('PASS alert hit targets at every zoom, animated bob, hidden and missed targets');

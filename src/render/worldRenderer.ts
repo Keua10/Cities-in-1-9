@@ -89,6 +89,9 @@ function chunkDiamond(cx: number, cy: number): number[] {
 }
 
 export class WorldRenderer {
+  alertAt(wx: number, wy: number) {
+    return this.showAlerts && !this.metroMode ? this.alertLayer.hitTest(wx, wy) : null;
+  }
   utilityMode: UtilityMode = 'off';
   powerField: PowerField | null = null;
   waterField: WaterField | null = null;

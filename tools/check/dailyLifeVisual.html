@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>밤낮 · 경고 검증</title>
+    <style>
+      canvas {
+        position: fixed;
+        inset: 0;
+      }
+      body {
+        margin: 0;
+        background: #203026;
+        color: #eef5ef;
+        font: 14px system-ui;
+      }
+      aside {
+        position: fixed;
+        top: 16px;
+        left: 16px;
+        z-index: 5;
+        background: #11261eef;
+        padding: 16px;
+        border-radius: 12px;
+        max-width: 360px;
+      }
+      button {
+        padding: 10px;
+        margin: 4px;
+        border: 0;
+        border-radius: 6px;
+        cursor: pointer;
+      }
+      p {
+        margin: 8px 0;
+      }
+      #status {
+        color: #bce0a0;
+      }
+    </style>
+  </head>
+  <body>
+    <aside>
+      <b>밤낮 · 경고 클릭 확인</b>
+      <p>시간 버튼으로 밤낮을 비교하고 건물 위 아이콘을 눌러 문제 설명을 확인합니다.</p>
+      <p id="click-result">아이콘을 클릭하세요.</p>
+      <button id="connect">두 평행 도로 연결</button><button id="restore">초기 상태</button>
+      <p id="status">준비 중</p>
+    </aside>
+    <script type="module" src="./dailyLifeVisual.ts"></script>
+  </body>
+</html>

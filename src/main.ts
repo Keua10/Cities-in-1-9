@@ -1,3 +1,5 @@
+import { AlertPanel } from './ui/alertPanel';
+import { applyDayNight } from './render/dayNight';
 import { audio } from './audio/audio';
 import { Application } from 'pixi.js';
 import { Camera } from './core/camera';
@@ -235,6 +237,7 @@ async function boot(): Promise<void> {
   };
 
   const tools = new Tools(world, renderer, sim);
+  const alertPanel = new AlertPanel();
   // 확정 바의 Escape 처리가 건설 메뉴·패널 닫기보다 먼저 와야 한다.
   const placementBar = bindPlacementBar(tools);
   const metroPanel = new MetroPanel(sim.metro, tools);
@@ -242,6 +245,14 @@ async function boot(): Promise<void> {
 
   attachInput(app.canvas, camera, {
     onTap: (wx, wy) => {
+      const alert = tools.tool === 'select' ? renderer.alertAt(wx, wy) : null;
+      if (alert) {
+        chrome.closePanels();
+        transportPanel.hide();
+        alertPanel.show(alert);
+        return;
+      }
+      alertPanel.hide();
       cursor = pickTile(world, wx, wy);
       renderer.setCursorTile(cursor);
       if (tools.metroMode) {
@@ -392,6 +403,7 @@ async function boot(): Promise<void> {
     renderer.metroSelection = tools.metroSelection;
     setPedestrianRenderZoom(camera.zoom);
     renderer.update(camera, now);
+    applyDayNight(app.canvas, traffic.daytimeState);
     renderer.flush();
     minimap.update(
       now,

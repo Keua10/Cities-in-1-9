@@ -7,7 +7,7 @@ import type { MacroSim } from '../sim/macro';
 import type { World } from '../world/world';
 
 import type { Camera } from '../core/camera';
-import { groupAlerts, type AlertPoint } from './alertLayout';
+import { groupAlerts, type AlertPoint, type AlertGroup } from './alertLayout';
 
 const COLORS: Record<BuildingAlert, number> = {
   road: 0xff7a59,
@@ -24,6 +24,18 @@ const COLORS: Record<BuildingAlert, number> = {
 export class BuildingAlertLayer {
   readonly graphics = new Graphics();
   private stamp = '';
+  private groups: AlertGroup[] = [];
+  private zoom = 1;
+
+  hitTest(wx: number, wy: number): AlertGroup | null {
+    if (!this.graphics.visible) return null;
+    const x = wx * this.zoom,
+      y = (wy - this.graphics.position.y) * this.zoom;
+    return (
+      this.groups.find((g) => Math.abs(x - g.x) <= 19 && y >= g.y - 23 && y <= g.y + 18) ?? null
+    );
+  }
+
   private points: AlertPoint[] = [];
   private layoutStamp = '';
   private reducedMotion =
@@ -41,6 +53,7 @@ export class BuildingAlertLayer {
     g.visible = enabled;
     if (!enabled) return;
     // Cancel the parent camera scale; all glyphs, stems and counters use CSS pixels.
+    this.zoom = camera.zoom;
     g.scale.set(1 / camera.zoom);
     g.position.y = this.reducedMotion ? 0 : (Math.sin(now / 420) * 2.5) / camera.zoom;
     g.alpha = this.reducedMotion ? 1 : 0.88 + 0.12 * Math.cos(now / 420);
@@ -83,7 +96,8 @@ export class BuildingAlertLayer {
         return sx >= -48 && sy >= -48 && sx <= camera.screenW + 48 && sy <= camera.screenH + 48;
       })
       .map((p) => ({ ...p, x: p.x * camera.zoom, y: p.y * camera.zoom - 12 }));
-    for (const group of groupAlerts(points, camera.zoom)) {
+    this.groups = groupAlerts(points, camera.zoom);
+    for (const group of this.groups) {
       const { x, y, alerts, count } = group;
       // Most urgent first, then each remaining issue in the same slot.
       const alert = alerts[phase % alerts.length];

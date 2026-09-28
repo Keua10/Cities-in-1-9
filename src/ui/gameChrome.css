@@ -832,3 +832,37 @@ body.game-ui {
     padding: 5px;
   }
 }
+
+.building-alert-panel {
+  position: fixed;
+  z-index: 40;
+  top: 80px;
+  right: 16px;
+  width: min(340px, calc(100vw - 32px));
+  box-sizing: border-box;
+  padding: 18px;
+  color: #f6f0dc;
+  background: #172637;
+  border: 2px solid #d8b66d;
+  border-radius: 6px;
+  box-shadow: 0 8px 28px #0008;
+  font: 14px/1.6 sans-serif;
+}
+.building-alert-panel[hidden] {
+  display: none;
+}
+.building-alert-panel button {
+  float: right;
+  color: inherit;
+  background: #30445a;
+  border: 1px solid #718396;
+  padding: 3px 9px;
+  cursor: pointer;
+}
+.building-alert-panel ul {
+  margin: 16px 0 0;
+  padding-left: 20px;
+}
+.building-alert-panel li + li {
+  margin-top: 8px;
+}
