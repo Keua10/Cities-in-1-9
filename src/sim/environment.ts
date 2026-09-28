@@ -131,7 +131,7 @@ export const ALERT_LABELS: Record<BuildingAlert, string> = {
   power: '전기가 들어오지 않습니다',
   water: '물이 들어오지 않습니다',
   sewer: '하수가 처리되지 않습니다',
-  pollution: '수돗물이 오염됐습니다',
+  pollution: '주변 토지 또는 수돗물이 오염됐습니다',
   fire: '소방서가 닿지 않습니다',
   police: '경찰서가 닿지 않습니다',
   health: '병원이 닿지 않습니다',

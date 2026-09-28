@@ -385,9 +385,17 @@ export class WorldRenderer {
         this.pedestrianLayer.maskFor(tx, ty, x, y),
       );
       if (this.disasters) this.incidentLayer.draw(this.world, this.disasters, range);
-      if (this.macro)
-        this.alertLayer.draw(this.world, this.macro, range, this.showAlerts && !this.metroMode);
     }
+
+    if (this.macro)
+      this.alertLayer.draw(
+        this.world,
+        this.macro,
+        range,
+        this.showAlerts && !this.metroMode,
+        camera,
+        now,
+      );
 
     this.stats.visibleChunks = visible;
     this.stats.loadedMeshes = this.meshes.size;

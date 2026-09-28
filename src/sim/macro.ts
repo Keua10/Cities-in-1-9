@@ -1,3 +1,4 @@
+import { groundPollutionFor } from './groundPollution';
 import { CHUNK_SIZE } from '../core/constants';
 import { MetroNetwork } from './metro';
 import { Build } from '../world/build';
@@ -334,7 +335,7 @@ export class MacroSim {
    * 플레이어는 도시 전체 통계만 보고 **어느 건물이** 문제인지 찾지 못한다.
    * 판정은 전부 이미 돌고 있는 값에서 읽는다 — 화면용 근사치를 만들지 않는다.
    *
-   * 급한 것부터 돌려준다. 화면에는 첫 번째 하나만 띄운다.
+   * 급한 것부터 돌려준다. 화면에서는 한 자리에서 차례로 보여준다.
    */
   buildingAlerts(tx: number, ty: number): BuildingAlert[] {
     const info = this.world.buildingCovering(tx, ty);
@@ -346,11 +347,14 @@ export class MacroSim {
     const water = this.water.statusAt(info.tx, info.ty);
     if (water.supply <= 0) out.push('water');
     if (water.drainage <= 0) out.push('sewer');
-    if (water.contamination > 0 && water.supply > 0) out.push('pollution');
+    if (
+      (water.contamination > 0 && water.supply > 0) ||
+      (this.environmentPartsAt(tx, ty)?.pollution ?? 0) >= 0.4
+    )
+      out.push('pollution');
     for (const kind of [FAC_FIRE, FAC_POLICE, FAC_HOSPITAL]) {
       if (this.services.ownerFor(tx, ty, info.level, kind) < 0) {
         out.push(kind === FAC_FIRE ? 'fire' : kind === FAC_POLICE ? 'police' : 'health');
-        break;
       }
     }
     const env = this.environmentAt(tx, ty);
@@ -573,6 +577,7 @@ export class MacroSim {
   private evaluate(updateDemand: boolean): void {
     const parcels = this.world.developedParcels();
     this.updateNuisance(parcels);
+    const groundPollution = groundPollutionFor(this.world);
 
     const tiers = emptyTiers();
     let buildings = 0;
@@ -713,7 +718,9 @@ export class MacroSim {
           /* ---------- 수정사항 4: 환경도 ---------- */
           // 만족도에 다시 곱하지 않는다. 같은 항을 두 번 세지 않기 위해서다.
           // 여기서는 **이미 돌고 있는 값을 읽을 수 있게** 모으기만 한다.
+          const ground = groundPollution.at(tx, ty);
           const parts = environmentParts(dist, nui, congestion, fulfil, water.contamination);
+          parts.pollution = Math.max(water.contamination, ground?.value ?? 0);
           const env = environmentScore(parts);
           envArr[i] = Math.round(env * 255);
           this.envParts.set(`${tx},${ty}`, parts);
@@ -728,6 +735,8 @@ export class MacroSim {
                   Math.min(
                     1,
                     satisfaction(zone, dist, nui, congestion, needsGap, amenityBonus) -
+                      (ground?.facility ?? 0) *
+                        (zone === ZONE_R ? 0.18 : zone === ZONE_C ? 0.09 : 0) -
                       incidentPenalty -
                       taxSatisfactionPenalty(policies, zone),
                   ),

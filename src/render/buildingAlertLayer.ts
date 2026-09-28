@@ -6,19 +6,9 @@ import type { BuildingAlert } from '../sim/environment';
 import type { MacroSim } from '../sim/macro';
 import type { World } from '../world/world';
 
-/**
- * 문제가 있는 건물 위에 아이콘을 띄운다 (수정사항 14).
- *
- * 테오타운·시티즈가 하는 그것이다. 도시 전체 통계만 보여주면 플레이어는
- * "전력 78%" 를 읽고도 **어느 건물이** 안 켜지는지 찾을 방법이 없다. 아이콘이
- * 떠 있으면 화면을 훑는 것만으로 다음에 할 일이 보인다.
- *
- * 판정은 MacroSim.buildingAlerts 가 한다. 여기서는 그리기만 한다 — 화면과 규칙이
- * 어긋나지 않게 하려면 판정이 한 곳에만 있어야 한다.
- *
- * 한 건물에 여러 문제가 겹쳐도 **가장 급한 하나만** 띄운다. 아이콘 세 개가
- * 겹쳐 뜨면 무엇부터 해야 하는지가 오히려 안 보인다.
- */
+import type { Camera } from '../core/camera';
+import { groupAlerts, type AlertPoint } from './alertLayout';
+
 const COLORS: Record<BuildingAlert, number> = {
   road: 0xff7a59,
   power: 0xffd23f,
@@ -31,59 +21,115 @@ const COLORS: Record<BuildingAlert, number> = {
   environment: 0xa9b4c0,
 };
 
-/** 한 화면에 띄우는 최대 개수. 넘으면 그리지 않는다 — 아이콘 밭이 되면 못 읽는다. */
-const MAX_BADGES = 120;
-
 export class BuildingAlertLayer {
   readonly graphics = new Graphics();
   private stamp = '';
+  private points: AlertPoint[] = [];
+  private layoutStamp = '';
+  private reducedMotion =
+    typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   draw(
     world: World,
     sim: MacroSim,
     range: { cx0: number; cy0: number; cx1: number; cy1: number },
     enabled: boolean,
+    camera: Camera,
+    now: number,
   ): void {
-    this.graphics.visible = enabled;
-    if (!enabled) return;
-    const stamp = `${world.walkRevision}:${world.utilityRevision}:${sim.tick}:${range.cx0},${range.cy0},${range.cx1},${range.cy1}`;
-    if (this.stamp === stamp) return;
-    this.stamp = stamp;
-
     const g = this.graphics;
-    g.clear();
-    let drawn = 0;
-    for (let cy = range.cy0; cy <= range.cy1 && drawn < MAX_BADGES; cy++) {
-      for (let cx = range.cx0; cx <= range.cx1 && drawn < MAX_BADGES; cx++) {
-        if (!world.isExplored(cx, cy)) continue;
-        const p = world.peekParcel(cx, cy);
-        if (!p?.bld) continue;
-        for (let i = 0; i < p.bld.length && drawn < MAX_BADGES; i++) {
-          const code = p.bld[i];
-          if (!isAnchor(code)) continue;
-          const tx = cx * CHUNK_SIZE + (i % CHUNK_SIZE);
-          const ty = cy * CHUNK_SIZE + Math.floor(i / CHUNK_SIZE);
-          const alert = sim.buildingAlerts(tx, ty)[0];
-          if (!alert) continue;
-          this.badge(world, tx, ty, levelOfCode(code), alert);
-          drawn++;
+    g.visible = enabled;
+    if (!enabled) return;
+    // Cancel the parent camera scale; all glyphs, stems and counters use CSS pixels.
+    g.scale.set(1 / camera.zoom);
+    g.position.y = this.reducedMotion ? 0 : (Math.sin(now / 420) * 2.5) / camera.zoom;
+    g.alpha = this.reducedMotion ? 1 : 0.88 + 0.12 * Math.cos(now / 420);
+    const stamp = `${world.walkRevision}:${world.utilityRevision}:${sim.tick}:${range.cx0},${range.cy0},${range.cx1},${range.cy1}`;
+    if (this.stamp !== stamp) {
+      this.stamp = stamp;
+      this.points = [];
+      for (let cy = range.cy0; cy <= range.cy1; cy++) {
+        for (let cx = range.cx0; cx <= range.cx1; cx++) {
+          if (!world.isExplored(cx, cy)) continue;
+          const p = world.peekParcel(cx, cy);
+          if (!p?.bld) continue;
+          for (let i = 0; i < p.bld.length; i++) {
+            const code = p.bld[i];
+            if (!isAnchor(code)) continue;
+            const tx = cx * CHUNK_SIZE + (i % CHUNK_SIZE);
+            const ty = cy * CHUNK_SIZE + Math.floor(i / CHUNK_SIZE);
+            const alerts = sim.buildingAlerts(tx, ty);
+            if (!alerts.length) continue;
+            const span = levelOfCode(code);
+            const mx = tx + (span - 1) / 2,
+              my = ty + (span - 1) / 2;
+            this.points.push({
+              x: tileToWorldX(mx, my),
+              y: tileToWorldY(mx, my, world.sampleHeight(tx, ty)) - TILE_HH * span * 1.6,
+              alerts,
+            });
+          }
         }
       }
     }
+    const phase = Math.floor(now / 2200);
+    const layoutStamp = `${stamp}:${camera.zoom}:${camera.x}:${camera.y}:${camera.screenW}:${camera.screenH}:${phase}`;
+    if (this.layoutStamp === layoutStamp) return;
+    this.layoutStamp = layoutStamp;
+    g.clear();
+    const points = this.points
+      .filter((p) => {
+        const { sx, sy } = camera.worldToScreen(p.x, p.y);
+        return sx >= -48 && sy >= -48 && sx <= camera.screenW + 48 && sy <= camera.screenH + 48;
+      })
+      .map((p) => ({ ...p, x: p.x * camera.zoom, y: p.y * camera.zoom - 12 }));
+    for (const group of groupAlerts(points, camera.zoom)) {
+      const { x, y, alerts, count } = group;
+      // Most urgent first, then each remaining issue in the same slot.
+      const alert = alerts[phase % alerts.length];
+      const color = COLORS[alert];
+      g.moveTo(x, y + 12)
+        .lineTo(x, y + 20)
+        .stroke({ color: 0x101820, width: 4 });
+      g.circle(x, y, 12)
+        .fill({ color: 0x17212d, alpha: 0.96 })
+        .stroke({ color: 0xffffff, width: 3 });
+      g.circle(x, y, 11).stroke({ color, width: 2 });
+      glyph(g, x, y, alert, color);
+      if (count > 1) counter(g, x + 6, y - 18, count);
+      if (alerts.length > 1) {
+        // Multiple issue indicator, distinct from the building-count counter.
+        for (let i = 0; i < alerts.length; i++)
+          g.rect(x - (alerts.length * 3 - 1) / 2 + i * 3, y + 15, 2, 2).fill(
+            i === phase % alerts.length ? 0xffffff : 0x667788,
+          );
+      }
+    }
   }
+}
 
-  private badge(world: World, tx: number, ty: number, span: number, alert: BuildingAlert): void {
-    const g = this.graphics;
-    const midX = tx + (span - 1) / 2;
-    const midY = ty + (span - 1) / 2;
-    const x = tileToWorldX(midX, midY);
-    const y = tileToWorldY(midX, midY, world.sampleHeight(tx, ty)) - TILE_HH * span * 1.6;
-    const color = COLORS[alert];
-    g.moveTo(x, y + 9)
-      .lineTo(x, y + 20)
-      .stroke({ color, width: 2, alpha: 0.9 });
-    g.circle(x, y, 10).fill({ color: 0x17212d, alpha: 0.92 }).stroke({ color, width: 2 });
-    glyph(g, x, y, alert, color);
+const DIGITS = [
+  '111101101101111',
+  '010110010010111',
+  '111001111100111',
+  '111001111001111',
+  '101101111001001',
+  '111100111001111',
+  '111100111101111',
+  '111001001001001',
+  '111101111101111',
+  '111101111001111',
+];
+function counter(g: Graphics, x: number, y: number, count: number): void {
+  const label = count > 99 ? '99+' : String(count);
+  g.roundRect(x - 3, y - 3, label.length * 8 + 4, 16, 4)
+    .fill(0xf4f0dd)
+    .stroke({ color: 0x17212d, width: 1 });
+  for (let n = 0; n < label.length; n++) {
+    const bits = label[n] === '+' ? '000010111010000' : DIGITS[Number(label[n])];
+    for (let i = 0; i < 15; i++)
+      if (bits[i] === '1')
+        g.rect(x + n * 8 + (i % 3) * 2, y + Math.floor(i / 3) * 2, 2, 2).fill(0x17212d);
   }
 }
 

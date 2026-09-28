@@ -4,6 +4,8 @@ import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const checks = {
+  alertRender: 'tools/check/alertRenderCheck.ts',
+  alertsPollution: 'tools/check/alertsPollutionCheck.ts',
   metro: 'tools/check/metroCheck.ts',
   signalPolicy: 'tools/check/signalPolicyCheck.ts',
   movingPixel: 'tools/check/movingPixelCheck.ts',
@@ -48,8 +50,8 @@ for (const name of process.argv.length > 2 ? process.argv.slice(2) : Object.keys
     bundle: true,
     platform: 'node',
     format: 'esm',
-    alias: { 'pixi.js': resolve('tools/check/stub-pixi.ts') },
-    external: ['@napi-rs/canvas'],
+    alias: name === 'alertRender' ? {} : { 'pixi.js': resolve('tools/check/stub-pixi.ts') },
+    external: ['@napi-rs/canvas', ...(name === 'alertRender' ? ['pixi.js'] : [])],
     logLevel: 'warning',
   });
   const result = spawnSync(process.execPath, [outfile], { stdio: 'inherit' });
