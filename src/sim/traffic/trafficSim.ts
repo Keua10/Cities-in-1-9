@@ -277,6 +277,13 @@ export class TrafficSim {
 
   update(dtMs: number): void {
     if (!this.initialized) return;
+    // Signals, schedules and vehicles advance equally, including at higher speeds.
+    for (let remaining = Math.max(0, dtMs); remaining > 0; remaining -= 50) {
+      this.updateSlice(Math.min(50, remaining));
+    }
+  }
+
+  private updateSlice(dtMs: number): void {
     this.citizens.pedestrians.update(
       dtMs,
       this.activeCx,

@@ -575,7 +575,7 @@ function workStartMinute(tx: number, ty: number, slot: number): number {
   return r < WORK_START_0830_SHARE ? 8 * 60 + 30 : 9 * 60;
 }
 
-function commuteDepartureMinute(
+export function commuteDepartureMinute(
   home: Pick<HomeState, 'tx' | 'ty'>,
   slot: number,
   job: DestLink,
@@ -590,7 +590,7 @@ function commuteDepartureMinute(
     simRandom(WORLD_SEED, home.tx ^ job.tx, home.ty ^ job.ty, slot ^ 0x6c31) *
       (COMMUTE_EARLY_SPREAD_MINUTES + 1),
   );
-  return Math.max(0, start - estimate - earlySpread);
+  return Math.max(7 * 60 + 30, Math.min(8 * 60, start - estimate - earlySpread));
 }
 
 function workExitSpreadMinutes(tx: number, ty: number, slot: number, day: number): number {

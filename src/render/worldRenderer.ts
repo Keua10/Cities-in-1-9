@@ -346,7 +346,7 @@ export class WorldRenderer {
         const counts = this.structures.counts(key);
         buildingsShown += counts.buildings;
         facilitiesShown += counts.facilities;
-        if (this.traffic && this.vehicles)
+        if (this.traffic && this.vehicles && camera.zoom >= 0.55 && !this.metroMode)
           visibleVehicles.push(...this.traffic.vehiclesInChunk(cx, cy));
       }
     }

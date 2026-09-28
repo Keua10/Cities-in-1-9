@@ -1,3 +1,4 @@
+import { WEEKDAY_NAMES, type DaytimeSnapshot } from '../sim/time';
 import { decorateGameIcons } from './gameIcons';
 import { formatMoney } from './money';
 import type { Camera } from '../core/camera';
@@ -95,7 +96,7 @@ export function bindGameChrome(camera: Camera, tools: Tools, center: () => void)
     get speed() {
       return speed;
     },
-    update(now: number, sim: MacroSim) {
+    update(now: number, sim: MacroSim, life: DaytimeSnapshot) {
       if (now - lastPaint < 250) return;
       lastPaint = now;
       setText('strip-pop', Math.round(sim.stats.population).toLocaleString('ko-KR'));
@@ -108,7 +109,10 @@ export function bindGameChrome(camera: Camera, tools: Tools, center: () => void)
       setText('strip-income', `${formatMoney(net, true, true)} /일`);
       document.getElementById('strip-income')!.title = `${formatMoney(net, false, true)} /일`;
       document.getElementById('strip-income')!.classList.toggle('negative', net < 0);
-      setText('strip-date', `${sim.day}일차 ${String(sim.hourOfDay).padStart(2, '0')}:00`);
+      setText(
+        'strip-date',
+        `${life.absoluteDay + 1}일차 ${WEEKDAY_NAMES[life.weekday]} ${String(life.hourOfDay).padStart(2, '0')}:${String(life.minuteOfDay % 60).padStart(2, '0')} ${life.isDay ? '낮' : '밤'}`,
+      );
       setText('game-notice', tools.activeMessage(now));
     },
   };

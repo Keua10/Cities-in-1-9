@@ -6,6 +6,7 @@ import { resolve } from 'node:path';
 const checks = {
   alertRender: 'tools/check/alertRenderCheck.ts',
   alertsPollution: 'tools/check/alertsPollutionCheck.ts',
+  dailyLife: 'tools/check/dailyLifeCheck.ts',
   metro: 'tools/check/metroCheck.ts',
   signalPolicy: 'tools/check/signalPolicyCheck.ts',
   movingPixel: 'tools/check/movingPixelCheck.ts',

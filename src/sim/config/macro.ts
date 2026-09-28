@@ -22,11 +22,11 @@ export const GAMETIME_DAYS_PER_YEAR = GAMETIME_DAYS_PER_MONTH * GAMETIME_MONTHS_
 
 /**
  * daytime: 밤낮·출퇴근·장보기처럼 화면에서 체감하는 실제시간 축.
- * 실시간 600초 = daytime 1일. 10분 플레이에 정확히 하루가 돈다.
- * gametime 1일(60초)과의 최소공배수도 정확히 600초(10분)다.
+ * 실시간 1,200초 = daytime 1일. 기본 배속에서 1시간은 50초다.
+ * gametime 1일(60초)과의 최소공배수도 정확히 1,200초(20분)다.
  */
-export const DAYTIME_DAY_MS = 600_000;
-export const DAYTIME_ALIGNMENT_MS = 600_000;
+export const DAYTIME_DAY_MS = 1_200_000;
+export const DAYTIME_ALIGNMENT_MS = 1_200_000;
 
 /** gametime 계절: 30일 x 3개월 = 계절 90일, 1년 360일. */
 export const SEASON_DAYS = GAMETIME_DAYS_PER_MONTH * 3;

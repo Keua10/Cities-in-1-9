@@ -368,7 +368,7 @@ async function boot(): Promise<void> {
 
   app.ticker.add((ticker) => {
     const now = performance.now();
-    const gameDelta = ticker.deltaMS * chrome.speed;
+    const gameDelta = Math.min(ticker.deltaMS, 100) * chrome.speed;
     if (chrome.speed > 0) {
       sim.update(gameDelta, CATCHUP_TICKS_PER_FRAME);
       transport.update();
@@ -401,7 +401,7 @@ async function boot(): Promise<void> {
     transportPanel.update();
     metroPanel.update();
     cityPanel.update(now, sim);
-    chrome.update(now, sim);
+    chrome.update(now, sim, traffic.daytimeState);
     facilityFinder.update(now);
     updateHud(now, ticker.FPS);
   });
