@@ -1,3 +1,4 @@
+import { constructionMinutes } from '../sim/construction';
 import { audio } from '../audio/audio';
 import { pickTile } from '../core/pick';
 import type { WorldRenderer } from '../render/worldRenderer';
@@ -6,7 +7,7 @@ import type { MacroSim } from '../sim/macro';
 import { PIPE_COST, PIPE_SEWER, PIPE_WATER, WATER_SPECS } from '../sim/config/water';
 import { POWER_SPECS, WIRE_COST } from '../sim/config/power';
 import { RUNWAY_COST, TAXIWAY_COST } from '../sim/config/transport';
-import { METRO_TUNNEL_COST } from '../sim/metro';
+import { METRO_STATION_COST, METRO_TUNNEL_COST } from '../sim/metro';
 import type { UtilityMode } from '../render/utilityLayer';
 import { MAX_HEIGHT } from '../core/constants';
 import { chunkIndexOf } from '../core/iso';
@@ -225,7 +226,7 @@ export class Tools {
     }
     if (this.shape === 'line') return '시작점을 누르세요 · 두 점을 이어 일직선으로 놓습니다';
     if (this.shape === 'area') return '한쪽 모서리를 누르세요 · 두 점이 사각형 범위가 됩니다';
-    if (this.shape === 'single') return '지도를 눌러 한 채 놓습니다';
+    if (this.shape === 'single') return '위치를 선택한 뒤 ✓ 건설 확인을 누르세요';
     return '';
   }
 
@@ -244,7 +245,8 @@ export class Tools {
     const shape = this.shape;
     if (shape === 'none') return;
     if (shape === 'single') {
-      this.applySingle(tx, ty);
+      this.pos1 = { tx, ty };
+      this.pos2 = { tx, ty };
       return;
     }
     if (!this.pos1) {
@@ -293,13 +295,18 @@ export class Tools {
 
   plan(): PlacementPlan | null {
     const shape = this.shape;
-    if (!this.pos1 || (shape !== 'line' && shape !== 'area')) return null;
+    if (!this.pos1 || shape === 'none') return null;
     const key = this.selectionKey();
     if (key === this.cacheKey && this.planCache) return this.planCache;
     this.cacheKey = key;
     this.previewCache = null;
     const end = this.pos2 ?? this.hover ?? this.pos1;
-    const raw = shape === 'line' ? lineTiles(this.pos1, end) : areaTiles(this.pos1, end);
+    const raw =
+      shape === 'single'
+        ? { tiles: [this.pos1], truncated: false }
+        : shape === 'line'
+          ? lineTiles(this.pos1, end)
+          : areaTiles(this.pos1, end);
 
     /*
      * 도로는 칸 하나하나가 독립이 아니다. 앞 칸과 이어지는지(비탈 규칙)까지
@@ -393,7 +400,7 @@ export class Tools {
   /** 렌더러가 그릴 것. 같은 그림이면 key 가 같아서 다시 그리지 않는다. */
   placementPreview(): PlacementPreview | null {
     const shape = this.shape;
-    if (!this.pos1 || (shape !== 'line' && shape !== 'area')) return null;
+    if (!this.pos1 || shape === 'none') return null;
     const plan = this.plan();
     if (!plan) return null;
     if (this.previewCache) return this.previewCache;
@@ -410,7 +417,8 @@ export class Tools {
   summary(): PlacementSummary {
     const plan = this.plan();
     if (!plan || !this.pos1) return { active: false, title: '', detail: '', canConfirm: false };
-    const label = TOOL_LABELS[this.tool];
+    const label =
+      this.tool === 'facility' ? FACILITY_SPECS[this.facilityKind].name : TOOL_LABELS[this.tool];
     const parts: string[] = [];
     if (plan.buildCount > 0) parts.push(`${plan.buildCount}칸`);
     if (plan.buildCount === 0 && plan.links > 0) parts.push(`연결 ${plan.links}`);
@@ -428,8 +436,16 @@ export class Tools {
     return {
       active: true,
       title: `${label} ${parts.join(' · ') || '범위 선택 중'}`,
-      detail,
-      canConfirm: plan.buildCount > 0 || plan.links > 0,
+      detail:
+        detail +
+        (this.tool === 'facility' || this.tool === 'metroStation'
+          ? ' · 공사 ' +
+            (
+              constructionMinutes(this.tool === 'metroStation' ? 26 : this.facilityKind) / 60
+            ).toFixed(1) +
+            '게임 시간'
+          : ''),
+      canConfirm: (plan.buildCount > 0 || plan.links > 0) && plan.cost <= this.sim.money,
     };
   }
 
@@ -438,6 +454,13 @@ export class Tools {
    * ---------------------------------------------------------------- */
 
   confirmPlacement(): void {
+    this.invalidatePlan();
+    if (this.shape === 'single' && this.pos1) {
+      const { tx, ty } = this.pos1;
+      this.applySingle(tx, ty);
+      this.clearSelection();
+      return;
+    }
     const plan = this.plan();
     if (!plan) return;
     if (plan.buildCount === 0 && plan.links === 0) {
@@ -510,6 +533,20 @@ export class Tools {
       return blocked('아직 개척하지 않은 땅입니다');
 
     switch (this.tool) {
+      case 'facility': {
+        const r = canPlaceFacility(this.world, tx, ty, this.facilityKind, this.cityLevel);
+        return r.ok
+          ? buildable(FACILITY_SPECS[this.facilityKind].cost)
+          : blocked(r.reason || '건설 불가');
+      }
+      case 'metroStation': {
+        const r = this.sim.metro.canPlaceStation(tx, ty);
+        return r.ok ? buildable(METRO_STATION_COST) : blocked(r.reason);
+      }
+      case 'metroErase':
+      case 'signalInstall':
+      case 'signalRemove':
+        return buildable(0);
       case 'road': {
         const cur = this.world.getBuild(tx, ty);
         if (cur === Build.Road) return SKIP;
@@ -579,13 +616,17 @@ export class Tools {
   }
 
   /* ---------------------------------------------------------------- *
-   * 한 채짜리 도구 (시설·지하철역·신호등) — 예전 그대로 탭 한 번
+   * 한 채짜리 도구 (시설·지하철역·신호등) — 위치 선택 후 확인
    * ---------------------------------------------------------------- */
 
   facilityPreviewAt(
     tx: number,
     ty: number,
   ): { tx: number; ty: number; kind: number; ok: boolean } | null {
+    if (this.shape === 'single' && this.pos1) {
+      tx = this.pos1.tx;
+      ty = this.pos1.ty;
+    }
     if (this.tool === 'metroStation')
       return { tx, ty, kind: 26, ok: this.sim.metro.canPlaceStation(tx, ty).ok };
     if (this.tool !== 'facility') return null;
@@ -594,12 +635,12 @@ export class Tools {
   }
 
   private applySingle(tx: number, ty: number): void {
-    if (this.tool === 'metroStation' || this.tool === 'metroErase') {
-      const result = this.sim.metro.edit(
-        tx,
-        ty,
-        this.tool === 'metroStation' ? 'station' : 'erase',
-      );
+    if (this.tool === 'metroStation') {
+      this.note(this.sim.construction.start(tx, ty, 26, this.cityLevel));
+      return;
+    }
+    if (this.tool === 'metroErase') {
+      const result = this.sim.metro.edit(tx, ty, 'erase');
       this.note(result.message);
       this.metroSelection = `${tx},${ty}`;
       return;
@@ -671,6 +712,10 @@ export class Tools {
     }
 
     if (this.tool === 'bulldoze') {
+      if (this.sim.construction?.cancel(tx, ty)) {
+        this.renderer.forceRedraw();
+        return true;
+      }
       if (this.world.getBuild(tx, ty) === Build.None) return false;
       const facility = this.world.buildingCovering(tx, ty);
       this.world.setBuild(tx, ty, Build.None);
@@ -719,23 +764,8 @@ export class Tools {
   }
 
   private applyFacility(tx: number, ty: number): void {
-    const kind = this.facilityKind;
-    const spec = FACILITY_SPECS[kind];
-    if (!spec) return;
-
-    const result = canPlaceFacility(this.world, tx, ty, kind, this.cityLevel);
-    if (!result.ok) {
-      if (result.reason) this.note(result.reason);
-      return;
-    }
-    if (result.warning) this.note(result.warning);
-    if (!this.sim.spend(spec.cost)) {
-      this.note('돈이 모자랍니다');
-      return;
-    }
-
-    this.world.placeFacility(tx, ty, kind, this.sim.day);
-    this.refreshArea(tx, ty, spec.span);
+    this.note(this.sim.construction.start(tx, ty, this.facilityKind, this.cityLevel));
+    this.refreshArea(tx, ty, FACILITY_SPECS[this.facilityKind].span);
   }
 
   private refreshArea(tx: number, ty: number, span: number): void {

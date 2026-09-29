@@ -1,3 +1,5 @@
+import { bindNatureControls } from './natureControls';
+import type { NatureSystem } from '../sim/nature';
 import './adminPanel.css';
 import { formatMoney, parseAdminMoney, toWon } from './money';
 
@@ -11,6 +13,8 @@ export type CityResetMode = 'metropolis' | 'empty';
 
 /** Local game tools; this code gate is not server-side administrator authentication. */
 export function bindAdminPanel(deps: {
+  nature: NatureSystem;
+  mapCenter: () => { tx: number; ty: number };
   getMoney: () => number;
   setMoney: (amount: number) => Promise<void>;
   resetCity: (mode: CityResetMode) => Promise<void>;
@@ -32,6 +36,7 @@ export function bindAdminPanel(deps: {
   const funds = dialog.querySelector<HTMLFormElement>('#admin-money')!;
   const amount = funds.elements.namedItem('amount') as HTMLInputElement;
   const result = dialog.querySelector<HTMLElement>('#admin-result')!;
+  bindNatureControls(controls, deps.nature, deps.mapCenter);
   let unlocked = false;
   let busy = false;
   document.getElementById('btn-admin')!.addEventListener('click', () => {

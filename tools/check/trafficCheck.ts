@@ -427,6 +427,7 @@ console.log('4. 실제 주행 (4차로 격자 도시)');
   const watch = new Map<Vehicle, Watch>();
 
   for (let frame = 0; frame < FRAMES; frame++) {
+    sim.advanceLifeClock(framePattern[frame % framePattern.length]);
     traffic.update(framePattern[frame % framePattern.length]);
     const vehicles = all();
     peak = Math.max(peak, vehicles.length);

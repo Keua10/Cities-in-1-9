@@ -1,9 +1,12 @@
+import type { NatureSystem } from '../sim/nature';
 import { signOut } from '../net/auth';
 import type { AnySaveManager } from '../net/saveManager';
 import type { WorldRenderer } from '../render/worldRenderer';
 import { bindAdminPanel, type CityResetMode } from './adminPanel';
 
 interface ToolbarDeps {
+  nature: NatureSystem;
+  mapCenter: () => { tx: number; ty: number };
   centerCamera: () => void;
   renderer: WorldRenderer;
   saver: AnySaveManager;

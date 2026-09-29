@@ -1,3 +1,5 @@
+import type { NatureState } from '../sim/nature';
+import type { ConstructionJob } from '../sim/construction';
 import type { DisasterState } from '../sim/disasterTypes';
 import type { MetroState } from '../sim/metro';
 import type { CityPolicies } from '../sim/policies';
@@ -18,6 +20,9 @@ export interface TransportState {
  * 매크로 상태. 파생값은 저장하지 않고, 사용자가 직접 정한 희소 설정만 선택 필드로 저장한다.
  */
 export interface MacroState {
+  lifeElapsedMs?: number;
+  nature?: NatureState;
+  construction?: ConstructionJob[];
   metro?: MetroState;
   /** Explicit road signal controls: true installs, false suppresses automatic placement. */
   signalOverrides?: Record<string, boolean>;

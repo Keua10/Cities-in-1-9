@@ -89,6 +89,10 @@ function chunkDiamond(cx: number, cy: number): number[] {
 }
 
 export class WorldRenderer {
+  setWorldTint(color: number): void {
+    this.groundLayer.tint = color;
+    this.pedestrianLayer.graphics.tint = color;
+  }
   alertAt(wx: number, wy: number) {
     return this.showAlerts && !this.metroMode ? this.alertLayer.hitTest(wx, wy) : null;
   }

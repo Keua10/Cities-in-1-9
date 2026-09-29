@@ -1,5 +1,7 @@
+import { ConstructionPanel } from './ui/constructionPanel';
+import { NatureLayer } from './render/natureLayer';
 import { AlertPanel } from './ui/alertPanel';
-import { applyDayNight } from './render/dayNight';
+import { lightingColor } from './render/dayNight';
 import { audio } from './audio/audio';
 import { Application } from 'pixi.js';
 import { Camera } from './core/camera';
@@ -181,6 +183,12 @@ async function boot(): Promise<void> {
   let cursor: { tx: number; ty: number } | null = null;
 
   const sim = new MacroSim(world, macro);
+  const constructionPanel = new ConstructionPanel(sim.construction);
+  const natureLayer = new NatureLayer(world, sim);
+  renderer.root.addChild(natureLayer.graphics);
+  const weatherStatus = document.createElement('div');
+  weatherStatus.className = 'weather-status';
+  document.body.append(weatherStatus);
   renderer.metro = sim.metro;
   renderer.waterField = sim.water;
   renderer.powerField = sim.power;
@@ -255,6 +263,12 @@ async function boot(): Promise<void> {
       alertPanel.hide();
       cursor = pickTile(world, wx, wy);
       renderer.setCursorTile(cursor);
+      if (tools.tool === 'select' && sim.construction.at(cursor.tx, cursor.ty)) {
+        chrome.closePanels();
+        constructionPanel.show(cursor.tx, cursor.ty);
+        return;
+      }
+      constructionPanel.hide();
       if (tools.metroMode) {
         metroPanel.selectStation(`${cursor.tx},${cursor.ty}`);
         return;
@@ -304,6 +318,8 @@ async function boot(): Promise<void> {
   });
 
   bindToolbar({
+    nature: sim.nature,
+    mapCenter: () => worldToTile(camera.x, camera.y),
     centerCamera,
     renderer,
     saver,
@@ -403,7 +419,18 @@ async function boot(): Promise<void> {
     renderer.metroSelection = tools.metroSelection;
     setPedestrianRenderZoom(camera.zoom);
     renderer.update(camera, now);
-    applyDayNight(app.canvas, traffic.daytimeState);
+    renderer.setWorldTint(lightingColor(traffic.daytimeState, sim.nature.weather.cloud));
+    natureLayer.draw(camera);
+    constructionPanel.update();
+    const weather = sim.nature.weather;
+    weatherStatus.textContent =
+      (weather.precipitation === 'rain' ? '비' : weather.precipitation === 'snow' ? '눈' : '맑음') +
+      ' · ' +
+      weather.temperature.toFixed(0) +
+      '°C · 바람 ' +
+      weather.windSpeed.toFixed(1) +
+      'm/s' +
+      (sim.nature.state.hazard ? ' · 재해 진행 중' : '');
     renderer.flush();
     minimap.update(
       now,

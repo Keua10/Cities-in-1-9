@@ -1,3 +1,5 @@
+import { NatureSystem } from './nature';
+import { ConstructionSystem } from './construction';
 import { groundPollutionFor, type GroundPollution } from './groundPollution';
 import { CHUNK_SIZE } from '../core/constants';
 import { MetroNetwork } from './metro';
@@ -112,6 +114,11 @@ export { graceFactor } from './satisfaction';
 
 export class MacroSim {
   readonly metro: MetroNetwork;
+  readonly construction: ConstructionSystem;
+  readonly nature: NatureSystem;
+  get lifeElapsedMs(): number {
+    return this.macro.lifeElapsedMs ?? 0;
+  }
   sanitation = { waste: 1, funeral: 1 };
   /** [zone][tier] 수요. -1 ~ +1. */
   demand: number[][] = zeroDemand();
@@ -173,6 +180,10 @@ export class MacroSim {
   ) {
     this.world.signalOverrides = this.macro.signalOverrides ?? {};
     this.metro = new MetroNetwork(world, macro, () => this.onMacroChange?.());
+    this.nature = new NatureSystem(world, macro, () => this.onMacroChange?.());
+    this.construction = new ConstructionSystem(world, macro, this.metro, () =>
+      this.onMacroChange?.(),
+    );
     this.disasters = new DisasterSim(macro.disasters, macro.tick);
     this.water.power = this.power;
     this.services.power = this.power;
@@ -467,7 +478,14 @@ export class MacroSim {
   }
 
   /** 실시간 프레임에서 부른다. 지나간 만큼 틱을 돌린다. */
+  advanceLifeClock(deltaMs: number): void {
+    this.macro.lifeElapsedMs = this.lifeElapsedMs + Math.max(0, deltaMs);
+    this.construction.update();
+    this.nature.update();
+  }
+
   update(deltaMs: number, budget: number): void {
+    this.advanceLifeClock(deltaMs);
     this.power.ensure(this.world);
     this.water.ensure(this.world);
     if (this.catchupLeft > 0) {
@@ -1012,6 +1030,9 @@ export class MacroSim {
    */
   resetState(money: number, nowMs: number): void {
     this.financeRemainder = 0;
+    delete this.macro.lifeElapsedMs;
+    delete this.macro.construction;
+    delete this.macro.nature;
     this.metro.reset();
     delete this.macro.signalOverrides;
     this.world.signalOverrides = {};

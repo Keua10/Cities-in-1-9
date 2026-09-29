@@ -16,7 +16,7 @@ const makeSim = () =>
 const sim = makeSim();
 sim.financeEstimate = () => ({ income: 123.4567, upkeep: 23.4567 });
 sim.update(1000, 1);
-assert.equal(sim.money, 1000.0833, 'cash arrives before any macro tick or citizen arrival');
+assert.equal(sim.money, 1000.1666, 'cash arrives before any macro tick or citizen arrival');
 for (let ms = 1000; ms < DAYTIME_DAY_MS; ms += 1000) sim.update(1000, 1);
 assert.equal(
   sim.money,
@@ -33,7 +33,7 @@ const offline = makeSim();
 offline.financeEstimate = () => ({ income: 100, upkeep: 0 });
 offline.primeCatchup(1000 + (MS_PER_TICK * 10) / OFFLINE_SPEED);
 offline.update(0, 10);
-assert.equal(offline.money, 1002.0833, 'offline catchup accrues its bounded elapsed time once');
+assert.equal(offline.money, 1004.1666, 'offline catchup accrues its bounded elapsed time once');
 
 const excellent = { parks: 1, noise: 0, traffic: 0, access: 1, pollution: 0 };
 assert.equal(environmentCeiling(ZONE_R, excellent), 1);

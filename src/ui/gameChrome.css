@@ -866,3 +866,25 @@ body.game-ui {
 .building-alert-panel li + li {
   margin-top: 8px;
 }
+
+.weather-status {
+  position: fixed;
+  left: 50%;
+  top: 12px;
+  transform: translateX(-50%);
+  z-index: 4;
+  pointer-events: none;
+  padding: 6px 12px;
+  border-radius: 12px;
+  background: #172f40dd;
+  color: #ecf4ff;
+  font-size: 12px;
+}
+@media (max-width: 700px) {
+  .weather-status {
+    top: 60px;
+    max-width: 75vw;
+    white-space: nowrap;
+    font-size: 10px;
+  }
+}

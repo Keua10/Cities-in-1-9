@@ -137,6 +137,10 @@ export class TrafficSim {
     this.congestion.setJunctions(this.junctionIndex);
   }
 
+  weatherSpeedAt(x: number, y: number): number {
+    return this.macro.nature.roadGripAt(Math.floor(x), Math.floor(y));
+  }
+
   /** 렌더러가 신호등을 그릴 때 쓰는 교차로 색인. */
   get junctions(): JunctionIndex {
     return this.junctionIndex;
@@ -315,7 +319,7 @@ export class TrafficSim {
     // 수백 명이 잡혀도 scanCursor가 다음 프레임부터 이어서 처리한다.
     const tripBudget = Math.min(room, ROUTE_BUDGET_PER_FRAME);
     const lifeDelta = Math.min(dtMs, 250);
-    this.daytime = sessionDaytimeAt(this.timeMs, this.macro.day);
+    this.daytime = sessionDaytimeAt(this.macro.lifeElapsedMs, this.macro.day);
     const trips = this.citizens.collectTrips(this.daytime, lifeDelta, tripBudget);
     for (const trip of trips) this.queueTrip(trip);
 
@@ -355,7 +359,7 @@ export class TrafficSim {
     return this.citizens.pedestrians.walkers;
   }
   get daytimeState(): DaytimeSnapshot {
-    return this.daytime;
+    return sessionDaytimeAt(this.macro.lifeElapsedMs, this.macro.day);
   }
   /** 렌더러의 신호등 색과 차량 판정이 같은 시계를 보게 한다. */
   get signalTimeMs(): number {
@@ -573,7 +577,9 @@ export class TrafficSim {
       const vehicle = f.vehicle;
       const points = vehicle.route.tiles.length / 2;
       let target =
-        VEHICLE_SPEED_TILES_PER_SEC * (vehicle.kind === VehicleKind.Truck ? TRUCK_SPEED_MUL : 1);
+        VEHICLE_SPEED_TILES_PER_SEC *
+        (vehicle.kind === VehicleKind.Truck ? TRUCK_SPEED_MUL : 1) *
+        this.weatherSpeedAt(f.x, f.y);
 
       const minCenterGap = VEHICLE_BODY_LENGTH_TILES + MIN_GAP_TILES;
       const desiredCenterGap = VEHICLE_BODY_LENGTH_TILES + DESIRED_GAP_TILES;

@@ -136,7 +136,9 @@ function moveVehiclesPatched(
     const points = vehicle.route.tiles.length / 2;
     const progress = vehicle.routeIdx + vehicle.tileT;
     const baseTarget =
-      VEHICLE_SPEED_TILES_PER_SEC * (vehicle.kind === VehicleKind.Truck ? TRUCK_SPEED_MUL : 1);
+      VEHICLE_SPEED_TILES_PER_SEC *
+      (vehicle.kind === VehicleKind.Truck ? TRUCK_SPEED_MUL : 1) *
+      traffic.weatherSpeedAt(f.x, f.y);
 
     const minCenterGap = VEHICLE_BODY_LENGTH_TILES + MIN_GAP_TILES;
     const desiredCenterGap = VEHICLE_BODY_LENGTH_TILES + DESIRED_GAP_TILES;
@@ -150,10 +152,7 @@ function moveVehiclesPatched(
       const usable = Math.max(0, limit - minCenterGap);
       safetyTarget = Math.min(safetyTarget, Math.sqrt(2 * DECEL_TILES_PER_SEC2 * usable));
       if (limit < desiredCenterGap) {
-        safetyTarget *= Math.max(
-          0,
-          usable / Math.max(0.001, desiredCenterGap - minCenterGap),
-        );
+        safetyTarget *= Math.max(0, usable / Math.max(0.001, desiredCenterGap - minCenterGap));
       }
     }
 
@@ -192,9 +191,7 @@ function moveVehiclesPatched(
     if (safetyTarget <= target + 1e-6 && safetyTarget < vehicle.speed) softDecel = null;
 
     const accel =
-      target > vehicle.speed
-        ? ACCEL_TILES_PER_SEC2
-        : (softDecel ?? DECEL_TILES_PER_SEC2);
+      target > vehicle.speed ? ACCEL_TILES_PER_SEC2 : (softDecel ?? DECEL_TILES_PER_SEC2);
     vehicle.speed = approach(vehicle.speed, target, accel * dt);
 
     let advance = vehicle.speed * dt;
@@ -380,8 +377,10 @@ function deadlockLoser(
   if (a.waitMs !== b.waitMs) return a.waitMs > b.waitMs ? b : a;
 
   // 객체 배열 순서에 의존하지 않는 결정적 타이브레이크.
-  const ak = ((a.destTx * 73856093) ^ (a.destTy * 19349663) ^ (a.route.tiles.length * 83492791)) >>> 0;
-  const bk = ((b.destTx * 73856093) ^ (b.destTy * 19349663) ^ (b.route.tiles.length * 83492791)) >>> 0;
+  const ak =
+    ((a.destTx * 73856093) ^ (a.destTy * 19349663) ^ (a.route.tiles.length * 83492791)) >>> 0;
+  const bk =
+    ((b.destTx * 73856093) ^ (b.destTy * 19349663) ^ (b.route.tiles.length * 83492791)) >>> 0;
   return ak <= bk ? b : a;
 }
 

@@ -1,4 +1,4 @@
-import { applyDayNight } from '../../src/render/dayNight';
+import { lightingColor } from '../../src/render/dayNight';
 import { sessionDaytimeAt } from '../../src/sim/time';
 import { AlertPanel } from '../../src/ui/alertPanel';
 import '../../src/ui/gameChrome.css';

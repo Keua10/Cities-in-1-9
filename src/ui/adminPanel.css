@@ -41,3 +41,13 @@
   font-size: 12px;
   line-height: 1.5;
 }
+
+#admin-panel select {
+  padding: 10px;
+  font: inherit;
+  width: 100%;
+}
+#admin-panel fieldset {
+  margin-top: 20px;
+  border: 1px solid #7594a2;
+}

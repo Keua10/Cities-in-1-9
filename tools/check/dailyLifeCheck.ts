@@ -5,7 +5,7 @@ import { DAYTIME_DAY_MS } from '../../src/sim/simConstants';
 import { TrafficSim } from '../../src/sim/traffic/trafficSim';
 
 assert.equal(sessionDaytimeAt(0, 0).minuteOfDay, 450);
-assert.equal(sessionDaytimeAt(50_000, 0).minuteOfDay, 510);
+assert.equal(sessionDaytimeAt(25_000, 0).minuteOfDay, 510);
 assert.equal(sessionDaytimeAt(DAYTIME_DAY_MS, 0).absoluteDay, 1);
 for (let slot = 0; slot < 200; slot++) {
   for (const dist of [1, 28, 44, 100, 1000]) {
@@ -34,7 +34,7 @@ for (const delta of [16, 64, 100, 200, 400]) {
   assert(slices.every((dt) => dt > 0 && dt <= 50));
 }
 console.log(
-  'Daily life: shared 50-second hour, 07:30–08:00 departures, full motion time at every speed.',
+  'Daily life: shared 25-second hour, 07:30–08:00 departures, full motion time at every speed.',
 );
 
 const { daylightAt } = await import('../../src/render/dayNight');

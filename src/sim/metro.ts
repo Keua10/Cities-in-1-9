@@ -149,7 +149,7 @@ export class MetroNetwork {
     this.revision++;
     this.changed();
   }
-  edit(x: number, y: number, action: MetroEdit): { ok: boolean; message: string } {
+  edit(x: number, y: number, action: MetroEdit, prepaid = false): { ok: boolean; message: string } {
     if (
       !Number.isSafeInteger(x) ||
       !Number.isSafeInteger(y) ||
@@ -183,7 +183,7 @@ export class MetroNetwork {
       return { ok: true, message: '이미 설치되어 있습니다.' };
     if (!state.tunnels[key] && Object.keys(state.tunnels).length >= METRO_MAX_TILES)
       return { ok: false, message: '이 도시의 지하철 건설 한도에 도달했습니다.' };
-    const cost = action === 'station' ? METRO_STATION_COST : METRO_TUNNEL_COST;
+    const cost = prepaid ? 0 : action === 'station' ? METRO_STATION_COST : METRO_TUNNEL_COST;
     if (this.macro.money < cost) return { ok: false, message: '지하철 건설 자금이 부족합니다.' };
     const mutable = (this.macro.metro ??= { tunnels: {}, stations: {}, nextStation: 1 });
     mutable.tunnels[key] = true;

@@ -8,9 +8,13 @@ export function daylightAt(life: DaytimeSnapshot): number {
   return t * t * (3 - 2 * t);
 }
 
-export function applyDayNight(canvas: HTMLCanvasElement, life: DaytimeSnapshot): void {
+/** Preserve colour at night: blue ambient moonlight, warm twilight, bright UI layers. */
+export function lightingColor(life: DaytimeSnapshot, cloud = 0): number {
   const light = daylightAt(life);
-  const twilight = 4 * light * (1 - light);
-  const filter = `brightness(${(0.52 + 0.48 * light).toFixed(3)}) saturate(${(0.72 + 0.28 * light).toFixed(3)}) sepia(${(0.22 * twilight).toFixed(3)})`;
-  if (canvas.style.filter !== filter) canvas.style.filter = filter;
+  const dusk = 4 * light * (1 - light);
+  const shade = 1 - cloud * 0.08;
+  const r = Math.round((145 + 110 * light + 12 * dusk) * shade);
+  const g = Math.round((163 + 92 * light - 12 * dusk) * shade);
+  const b = Math.round((207 + 48 * light - 30 * dusk) * shade);
+  return (Math.min(255, r) << 16) | (Math.min(255, g) << 8) | Math.min(255, b);
 }
