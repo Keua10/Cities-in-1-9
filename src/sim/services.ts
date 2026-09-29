@@ -1,3 +1,4 @@
+import { qualityFromLoad } from './serviceQuality';
 import { CHUNK_SIZE, CHUNK_TILES } from '../core/constants';
 import { chunkIndexOf, chunkKey, localIndexOf } from '../core/iso';
 import { Build, DIRS } from '../world/build';
@@ -10,12 +11,7 @@ import {
 } from './buildings';
 import { FACILITY_SPECS, touchesRoadTiles } from './facilities';
 import { edgeNeighbors } from './roadGraph';
-import {
-  AMENITY_SCORE_SCALE,
-  LOAD_SMOOTH,
-  OVERLOAD_SLOPE,
-  SERVICE_FIELD_MAX_DIST,
-} from './simConstants';
+import { AMENITY_SCORE_SCALE, LOAD_SMOOTH, SERVICE_FIELD_MAX_DIST } from './simConstants';
 import {
   FAC_INCINERATOR,
   FAC_CREMATORIUM,
@@ -162,9 +158,7 @@ export class ServiceField {
     if (!f || (FACILITY_SPECS[f.kind].needsRoad && !f.hasRoad)) return 0;
     const capacity = this.capacityOfKind(f.kind);
     const quality =
-      capacity > 0
-        ? clamp01(1 - Math.max(0, this.load[index] / capacity - 1) * OVERLOAD_SLOPE)
-        : this.quality[index];
+      capacity > 0 ? qualityFromLoad(f.kind, this.load[index] / capacity) : this.quality[index];
     return (
       quality *
       (usesServiceBudget(f.kind) ? Math.min(1, this.budget) : 1) *
@@ -344,7 +338,7 @@ export class ServiceField {
         continue;
       }
       const ratio = this.load[f.index] / spec.capacity;
-      this.quality[f.index] = clamp01(1 - Math.max(0, ratio - 1) * OVERLOAD_SLOPE);
+      this.quality[f.index] = qualityFromLoad(f.kind, ratio);
     }
     this.pending.fill(0);
   }
@@ -587,8 +581,4 @@ export class ServiceField {
     if (!d) return false;
     return d[localIndexOf(ty) * CHUNK_SIZE + localIndexOf(tx)] !== SERVICE_DIST_NONE;
   }
-}
-
-function clamp01(v: number): number {
-  return v < 0 ? 0 : v > 1 ? 1 : v;
 }

@@ -4,6 +4,20 @@ import {
   INDUSTRY_NUISANCE_MAX,
   ROAD_DIST_UNREACHABLE,
 } from './simConstants';
+import { ZONE_R, ZONE_C } from './buildings';
+
+/** Pollution limits habitation even when other amenities are excellent. */
+export function pollutionCeiling(zone: number, pollution: number): number {
+  if (zone === ZONE_R) return Math.pow(Math.max(0, 1 - pollution / 0.65), 2);
+  if (zone === ZONE_C) return Math.max(0.15, 1 - pollution * 0.85);
+  return 1;
+}
+
+export function environmentCeiling(zone: number, parts: EnvironmentParts): number {
+  const score = environmentScore(parts);
+  const living = zone === ZONE_R ? Math.min(1, Math.pow(score / 0.65, 2)) : 1;
+  return Math.min(living, pollutionCeiling(zone, parts.pollution));
+}
 
 /**
  * 환경도 (수정사항 4).
@@ -15,7 +29,7 @@ import {
  *
  * 환경도는 그 다섯 가지를 하나의 0~1 점수로 모은 값이다. 새로운 시뮬레이션을
  * 더하는 게 아니라 **이미 돌고 있는 값을 읽을 수 있게 만드는 것** 이므로,
- * 만족도에 다시 곱하지 않는다(같은 항을 두 번 세면 밸런스가 무너진다).
+ * 만족도 감점과 별도로 오염·환경이 입주율의 상한을 정한다.
  * 화면에 뜨는 건 이 점수이고, 점수가 낮은 이유도 항목별로 그대로 나온다.
  *
  *   공원   공원·복지 요구를 얼마나 채웠는가
@@ -102,12 +116,15 @@ export function environmentParts(
 /** 항목을 0~1 환경도 한 값으로 모은다. */
 export function environmentScore(p: EnvironmentParts): number {
   const w = ENVIRONMENT_WEIGHT;
-  return clamp01(
-    w.parks * p.parks +
-      w.access * p.access +
-      w.noise * (1 - p.noise) +
-      w.pollution * (1 - p.pollution) +
-      w.traffic * (1 - p.traffic),
+  return Math.min(
+    1 - clamp01(p.pollution) * 0.9,
+    clamp01(
+      w.parks * p.parks +
+        w.access * p.access +
+        w.noise * (1 - p.noise) +
+        w.pollution * (1 - p.pollution) +
+        w.traffic * (1 - p.traffic),
+    ),
   );
 }
 
@@ -131,10 +148,10 @@ export const ALERT_LABELS: Record<BuildingAlert, string> = {
   power: '전기가 들어오지 않습니다',
   water: '물이 들어오지 않습니다',
   sewer: '하수가 처리되지 않습니다',
-  pollution: '주변 토지 또는 수돗물이 오염됐습니다',
-  fire: '소방서가 닿지 않습니다',
-  police: '경찰서가 닿지 않습니다',
-  health: '병원이 닿지 않습니다',
+  pollution: '토지 또는 수돗물 오염으로 입주가 제한됩니다. 주거지와 오염원을 떨어뜨리세요',
+  fire: '소방 대응이 부족합니다. 도로 연결·전력·담당 건물 수를 확인하세요',
+  police: '경찰 서비스가 부족합니다. 연결 또는 수용 능력을 확인하세요',
+  health: '의료 서비스가 부족합니다. 연결 또는 수용 능력을 확인하세요',
   environment: '환경도가 낮습니다',
 };
 

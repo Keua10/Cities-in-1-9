@@ -1,4 +1,4 @@
-import { groundPollutionFor } from './groundPollution';
+import { groundPollutionFor, type GroundPollution } from './groundPollution';
 import { CHUNK_SIZE } from '../core/constants';
 import { MetroNetwork } from './metro';
 import { Build } from '../world/build';
@@ -47,6 +47,8 @@ import {
   EMPTY_ENVIRONMENT,
   environmentParts,
   environmentScore,
+  environmentCeiling,
+  pollutionCeiling,
   type BuildingAlert,
   type EnvironmentParts,
 } from './environment';
@@ -68,6 +70,7 @@ import {
   INDUSTRY_PER_SHOP,
   MAX_CATCHUP_TICKS,
   MS_PER_TICK,
+  DAYTIME_DAY_MS,
   NEEDS_PENALTY_MAX,
   OCCUPANCY_HEALTHY,
   OFFLINE_SPEED,
@@ -282,8 +285,25 @@ export class MacroSim {
    * 빈 부지의 필수 인프라 준비도 0~1. 신축·재개발 판정에 쓴다.
    * 건물이 아직 없으므로 배관·전선 커버리지로 본다.
    */
-  private plotEssentials(tx: number, ty: number, span: number, gate: number): number {
-    if (gate <= 0) return 1;
+  private plotEssentials(
+    tx: number,
+    ty: number,
+    span: number,
+    gate: number,
+    ground: GroundPollution,
+  ): number {
+    let pollution = 0;
+    for (let dy = 0; dy < span; dy++)
+      for (let dx = 0; dx < span; dx++)
+        pollution = Math.max(
+          pollution,
+          ground.at(tx + dx, ty + dy)?.value ?? 0,
+          this.water.statusAt(tx + dx, ty + dy).contamination,
+        );
+    const build = this.world.getBuild(tx, ty);
+    const zone = build === Build.ZoneR ? ZONE_R : build === Build.ZoneC ? ZONE_C : ZONE_I;
+    const environmental = pollutionCeiling(zone, pollution);
+    if (gate <= 0) return environmental;
     /*
      * 전기는 **도시 전체의 발전 여유** 로 본다. 타일별 전력 커버리지로 막으면
      * 도시가 자기 발밑에서만 자란다 — 전력은 건물을 타고 전달되므로, 아직
@@ -310,7 +330,7 @@ export class MacroSim {
         }
       }
     }
-    return essentialCeiling({ supply, drainage }, power, gate);
+    return Math.min(environmental, essentialCeiling({ supply, drainage }, power, gate));
   }
 
   /**
@@ -349,11 +369,11 @@ export class MacroSim {
     if (water.drainage <= 0) out.push('sewer');
     if (
       (water.contamination > 0 && water.supply > 0) ||
-      (this.environmentPartsAt(tx, ty)?.pollution ?? 0) >= 0.4
+      (this.environmentPartsAt(tx, ty)?.pollution ?? 0) >= 0.08
     )
       out.push('pollution');
     for (const kind of [FAC_FIRE, FAC_POLICE, FAC_HOSPITAL]) {
-      if (this.services.ownerFor(tx, ty, info.level, kind) < 0) {
+      if (this.services.qualityAt(info.tx, info.ty, info.level, kind) < 0.75) {
         out.push(kind === FAC_FIRE ? 'fire' : kind === FAC_POLICE ? 'police' : 'health');
       }
     }
@@ -452,11 +472,15 @@ export class MacroSim {
     this.water.ensure(this.world);
     if (this.catchupLeft > 0) {
       const n = Math.min(this.catchupLeft, budget);
-      for (let i = 0; i < n; i++) this.step();
+      for (let i = 0; i < n; i++) {
+        this.accrueFinance(MS_PER_TICK);
+        this.step();
+      }
       this.catchupLeft -= n;
       return;
     }
 
+    this.accrueFinance(deltaMs);
     this.accumulatorMs += deltaMs;
     // 탭이 뒤로 갔다 오면 deltaMs 가 크게 튄다. 한 프레임에 도는 틱을 제한한다.
     let guard = 0;
@@ -537,6 +561,7 @@ export class MacroSim {
     this.power.ensure(this.world);
     this.water.ensure(this.world);
     const gate = this.essentialGateFactor;
+    const ground = groundPollutionFor(this.world);
     const ctx: GrowthContext = {
       maxBuildingTier: this.maxBuildingTier,
       demand: this.demand,
@@ -545,7 +570,7 @@ export class MacroSim {
       tick: this.macro.tick,
       money: this.macro.money,
       blocksRebuild: (tx, ty, span) => this.disasters.blocksRebuild(tx, ty, span, this.world),
-      essentialsAt: (tx, ty, span) => this.plotEssentials(tx, ty, span, gate),
+      essentialsAt: (tx, ty, span) => this.plotEssentials(tx, ty, span, gate, ground),
     };
 
     for (const p of this.world.developedParcels()) {
@@ -716,11 +741,16 @@ export class MacroSim {
           );
 
           /* ---------- 수정사항 4: 환경도 ---------- */
-          // 만족도에 다시 곱하지 않는다. 같은 항을 두 번 세지 않기 위해서다.
-          // 여기서는 **이미 돌고 있는 값을 읽을 수 있게** 모으기만 한다.
-          const ground = groundPollution.at(tx, ty);
+          // 표시와 입주 상한은 같은 환경 수치를 공유한다.
+          let localPollution = 0;
+          for (let dy = 0; dy < level; dy++)
+            for (let dx = 0; dx < level; dx++)
+              localPollution = Math.max(
+                localPollution,
+                groundPollution.at(tx + dx, ty + dy)?.value ?? 0,
+              );
           const parts = environmentParts(dist, nui, congestion, fulfil, water.contamination);
-          parts.pollution = Math.max(water.contamination, ground?.value ?? 0);
+          parts.pollution = Math.max(water.contamination, localPollution);
           const env = environmentScore(parts);
           envArr[i] = Math.round(env * 255);
           this.envParts.set(`${tx},${ty}`, parts);
@@ -735,8 +765,6 @@ export class MacroSim {
                   Math.min(
                     1,
                     satisfaction(zone, dist, nui, congestion, needsGap, amenityBonus) -
-                      (ground?.facility ?? 0) *
-                        (zone === ZONE_R ? 0.18 : zone === ZONE_C ? 0.09 : 0) -
                       incidentPenalty -
                       taxSatisfactionPenalty(policies, zone),
                   ),
@@ -746,7 +774,10 @@ export class MacroSim {
 
           // 필수 인프라 게이트(수정사항 1 · 13). 만족도와 **곱해지는 상한** 이다.
           // 전기나 상수가 아예 안 닿으면 상한이 0 이라 살던 사람도 빠져나간다.
-          const ceiling = essentialCeiling(water, this.power.supplyAt(tx, ty), essentialGateNow);
+          const ceiling = Math.min(
+            environmentCeiling(zone, parts),
+            essentialCeiling(water, this.power.supplyAt(tx, ty), essentialGateNow),
+          );
           if (ceiling < 1) {
             if (target > ceiling) starved++;
             target = Math.min(target, ceiling);
@@ -933,6 +964,26 @@ export class MacroSim {
 
   /* ---------------- 돈 ---------------- */
 
+  private financeRemainder = 0;
+
+  private accrueFinance(deltaMs: number): void {
+    if (!(deltaMs > 0)) return;
+    const { income, upkeep } = this.financeEstimate();
+    this.stats.dailyIncome = income;
+    this.stats.dailyUpkeep = upkeep;
+    this.stats.facilityUpkeep = this.services.dailyUpkeep();
+    // One displayed life day earns exactly one quoted daily net amount.
+    this.financeRemainder += ((income - upkeep) * deltaMs) / DAYTIME_DAY_MS;
+    const won = Math.trunc(
+      this.financeRemainder * 10_000 + Math.sign(this.financeRemainder) * 1e-7,
+    );
+    if (won !== 0) {
+      this.macro.money = Math.round(this.macro.money * 10_000 + won) / 10_000;
+      this.financeRemainder -= won / 10_000;
+      this.onMacroChange?.();
+    }
+  }
+
   private settleFinance(): void {
     const { income, upkeep } = this.financeEstimate();
     // 3.3단계: 시설 유지비가 붙는다. **도로가 끊겨 죽은 시설도 유지비를 낸다.**
@@ -941,8 +992,7 @@ export class MacroSim {
     this.stats.dailyIncome = income;
     this.stats.dailyUpkeep = upkeep;
     this.stats.facilityUpkeep = facilityUpkeep;
-    // A ledger unit represents 10,000 won; retain whole-won precision at settlement.
-    this.macro.money = Math.round((this.macro.money + income - upkeep) * 10_000) / 10_000;
+    // Cash is integrated continuously in accrueFinance, never awarded again here.
     this.macro.prosperity = normalizeProsperity(
       this.prosperity +
         dailyProsperity(this.stats.population, this.stats.occupancy, income - upkeep),
@@ -961,6 +1011,7 @@ export class MacroSim {
    * 그러면 초기화가 서버에 안 실리고, 새로고침하면 예전 도시가 그대로 돌아온다.
    */
   resetState(money: number, nowMs: number): void {
+    this.financeRemainder = 0;
     this.metro.reset();
     delete this.macro.signalOverrides;
     this.world.signalOverrides = {};

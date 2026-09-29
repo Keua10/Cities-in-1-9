@@ -107,7 +107,8 @@ export function bindGameChrome(camera: Camera, tools: Tools, center: () => void)
       const finance = sim.financeEstimate();
       const net = finance.income - finance.upkeep;
       setText('strip-income', `${formatMoney(net, true, true)} /일`);
-      document.getElementById('strip-income')!.title = `${formatMoney(net, false, true)} /일`;
+      document.getElementById('strip-income')!.title =
+        `${formatMoney(net, false, true)} /일 · 생활 하루(기본 20분)에 걸쳐 수입과 유지비가 일정하게 반영됩니다`;
       document.getElementById('strip-income')!.classList.toggle('negative', net < 0);
       setText(
         'strip-date',
