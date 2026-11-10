@@ -9,6 +9,7 @@ import { DISASTER_NAMES } from '../sim/disasters';
 import type { EnvironmentParts } from '../sim/environment';
 import type { MacroSim } from '../sim/macro';
 import { SEASON_NAMES, WEEKDAY_NAMES } from '../sim/time';
+import { DAYTIME_DAY_MS, GAMETIME_DAY_MS } from '../sim/simConstants';
 import type { TrafficSim } from '../sim/traffic/trafficSim';
 import { Build, hasRoadAccess, isZone } from '../world/build';
 import type { World } from '../world/world';
@@ -77,7 +78,7 @@ export function createHudUpdater(deps: GameHudDeps): (now: number, fps: number) 
             ? describeFacility(sim, here.tx, here.ty, here.kind)
             : `${BUILDING_NAMES[here.zone][here.level - 1][simHash(WORLD_SEED, here.tx, here.ty, here.level) % BUILDING_ART_VARIANTS]} · ${ZONE_NAMES[here.zone]} L${here.level} (${TIER_NAMES[here.level - 1]}) · ` +
               `${occupancy === null || occupancy <= 0 ? '공실' : `입주 ${Math.round(occupancy * 100)}%`} · ` +
-              `${sim.day - here.born}일 됨 · 전력 ${Math.round(sim.power.supplyAt(here.tx, here.ty) * 100)}% · 급수 ${Math.round(sim.water.statusAt(here.tx, here.ty).supply * 100)}% · 하수 ${Math.round(sim.water.statusAt(here.tx, here.ty).drainage * 100)}%${sim.water.contaminationAt(here.tx, here.ty) > 0 ? ' · 수질 오염' : ''}` +
+              `${buildingAge(sim.day - here.born)} · 전력 ${Math.round(sim.power.supplyAt(here.tx, here.ty) * 100)}% · 급수 ${Math.round(sim.water.statusAt(here.tx, here.ty).supply * 100)}% · 하수 ${Math.round(sim.water.statusAt(here.tx, here.ty).drainage * 100)}%${sim.water.contaminationAt(here.tx, here.ty) > 0 ? ' · 수질 오염' : ''}` +
               (environment === null
                 ? ''
                 : `\n환경도 ${Math.round(environment * 100)}% · ${describeEnvironment(envParts)}`)
@@ -109,4 +110,14 @@ export function createHudUpdater(deps: GameHudDeps): (now: number, fps: number) 
       };
     });
   };
+}
+
+/**
+ * 건물 나이. `born` 은 시뮬레이션 날짜(1일 = 1분)로 저장되지만 화면 아래 시계는
+ * 생활 날짜(1일 = 10분)다. 같은 화면에서 두 날짜가 섞이면 "6일차인데 51일 된
+ * 건물" 이 나온다. 표시만 생활 날짜로 바꾼다.
+ */
+function buildingAge(simDays: number): string {
+  const lifeDays = Math.floor((Math.max(0, simDays) * GAMETIME_DAY_MS) / DAYTIME_DAY_MS);
+  return lifeDays < 1 ? '새로 지음' : `${lifeDays}일 됨`;
 }

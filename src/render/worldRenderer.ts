@@ -113,6 +113,8 @@ export class WorldRenderer {
   private groundLayer = new Container();
   private fogLayer = new Container();
   private gridLayer = new Graphics();
+  private baseBorder: number[] = [];
+  private baseBorderKey = '';
   private cursorLayer = new Graphics();
   /** 시설 배치 미리보기 사각형. 커서 레이어와 따로 둬야 서로 지우지 않는다. */
   private previewLayer = new Graphics();
@@ -602,21 +604,20 @@ export class WorldRenderer {
     }
 
     // 내 도시의 base 영역은 항상 표시한다. 여기가 전쟁에서 안 뺏기는 땅이다.
+    //
+    // 테두리는 **지면 높이를 따라** 그린다. 예전에는 네 꼭짓점만 이은 고도 0
+    // 마름모라, 언덕 위의 실제 경계보다 높이 × 8px 아래(화면상)에 선이 떠서
+    // 엉뚱한 풀밭을 가로질렀다.
     const b = this.world;
     const t0x = b.baseCx * CHUNK_SIZE;
     const t0y = b.baseCy * CHUNK_SIZE;
     const t1x = t0x + BASE_CHUNK_SPAN * CHUNK_SIZE - 1;
     const t1y = t0y + BASE_CHUNK_SPAN * CHUNK_SIZE - 1;
-    g.poly([
-      tileToWorldX(t0x, t0y),
-      tileToWorldY(t0x, t0y) - TILE_HH,
-      tileToWorldX(t1x, t0y) + TILE_HW,
-      tileToWorldY(t1x, t0y),
-      tileToWorldX(t1x, t1y),
-      tileToWorldY(t1x, t1y) + TILE_HH,
-      tileToWorldX(t0x, t1y) - TILE_HW,
-      tileToWorldY(t0x, t1y),
-    ]);
+    if (this.baseBorderKey !== `${t0x},${t0y},${b.walkRevision}`) {
+      this.baseBorderKey = `${t0x},${t0y},${b.walkRevision}`;
+      this.baseBorder = baseBorderPath(b, t0x, t0y, t1x, t1y);
+    }
+    g.poly(this.baseBorder, true);
     g.stroke({ width: px * 2, color: 0x6fd3b8, alpha: 0.75 });
   }
 
@@ -711,4 +712,39 @@ function surfaceDiamond(world: World, tx: number, ty: number, x: number): number
     x - TILE_HW,
     y + dx - dy,
   ];
+}
+
+/**
+ * 기본 영역 바깥 테두리를 칸마다 그 칸의 높이로 잇는다.
+ * 네 변을 시계 방향으로 돈다: 위(-ty) → 오른쪽(+tx) → 아래(+ty) → 왼쪽(-tx).
+ */
+function baseBorderPath(
+  world: World,
+  t0x: number,
+  t0y: number,
+  t1x: number,
+  t1y: number,
+): number[] {
+  const out: number[] = [];
+  const corner = (tx: number, ty: number, dx: number, dy: number) => {
+    const h = world.sampleHeight(tx, ty);
+    out.push(tileToWorldX(tx, ty) + dx * TILE_HW, tileToWorldY(tx, ty, h) + dy * TILE_HH);
+  };
+  for (let tx = t0x; tx <= t1x; tx++) {
+    corner(tx, t0y, 0, -1); // 위 꼭짓점
+    corner(tx, t0y, 1, 0); // 오른쪽 꼭짓점
+  }
+  for (let ty = t0y; ty <= t1y; ty++) {
+    corner(t1x, ty, 1, 0);
+    corner(t1x, ty, 0, 1); // 아래 꼭짓점
+  }
+  for (let tx = t1x; tx >= t0x; tx--) {
+    corner(tx, t1y, 0, 1);
+    corner(tx, t1y, -1, 0); // 왼쪽 꼭짓점
+  }
+  for (let ty = t1y; ty >= t0y; ty--) {
+    corner(t0x, ty, -1, 0);
+    corner(t0x, ty, 0, -1);
+  }
+  return out;
 }

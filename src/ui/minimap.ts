@@ -4,6 +4,7 @@ import { parseChunkKey, tileToWorldX, tileToWorldY, worldToTileF } from '../core
 import { isWelfareKind } from '../sim/buildings';
 import type { ServiceField } from '../sim/services';
 import { Build } from '../world/build';
+import { isWater } from '../world/terrain';
 import type { World } from '../world/world';
 import './minimap.css';
 import { bindMapPointer } from './mapPointer';
@@ -28,6 +29,22 @@ interface TileBounds {
 }
 
 const MAP_RES = 512;
+/** 높이별 땅 색. 높을수록 밝다. 건물·도로 색보다 한참 어둡게 둔다. */
+const LAND_SHADES = [
+  '#24333a',
+  '#27373c',
+  '#2a3b3f',
+  '#2d3f42',
+  '#304345',
+  '#344748',
+  '#384b4b',
+  '#3c4f4e',
+  '#405351',
+  '#445754',
+  '#485b57',
+  '#4c5f5a',
+  '#50635d',
+];
 const REDRAW_MS = 500;
 
 /**
@@ -41,6 +58,8 @@ export class Minimap {
   private large: HTMLCanvasElement;
   private close: HTMLButtonElement;
   private base = document.createElement('canvas');
+  private terrain = document.createElement('canvas');
+  private terrainStamp = '';
   private bounds: TileBounds;
   private lastBasePaint = -Infinity;
   /** 지금 그려진 오버레이 종류. 바뀌면 다시 칠한다. */
@@ -53,6 +72,8 @@ export class Minimap {
     this.bounds = exploredBounds(world);
     this.base.width = MAP_RES;
     this.base.height = MAP_RES;
+    this.terrain.width = MAP_RES;
+    this.terrain.height = MAP_RES;
 
     this.shell = document.createElement('div');
     this.shell.id = 'minimap-shell';
@@ -131,6 +152,47 @@ export class Minimap {
     );
   }
 
+  /**
+   * 개척 청크의 지형 그림. 개척 범위가 바뀌거나 지형이 고쳐질 때만 다시 만든다
+   * (청크마다 4,096칸을 읽으므로 0.5초마다 할 일이 아니다).
+   */
+  private terrainLayer(): HTMLCanvasElement {
+    const keys = [...this.world.exploredKeys()].sort();
+    const stamp = `${keys.join('|')}#${this.boundsKey()}#${this.world.walkRevision}`;
+    if (stamp === this.terrainStamp) return this.terrain;
+    this.terrainStamp = stamp;
+    const ctx = this.terrain.getContext('2d')!;
+    ctx.clearRect(0, 0, MAP_RES, MAP_RES);
+    for (const key of keys) {
+      const { cx, cy } = parseChunkKey(key);
+      for (let ly = 0; ly < CHUNK_SIZE; ly++) {
+        for (let lx = 0; lx < CHUNK_SIZE; lx++) {
+          const tx = cx * CHUNK_SIZE + lx;
+          const ty = cy * CHUNK_SIZE + ly;
+          if (isWater(this.world.getTile(tx, ty))) ctx.fillStyle = '#2f6d8c';
+          else {
+            const h = Math.min(12, this.world.sampleHeight(tx, ty));
+            ctx.fillStyle = LAND_SHADES[h] ?? LAND_SHADES[LAND_SHADES.length - 1];
+          }
+          const x0 = this.mapX(tx);
+          const y0 = this.mapY(ty);
+          ctx.fillRect(
+            x0,
+            y0,
+            Math.max(1, this.mapX(tx + 1) - x0 + 0.25),
+            Math.max(1, this.mapY(ty + 1) - y0 + 0.25),
+          );
+        }
+      }
+    }
+    return this.terrain;
+  }
+
+  private boundsKey(): string {
+    const b = this.bounds;
+    return `${b.minTx},${b.minTy},${b.maxTx},${b.maxTy}`;
+  }
+
   private paintBase(overlay: CoverageOverlay | null = null): void {
     const ctx = this.base.getContext('2d');
     if (!ctx) return;
@@ -138,16 +200,10 @@ export class Minimap {
     ctx.fillStyle = '#182228';
     ctx.fillRect(0, 0, MAP_RES, MAP_RES);
 
-    // 개척된 청크를 먼저 깔아 맵의 실제 사용 범위를 보여준다.
-    ctx.fillStyle = '#27343a';
-    for (const key of this.world.exploredKeys()) {
-      const { cx, cy } = parseChunkKey(key);
-      const x0 = this.mapX(cx * CHUNK_SIZE);
-      const y0 = this.mapY(cy * CHUNK_SIZE);
-      const x1 = this.mapX((cx + 1) * CHUNK_SIZE);
-      const y1 = this.mapY((cy + 1) * CHUNK_SIZE);
-      ctx.fillRect(x0, y0, Math.max(1, x1 - x0), Math.max(1, y1 - y0));
-    }
+    // 개척된 청크의 지형(높이 음영 + 물)을 먼저 깐다. 예전에는 개척 범위를
+    // 회색 사각형으로만 칠해서, 하수 방류구·취수장을 지을 하천이 어디 있는지
+    // 지도에서 찾을 수 없었다.
+    ctx.drawImage(this.terrainLayer(), 0, 0);
 
     // 저장 레이어만 읽으므로 미니맵 때문에 지형 청크를 새로 생성하지 않는다.
     for (const p of this.world.developedParcels()) {

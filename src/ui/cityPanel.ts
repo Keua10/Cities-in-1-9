@@ -4,7 +4,10 @@ import { formatMoney } from './money';
 import type { MacroSim } from '../sim/macro';
 import { BUILDING_UNLOCK_LEVEL, CITY_LEVELS } from '../sim/progression';
 import { SERVICE_KIND_COUNT } from '../sim/services';
-import { FACILITY_NAMES, TICKS_PER_DAY } from '../sim/simConstants';
+import { FACILITY_NAMES } from '../sim/simConstants';
+import { sessionDaytimeAt } from '../sim/time';
+import { sewerOutletHint } from '../sim/sewerHint';
+import type { World } from '../world/world';
 import { DEFAULT_POLICIES, type CityPolicies } from '../sim/policies';
 import { cityAdvice } from './cityAdvice';
 
@@ -22,6 +25,8 @@ import { cityAdvice } from './cityAdvice';
 export class CityPanel {
   private sim: MacroSim | null = null;
   onIncidentFocus: (() => void) | null = null;
+  /** 하수 안내 문장을 만들 때 지형을 읽는다. 없으면 안내를 생략한다. */
+  world: World | null = null;
   private safetyEl: HTMLElement;
   private safetyNoteEl: HTMLElement;
   private incidentButton: HTMLButtonElement;
@@ -96,6 +101,15 @@ export class CityPanel {
       audio.setSfxVolume(Number(sfx.value) / 100);
       audio.play('select');
     });
+    // 소리는 도시 통계가 아니라 설정에서 찾는다. 통계 한가운데(수요와 서비스
+    // 사이)에 있어서 "소리를 끄는 곳이 없다" 고 읽혔다. 설정 패널이 있으면
+    // 관리자 코드 버튼 위로 옮긴다.
+    const audioBlock = el.querySelector<HTMLElement>('.cp-audio');
+    const settings = document.getElementById('toolbar');
+    if (audioBlock && settings) {
+      audioBlock.classList.add('settings-audio');
+      settings.insertBefore(audioBlock, document.getElementById('btn-admin'));
+    }
     this.envEl = must(el, '.cp-env-value');
     this.envFillEl = must(el, '.cp-env-fill');
     this.noteEl = must(el, '.cp-note');
@@ -159,9 +173,13 @@ export class CityPanel {
     this.envFillEl.classList.toggle('warning', environment < 0.6);
     this.envFillEl.classList.toggle('critical', environment < 0.4);
 
-    const day = sim.day;
-    const hour = sim.tick % TICKS_PER_DAY;
-    setText(this.dateEl, `${day}일차 ${String(hour).padStart(2, '0')}시`);
+    // 화면 아래 시계와 같은 생활 시계를 쓴다. 예전에는 시뮬레이션 날짜
+    // (1일 = 1분)를 써서 아래 시계(1일 = 10분)보다 날짜가 10배 빨리 갔다.
+    const life = sessionDaytimeAt(sim.lifeElapsedMs, sim.day);
+    setText(
+      this.dateEl,
+      `${life.absoluteDay + 1}일차 ${String(life.hourOfDay).padStart(2, '0')}시`,
+    );
 
     /*
      * 상대 수요 (수정사항 5).
@@ -237,6 +255,7 @@ export class CityPanel {
       water,
       sanitation: sim.sanitation,
       netIncome: finance.income - finance.upkeep,
+      sewerHint: this.world && water.drainage <= 0 ? sewerOutletHint(this.world) : '',
     });
     setText(
       this.noteEl,

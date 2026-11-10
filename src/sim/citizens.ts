@@ -121,6 +121,7 @@ export class CitizenPool {
   private freightScanSlot = -1;
   private freightCursor = 0;
   private life: DaytimeSnapshot | null = null;
+  private assignmentRevision = -1;
 
   constructor(
     private world: World,
@@ -129,8 +130,32 @@ export class CitizenPool {
     this.pedestrians = new PedestrianPool(world);
   }
 
-  setActiveRegion(cx: number, cy: number, radius: number): void {
-    if (cx === this.cx && cy === this.cy && radius === this.radius && this.homes.size > 0) return;
+  /**
+   * 배정표가 다시 만들어졌으면 같은 영역의 가구 목록을 다시 읽는다.
+   *
+   * 가구 목록은 원래 **활성 청크가 바뀔 때만** 만들어졌다. 그래서 빈 땅에서
+   * 시작한 도시는 카메라를 다른 청크로 옮기기 전까지 가구가 0 이었고, 사람도
+   * 차도 한 대 나오지 않았다. 새로 지은 건물·바뀐 직장도 같은 이유로 반영되지
+   * 않았다. 배정표는 하루 한 번(또는 도로가 바뀔 때) 다시 만들어지므로, 그때만
+   * 다시 읽으면 비용이 거의 들지 않는다. 기존 가구 상태는 인원 수가 같으면
+   * 그대로 이어받는다.
+   */
+  syncAssignment(): void {
+    if (this.assignment.revision === this.assignmentRevision) return;
+    this.setActiveRegion(this.cx, this.cy, this.radius, true);
+  }
+
+  setActiveRegion(cx: number, cy: number, radius: number, force = false): void {
+    if (
+      !force &&
+      cx === this.cx &&
+      cy === this.cy &&
+      radius === this.radius &&
+      this.homes.size > 0 &&
+      this.assignment.revision === this.assignmentRevision
+    )
+      return;
+    this.assignmentRevision = this.assignment.revision;
     this.cx = cx;
     this.cy = cy;
     this.radius = radius;
@@ -161,6 +186,7 @@ export class CitizenPool {
             const key = `${tx},${ty}`;
             let state = this.homes.get(key);
             if (!state || state.supply.length !== count) {
+              const prev = state;
               state = {
                 tx,
                 ty,
@@ -171,6 +197,13 @@ export class CitizenPool {
                 lastConsumedHour: -1,
                 scanCursor: 0,
               };
+              // 인원만 바뀐 가구는 겹치는 사람의 상태를 이어받는다. 지우면 지금
+              // 길 위에 있는 사람이 집에 있는 것으로 보여 한 번 더 출발한다.
+              if (prev) {
+                const n = Math.min(count, prev.supply.length);
+                state.supply.set(prev.supply.subarray(0, n));
+                state.inTransit.set(prev.inTransit.subarray(0, n));
+              }
             }
             next.set(key, state);
           } else {
@@ -320,7 +353,12 @@ export class CitizenPool {
       if (out.length >= budget) break;
       if (scheduled.dueLifeSlot > life.absoluteLifeSlot) continue;
       const home = this.homes.get(`${scheduled.homeTx},${scheduled.homeTy}`);
-      if (!home) {
+      // 가구 인원이 줄면(입주율 하락·가구 목록 재구성) 예약된 슬롯 번호가 배열
+      // 밖으로 나간다. 형식 배열은 범위 밖 읽기를 undefined 로, 쓰기를 무시로
+      // 처리하므로 "이동 중" 표시가 영영 서지 않아 **같은 이동이 매 프레임
+      // 복제됐다**. 복제분이 출발 대기열(상한 1,000)을 채워 도시 전체의 차량
+      // 출발을 막았다. 그런 예약은 버린다.
+      if (!home || scheduled.slot >= home.inTransit.length) {
         this.schedules.delete(key);
         continue;
       }

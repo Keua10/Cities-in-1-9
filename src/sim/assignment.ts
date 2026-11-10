@@ -40,9 +40,12 @@ interface Building {
 
 export class AssignmentTable {
   private table = new Map<string, ParcelAssignment>();
+  /** rebuild 할 때마다 1 오른다. 시민 목록이 낡았는지 이 값으로 안다. */
+  revision = 0;
 
   rebuild(world: World, field: RoadField, stats: CityStats): void {
     void field;
+    this.revision++;
     this.table.clear();
     const jobs: Building[] = [];
     const shops: Building[] = [];

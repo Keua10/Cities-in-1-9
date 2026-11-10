@@ -79,6 +79,7 @@ export class GameAudio {
       this.masterMusic.gain.setTargetAtTime(this.prefs.music * 0.25, this.ctx.currentTime, 0.1);
     this.save();
     if (this.prefs.music > 0) this.startMusic();
+    else this.stopMusic();
   }
 
   setSfxVolume(v: number): void {

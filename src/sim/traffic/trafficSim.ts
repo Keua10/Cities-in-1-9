@@ -309,6 +309,7 @@ export class TrafficSim {
     this.router.update(ROUTE_BUDGET_PER_FRAME);
     if (this.macro.tick !== this.lastMacroTick) {
       this.lastMacroTick = this.macro.tick;
+      this.citizens.syncAssignment();
       this.congestion.decayOutside(this.world, this.activeCx, this.activeCy, SIM_RADIUS_CHUNKS);
     }
 

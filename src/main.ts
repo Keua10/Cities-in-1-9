@@ -222,6 +222,7 @@ async function boot(): Promise<void> {
   window.addEventListener('keydown', wakeAudio, { once: false });
 
   const cityPanel = new CityPanel();
+  cityPanel.world = world;
   const facilityFinder = new FacilityFinder(world, sim, (f) => {
     renderer.setFacilityFocus(f);
     if (!f) return;

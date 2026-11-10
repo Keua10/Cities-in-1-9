@@ -1,4 +1,4 @@
-import type { Tools } from './tools';
+import { TOOL_LABELS, type Tools } from './tools';
 import { formatMoney } from './money';
 import {
   BUILD_CATEGORIES,
@@ -65,7 +65,7 @@ export function bindConstructionMenu(tools: Tools, onChange?: () => void): void 
           ? '철거 · 두 점으로 범위를 정한 뒤 ✓'
           : selected
             ? `${selected.name} · ${formatMoney(selected.cost, true)}`
-            : '';
+            : (TOOL_LABELS[tools.tool] ?? '');
     onChange?.();
   };
   const cancel = () => {

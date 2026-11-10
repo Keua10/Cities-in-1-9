@@ -23,12 +23,14 @@ import {
   type RoadProbe,
 } from '../world/build';
 import { isWater } from '../world/terrain';
+import { formatMoney } from './money';
 import type { World } from '../world/world';
 import {
   areaTiles,
   guideTiles,
   lineTiles,
   MAX_AREA_SIDE,
+  MAX_LINE_TILES,
   placementShape,
   type PlacementPlan,
   type PlacementShape,
@@ -94,6 +96,27 @@ export const TOOL_LABELS: Record<ToolId, string> = {
   terrainRaise: '지형 높이기',
   terrainLower: '지형 낮추기',
 };
+
+/** 확정 뒤 안내 문구의 동사. 철거 도구가 "N칸 건설 완료" 라고 말하면 안 된다. */
+const TOOL_VERBS: Partial<Record<ToolId, string>> = {
+  bulldoze: '철거',
+  wireErase: '철거',
+  pipeErase: '철거',
+  metroErase: '철거',
+  zoneR: '지정',
+  zoneC: '지정',
+  zoneI: '지정',
+  terrainRaise: '정리',
+  terrainLower: '정리',
+};
+
+/** 공사 기간 표기. "8.0게임 시간" 대신 "8시간", "3시간 30분". */
+function formatHours(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = Math.round(minutes % 60);
+  if (h === 0) return `${m}분`;
+  return m ? `${h}시간 ${m}분` : `${h}시간`;
+}
 
 const MESSAGE_MS = 2500;
 
@@ -393,8 +416,44 @@ export class Tools {
       cost: this.tool === 'metroTunnel' ? buildCount * METRO_TUNNEL_COST : cost,
       reason,
       truncated: raw.truncated,
+      warning: buildCount > 0 ? this.planWarning(tiles) : '',
     };
     return this.planCache;
+  }
+
+  /**
+   * 지을 수는 있지만 결과가 학생 예상과 다를 때의 경고.
+   *
+   * 예전에는 이 두 가지를 **돈을 쓰고 난 뒤에야** 알 수 있었다.
+   *   - 도로에 안 닿은 시설: canPlaceFacility 가 warning 을 돌려주지만 아무도
+   *     읽지 않아, 학생은 가동 중지된 시설을 보고서야 이유를 찾았다.
+   *   - 상·하수도관 혼합: 같은 칸에 겹칠 때만 확정 후 알렸고, 4방향으로
+   *     맞닿기만 해도 오염된다는 사실은 끝내 알려주지 않았다(water.ts 규칙).
+   */
+  private planWarning(tiles: readonly PlanTile[]): string {
+    if (this.tool === 'facility' && this.pos1) {
+      const r = canPlaceFacility(
+        this.world,
+        this.pos1.tx,
+        this.pos1.ty,
+        this.facilityKind,
+        this.cityLevel,
+      );
+      return r.ok && r.warning ? r.warning : '';
+    }
+    if (this.tool !== 'waterPipe' && this.tool !== 'sewerPipe') return '';
+    const other = this.tool === 'waterPipe' ? PIPE_SEWER : PIPE_WATER;
+    let mixed = 0;
+    for (const t of tiles) {
+      if (t.state !== 'build') continue;
+      const touches =
+        (this.world.getPipe(t.tx, t.ty) & other) !== 0 ||
+        DIRS.some(([dx, dy]) => (this.world.getPipe(t.tx + dx, t.ty + dy) & other) !== 0);
+      if (touches) mixed++;
+    }
+    if (!mixed) return '';
+    const otherName = other === PIPE_SEWER ? '하수도관' : '상수도관';
+    return `${otherName}과 맞닿는 칸 ${mixed}개 · 물이 오염됩니다`;
   }
 
   /** 렌더러가 그릴 것. 같은 그림이면 key 가 같아서 다시 그리지 않는다. */
@@ -417,34 +476,38 @@ export class Tools {
   summary(): PlacementSummary {
     const plan = this.plan();
     if (!plan || !this.pos1) return { active: false, title: '', detail: '', canConfirm: false };
+    const facilityLike = this.tool === 'facility' || this.tool === 'metroStation';
     const label =
       this.tool === 'facility' ? FACILITY_SPECS[this.facilityKind].name : TOOL_LABELS[this.tool];
     const parts: string[] = [];
-    if (plan.buildCount > 0) parts.push(`${plan.buildCount}칸`);
+    if (facilityLike) {
+      const span = this.tool === 'facility' ? FACILITY_SPECS[this.facilityKind].span : 1;
+      if (plan.buildCount > 0) parts.push(`${span}×${span}`);
+    } else if (plan.buildCount > 0) parts.push(`${plan.buildCount}칸`);
     if (plan.buildCount === 0 && plan.links > 0) parts.push(`연결 ${plan.links}`);
     if (plan.skipCount > 0) parts.push(`유지 ${plan.skipCount}`);
-    if (plan.blockedCount > 0) parts.push(`불가 ${plan.blockedCount}`);
+    if (plan.blockedCount > 0 && !facilityLike) parts.push(`불가 ${plan.blockedCount}`);
     const cost = plan.cost;
-    const detail =
+    let detail =
       plan.buildCount === 0
         ? plan.links > 0
           ? '이미 놓인 도로를 잇습니다 · ₩0'
           : plan.reason || '지을 칸이 없습니다'
         : cost > this.sim.money
-          ? `₩${cost.toLocaleString('ko-KR')} · 자금 부족`
-          : `₩${cost.toLocaleString('ko-KR')}`;
+          ? `${formatMoney(cost, true)} · 자금 부족`
+          : formatMoney(cost, true);
+    if (facilityLike && plan.buildCount > 0) {
+      const minutes = constructionMinutes(this.tool === 'metroStation' ? 26 : this.facilityKind);
+      detail += ` · 공사 ${formatHours(minutes)}`;
+    }
+    if (plan.warning) detail += ` · ⚠ ${plan.warning}`;
+    if (plan.truncated && plan.shape === 'line')
+      detail += ` · 한 번에 최대 ${MAX_LINE_TILES}칸, 나머지는 이어서 놓으세요`;
+    else if (plan.truncated) detail += ` · 한 번에 최대 ${MAX_AREA_SIDE}×${MAX_AREA_SIDE}칸`;
     return {
       active: true,
       title: `${label} ${parts.join(' · ') || '범위 선택 중'}`,
-      detail:
-        detail +
-        (this.tool === 'facility' || this.tool === 'metroStation'
-          ? ' · 공사 ' +
-            (
-              constructionMinutes(this.tool === 'metroStation' ? 26 : this.facilityKind) / 60
-            ).toFixed(1) +
-            '게임 시간'
-          : ''),
+      detail,
       canConfirm: (plan.buildCount > 0 || plan.links > 0) && plan.cost <= this.sim.money,
     };
   }
@@ -493,20 +556,18 @@ export class Tools {
 
     if (!this.message || performance.now() - this.messageAt > MESSAGE_MS) {
       const short = plan.buildCount - placed;
-      this.note(
-        short > 0
-          ? `${placed}칸 건설 · ${short}칸은 짓지 못했습니다`
-          : placed === 0
-            ? `${linked}곳을 이었습니다`
-            : `${placed}칸 건설 완료`,
-      );
+      const verb = TOOL_VERBS[this.tool] ?? '건설';
+      if (short > 0) this.note(`${placed}칸 ${verb} · ${short}칸은 하지 못했습니다`, 'deny');
+      else if (placed === 0) this.note(`${linked}곳을 이었습니다`, 'none');
+      else if (plan.warning) this.note(`${placed}칸 ${verb} · ⚠ ${plan.warning}`, 'deny');
+      else this.note(`${placed}칸 ${verb} 완료`, 'none');
     }
     this.clearSelection();
   }
 
   cancelPlacement(): void {
     this.clearSelection();
-    this.note('선택 취소');
+    this.note('선택 취소', 'none');
   }
 
   /* ---------------------------------------------------------------- *
@@ -636,12 +697,12 @@ export class Tools {
 
   private applySingle(tx: number, ty: number): void {
     if (this.tool === 'metroStation') {
-      this.note(this.sim.construction.start(tx, ty, 26, this.cityLevel));
+      this.noteResult(this.sim.construction.start(tx, ty, 26, this.cityLevel));
       return;
     }
     if (this.tool === 'metroErase') {
       const result = this.sim.metro.edit(tx, ty, 'erase');
-      this.note(result.message);
+      this.note(result.message, result.ok ? 'none' : 'deny');
       this.metroSelection = `${tx},${ty}`;
       return;
     }
@@ -651,6 +712,7 @@ export class Tools {
       else
         this.note(
           this.tool === 'signalInstall' ? '신호등 설치 지정' : '신호등 제거 · 자동 설치 제외',
+          'none',
         );
       return;
     }
@@ -692,8 +754,6 @@ export class Tools {
       }
       this.world.setPipe(tx, ty, mask);
       this.feedback(tx, ty, mask === 0 ? 'demolish' : 'build');
-      if (mask === 3)
-        this.note('상·하수도관이 교차 연결되어 물이 오염됩니다. 배관 철거로 분리하세요.');
       return true;
     }
 
@@ -764,7 +824,9 @@ export class Tools {
   }
 
   private applyFacility(tx: number, ty: number): void {
-    this.note(this.sim.construction.start(tx, ty, this.facilityKind, this.cityLevel));
+    const warning = canPlaceFacility(this.world, tx, ty, this.facilityKind, this.cityLevel).warning;
+    const message = this.sim.construction.start(tx, ty, this.facilityKind, this.cityLevel);
+    this.noteResult(message, warning);
     this.refreshArea(tx, ty, FACILITY_SPECS[this.facilityKind].span);
   }
 
@@ -790,11 +852,23 @@ export class Tools {
     }
   }
 
-  private note(text: string): void {
+  /**
+   * 화면 아래 안내 문구.
+   *
+   * 실패는 소리로 먼저 안다 — 메시지는 읽기 전에 사라지기도 한다. 그래서 거부음은
+   * **실패와 경고에만** 낸다. 예전에는 "20칸 건설 완료" 에도 거부음이 났다.
+   */
+  private note(text: string, sound: 'deny' | 'none' = 'deny'): void {
     this.message = text;
     this.messageAt = performance.now();
-    // 실패는 소리로 먼저 안다. 메시지는 읽기 전에 사라지기도 한다.
-    if (text) audio.play('deny');
+    if (text && sound === 'deny') audio.play('deny');
+  }
+
+  /** construction.start 처럼 성공·실패를 문자열로만 돌려주는 호출의 결과. */
+  private noteResult(message: string, warning = ''): void {
+    const ok = message.includes('착공');
+    if (ok && warning) this.note(`${message} · ⚠ ${warning}`, 'deny');
+    else this.note(message, ok ? 'none' : 'deny');
   }
 }
 

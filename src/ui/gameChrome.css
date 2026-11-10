@@ -240,6 +240,7 @@ body.game-ui {
   font-size: 11px;
 }
 .game-ui .game-panel header button,
+.game-ui #toolbar header button,
 .game-ui .panel-heading button,
 #cancel-build {
   flex: 0 0 40px;
@@ -880,6 +881,13 @@ body.game-ui {
   color: #ecf4ff;
   font-size: 12px;
 }
+/* 상단 도시 정보 줄(약 330px)과 가운데 날씨 표시가 세로 태블릿에서 겹친다.
+   좁은 화면에서는 날씨를 정보 줄 아래로 내린다. */
+@media (max-width: 900px) {
+  .weather-status {
+    top: calc(54px + env(safe-area-inset-top, 0px));
+  }
+}
 @media (max-width: 700px) {
   .weather-status {
     top: 60px;
@@ -887,4 +895,16 @@ body.game-ui {
     white-space: nowrap;
     font-size: 10px;
   }
+}
+
+/* 설정 패널으로 옮긴 소리 조절 (cityPanel.ts 참고) */
+.game-ui #toolbar .settings-audio {
+  margin: 6px 0 4px;
+  padding: 8px 10px;
+  border: 1px solid #4d6a72;
+  border-radius: 3px;
+  background: #1f3843;
+}
+.game-ui #toolbar .settings-audio .cp-section-title {
+  margin: 0 0 4px;
 }

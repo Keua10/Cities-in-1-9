@@ -69,13 +69,19 @@ function tool(category: BuildCategory, id: ToolId, name: string, cost: number, d
 tool('zones', 'zoneR', '주거 구역', COST_ZONE, '주택이 들어서는 구역 · 도로와 공급망 필요');
 tool('zones', 'zoneC', '상업 구역', COST_ZONE, '상점과 업무시설이 들어서는 구역');
 tool('zones', 'zoneI', '공업 구역', COST_ZONE, '공장과 생산시설이 들어서는 구역');
-tool('transport', 'road', '도로', COST_ROAD, '드래그로 도로 연결 · 클릭으로 독립 타일 설치');
+tool(
+  'transport',
+  'road',
+  '도로',
+  COST_ROAD,
+  '시작점과 끝점을 눌러 일직선 연결 · 한 번에 최대 120칸',
+);
 tool(
   'transport',
   'metroTunnel',
   '지하철 터널',
   METRO_TUNNEL_COST,
-  '드래그 연결 · 지상 건물 아래에 건설',
+  '시작점과 끝점을 눌러 일직선 연결 · 지상 건물 아래에 건설',
 );
 tool(
   'transport',

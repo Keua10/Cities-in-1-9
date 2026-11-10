@@ -68,6 +68,11 @@ export interface PlacementPlan {
   reason: string;
   /** 상한에 걸려 잘렸는가. */
   truncated: boolean;
+  /**
+   * 지을 수는 있지만 알아야 하는 것. 확정 전에 보여준다.
+   * (도로에 안 닿은 시설, 상·하수도관이 맞닿아 물이 오염되는 배관 등)
+   */
+  warning: string;
 }
 
 /** 선 하나의 최대 길이. 이보다 길면 잘라낸다. */
