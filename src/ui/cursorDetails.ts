@@ -15,10 +15,22 @@ import {
 } from '../sim/config/special';
 import { SERVICE_KIND_COUNT } from '../sim/services';
 import { AMENITY_NEED_BY_TIER, FACILITY_NAMES } from '../sim/simConstants';
+import { FOOD_SPECS } from '../sim/config/food';
 
 export function describeFacility(sim: MacroSim, tx: number, ty: number, kind: number): string {
   const spec = FACILITY_SPECS[kind];
   const upkeep = `하루 ${formatMoney(sim.services.upkeepOfKind(kind))}`;
+
+  const food = FOOD_SPECS[kind];
+  if (food) {
+    const farm = sim.food.farmAt(tx, ty);
+    const summary = sim.food.summary;
+    if (food.output <= 0)
+      return `${spec.name} · ${food.blurb} · 도시 비축 ${Math.round(summary.stock).toLocaleString('ko-KR')} / ${summary.capacity.toLocaleString('ko-KR')} · ${upkeep}`;
+    if (!farm || !farm.active) return `${spec.name} · 가동 중지: 도로를 이어주세요 · ${upkeep}`;
+    const fert = food.fertilityWeight > 0 ? `비옥도 ${Math.round(farm.fertility * 100)}% · ` : '';
+    return `${spec.name} · ${fert}식량 ${farm.output.toLocaleString('ko-KR')}/일 · ${upkeep}`;
+  }
 
   if (POWER_SPECS[kind])
     return `${spec.name} · 발전 용량 ${POWER_SPECS[kind].capacity.toLocaleString('ko-KR')} · ${sim.power.supplyAt(tx, ty) > 0 ? '가동' : '가동 중지: 도로 확인'} · ${upkeep}`;

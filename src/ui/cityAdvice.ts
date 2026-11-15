@@ -1,3 +1,4 @@
+import type { FoodSummary } from '../sim/food';
 import type { CityStats } from '../sim/cityStats';
 import { formatMoney } from './money';
 import { FACILITY_NAMES } from '../sim/simConstants';
@@ -22,6 +23,7 @@ export interface CityAdviceInput {
   netIncome: number;
   /** 하수가 전혀 연결되지 않았을 때 하천 위치를 알려주는 문장. */
   sewerHint?: string;
+  food?: FoodSummary;
 }
 export interface CityAdvice {
   headline: string;
@@ -49,6 +51,11 @@ export function cityAdvice(input: CityAdviceInput): CityAdvice {
   // 하수가 하나도 없으면 입주 상한이 35% 로 묶인다. 해결책이 "어디에" 인지가
   // 핵심이므로 일반 공급 안내보다 앞에 둔다(상위 3건만 화면에 보인다).
   if (w.drainage <= 0 && input.sewerHint) issues.push(input.sewerHint);
+  const food = input.food;
+  if (food && food.importPerDay > 0 && food.consumption >= 300 && food.selfSufficiency < 0.6)
+    issues.push(
+      `식량의 ${Math.round((1 - food.selfSufficiency) * 100)}%를 사 오느라 하루 ${formatMoney(food.importCost)}를 씁니다 · 하천 가까운 평지에 농장을 지으세요.`,
+    );
   if (p.unpoweredBuildings > 0 || p.supply < 0.999)
     issues.push(`전력 공급 ${percent(p.supply)}% · 발전 용량과 전력망 연결을 확인하세요.`);
   if (w.supply < 0.999 || w.drainage < 0.999)

@@ -24,6 +24,8 @@ import {
 } from '../world/build';
 import { isWater } from '../world/terrain';
 import { formatMoney } from './money';
+import { FOOD_SPECS } from '../sim/config/food';
+import { footprintFertility } from '../sim/food';
 import type { World } from '../world/world';
 import {
   areaTiles,
@@ -456,6 +458,35 @@ export class Tools {
     return `${otherName}과 맞닿는 칸 ${mixed}개 · 물이 오염됩니다`;
   }
 
+  private foodPreviewKey = '';
+  private foodPreviewText = '';
+
+  /**
+   * 식량 시설을 놓기 전에 그 자리의 비옥도와 예상 생산량을 보여준다.
+   * 같은 땅이라도 하천 가까이에 두면 훨씬 많이 거둔다는 걸 놓기 전에 안다.
+   * 발자국 전체(최대 25칸)를 읽으므로 자리가 바뀔 때만 다시 계산한다.
+   */
+  private foodPreview(): string {
+    const food = FOOD_SPECS[this.facilityKind];
+    if (!food || !this.pos1 || food.output <= 0) return '';
+    const key = `${this.facilityKind}@${this.pos1.tx},${this.pos1.ty}`;
+    if (key !== this.foodPreviewKey) {
+      this.foodPreviewKey = key;
+      if (food.fertilityWeight <= 0) {
+        this.foodPreviewText = ` · 식량 ${food.output.toLocaleString('ko-KR')}/일`;
+      } else {
+        const f = footprintFertility(
+          this.pos1.tx,
+          this.pos1.ty,
+          FACILITY_SPECS[this.facilityKind].span,
+        );
+        const out = Math.round(food.output * (1 - food.fertilityWeight + food.fertilityWeight * f));
+        this.foodPreviewText = ` · 비옥도 ${Math.round(f * 100)}% · 식량 약 ${out.toLocaleString('ko-KR')}/일`;
+      }
+    }
+    return this.foodPreviewText;
+  }
+
   /** 렌더러가 그릴 것. 같은 그림이면 key 가 같아서 다시 그리지 않는다. */
   placementPreview(): PlacementPreview | null {
     const shape = this.shape;
@@ -500,6 +531,7 @@ export class Tools {
       const minutes = constructionMinutes(this.tool === 'metroStation' ? 26 : this.facilityKind);
       detail += ` · 공사 ${formatHours(minutes)}`;
     }
+    if (this.tool === 'facility' && plan.buildCount > 0) detail += this.foodPreview();
     if (plan.warning) detail += ` · ⚠ ${plan.warning}`;
     if (plan.truncated && plan.shape === 'line')
       detail += ` · 한 번에 최대 ${MAX_LINE_TILES}칸, 나머지는 이어서 놓으세요`;

@@ -9,7 +9,7 @@ import { BASE_CHUNK_SPAN, CHUNK_SIZE, DEFAULT_ZOOM, TILE_HH, TILE_HW } from './c
 import { attachInput } from './core/input';
 import { chunkIndexOf, tileToWorldX, tileToWorldY, worldToTile } from './core/iso';
 import { pickTile } from './core/pick';
-import { loadCity } from './net/citySave';
+import { claimOrigin, ClaimError, loadCity, loadClaimedOrigins } from './net/citySave';
 import { OfflineSaveManager, SaveManager, type AnySaveManager } from './net/saveManager';
 import type { CityDoc, MacroState } from './net/types';
 import { loadTileAtlas } from './render/atlas';
@@ -49,6 +49,8 @@ import {
   type SeededCity,
 } from './world/citySeed';
 import { findDryTileNearBase } from './world/spawn';
+import { canStartAt, parseOriginKey, type Origin } from './world/sites';
+import { pickStartOrigin } from './ui/startPicker';
 import type { ChunkOverride } from './world/world';
 import { World } from './world/world';
 import { bindGameChrome } from './ui/gameChrome';
@@ -78,8 +80,43 @@ async function boot(): Promise<void> {
     }
   }
 
+  // 지도 v2: 기본 영역의 자리는 학생이 고른다. 아직 없으면(새 학생, 예전 지도에서
+  // 초기화된 학생, 둘러보기) 시작 화면을 띄운다.
+  let origin: Origin | null = city?.origin ? parseOriginKey(city.origin) : null;
+  if (!origin) {
+    if (loading) loading.textContent = '대륙 지도를 펼치는 중…';
+    const online = !!(session && city);
+    let claimed: Origin[] = [];
+    if (online) {
+      try {
+        claimed = await loadClaimedOrigins();
+      } catch (err) {
+        console.warn('자리 목록을 읽지 못했습니다', err);
+      }
+    }
+    origin = await pickStartOrigin({
+      claimed,
+      offline: !online,
+      confirm: async (o) => {
+        if (!online || !session) return { error: '' };
+        try {
+          await claimOrigin(session, o, (list) => canStartAt(o, list).reason);
+          if (city) city.origin = `${o.cx},${o.cy}`;
+          return { error: '' };
+        } catch (err) {
+          if (err instanceof ClaimError)
+            return {
+              error: `${err.message} · 방금 다른 도시가 자리를 잡았습니다. 다른 곳을 골라 주세요.`,
+              claimed: await loadClaimedOrigins().catch(() => undefined),
+            };
+          throw err;
+        }
+      },
+    });
+  }
+
   if (loading) loading.textContent = '지형을 그리는 중…';
-  const world = new World(city?.cityIndex ?? 0);
+  const world = new World(origin);
   revealBaseRing(world);
   if (city) {
     world.setExploredKeys(city.explored);
@@ -92,11 +129,9 @@ async function boot(): Promise<void> {
     tick: 0,
     tickedAt: Date.now(),
   };
-  const terrainMigrated = !Array.isArray(macro.legacyTerrainChunks);
-  if (terrainMigrated) {
-    macro.legacyTerrainChunks = city ? [...new Set([...city.explored, ...overrides.keys()])] : [];
-  }
-  world.preserveTerrainChunks(macro.legacyTerrainChunks!);
+  // 지도 v1 의 "예전 지형 보존" 목록은 지도 v2 초기화로 의미가 없어졌다.
+  const terrainMigrated = Array.isArray(macro.legacyTerrainChunks);
+  delete macro.legacyTerrainChunks;
   // 대도시는 **관리자 도구가 요청했을 때만** 만든다. 그 밖의 새 도시는 도로 한
   // 칸 없는 빈 땅에 시작 자금(START_MONEY)만 들고 시작한다 — 도시를 세우는 게
   // 이 게임이므로, 다 지어진 도시를 받아 들고 시작하면 배울 것이 남지 않는다.

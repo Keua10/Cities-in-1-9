@@ -39,6 +39,8 @@ export const BUILDING_UNLOCK_LEVEL = [1, 2, 4] as const;
 /** Existing 0~20 order stays fixed. New transport kinds 21~25 append only. */
 export const FACILITY_UNLOCK_LEVEL: readonly number[] = [
   1, 1, 1, 1, 1, 2, 3, 1, 2, 1, 3, 1, 2, 3, 1, 2, 1, 2, 3, 3, 3, 3, 4, 5, 4, 5, 1,
+  // 식량: 곡물·채소 농장과 창고는 처음부터, 목축·과수·어업은 Lv.2, 온실·가공은 Lv.3
+  1, 1, 2, 2, 2, 3, 2, 1, 3,
 ];
 
 export function normalizeProsperity(value: unknown): number {

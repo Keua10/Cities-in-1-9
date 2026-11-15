@@ -35,5 +35,8 @@ export function facilityPowerDemand(kind: number): number {
   if (kind === FAC_HARBOR_HYBRID_L2) return 900;
   if (kind === FAC_HARBOR_HYBRID_L3) return 1_800;
   if (kind === FAC_PRISON) return 260;
+  // 식량 시설 27~35: 밭·목장은 적게, 온실·가공 공장은 많이 쓴다.
+  const food = [40, 20, 20, 60, 120, 250, 60, 30, 300][kind - 27];
+  if (food !== undefined) return food;
   return 100;
 }

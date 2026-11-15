@@ -12,6 +12,8 @@ import {
   facilityCellSize,
   loadFacilityAtlas,
   paintFacilityThumbnail,
+  FACILITY_SHEET_KINDS,
+  FACILITY_SHEET_W,
 } from '../../src/render/facilityAtlas';
 // @ts-ignore Node-only raster tooling shares the geometry preparation implementation.
 import { readRaster, describe } from '../art/footprintMath.mjs';
@@ -21,9 +23,10 @@ import { alignFacilityFootprint } from '../art/facilityFootprint.mjs';
 const entries = JSON.parse(
   readFileSync('public/sprites/facilities-detailed/manifest.json', 'utf8'),
 );
-assert.equal(entries.length, FACILITY_COUNT - 1);
+// PNG 시트에는 0~25 만 있다. 지하철역(26)과 식량 시설(27~)은 코드로 그린다.
+assert.equal(entries.length, FACILITY_SHEET_KINDS);
 const sheet = await loadImage('public/sprites/facilities-v2.png');
-assert.equal(sheet.width, FACILITY_ATLAS_W);
+assert.equal(sheet.width, FACILITY_SHEET_W);
 assert.equal(sheet.height, FACILITY_ATLAS_H);
 const canvas = createCanvas(sheet.width, sheet.height),
   ctx = canvas.getContext('2d');
@@ -104,7 +107,7 @@ for (const e of entries) {
     }
   hashes.add(createHash('sha256').update(raster.data).digest('hex'));
 }
-assert.equal(hashes.size, FACILITY_COUNT - 1);
+assert.equal(hashes.size, FACILITY_SHEET_KINDS);
 
 // Exercise the real async loader and catalog against native PNGs, plus missing-file fallback.
 const oldDocument = globalThis.document,
@@ -144,10 +147,11 @@ try {
     'native metro station menu/city parity',
   );
   for (const e of entries) {
+    // 실제 아틀라스 캔버스는 코드로 그리는 시설(27~) 열만큼 시트보다 넓다.
     assert.deepEqual(atlas.uv(e.kind), [
-      e.x / sheet.width,
+      e.x / FACILITY_ATLAS_W,
       e.y / sheet.height,
-      (e.x + e.size) / sheet.width,
+      (e.x + e.size) / FACILITY_ATLAS_W,
       (e.y + e.size) / sheet.height,
     ]);
     const thumb = globalThis.document.createElement('canvas') as any;
@@ -157,6 +161,25 @@ try {
       thumb.getContext('2d').getImageData(0, 0, e.size, e.size).data,
       ctx.getImageData(e.x, e.y, e.size, e.size).data,
       `${e.name}: menu matches city`,
+    );
+  }
+  // 식량 시설(27~)은 코드로 그린다. 메뉴 그림과 도시 그림이 같아야 한다.
+  for (let kind = FACILITY_SHEET_KINDS + 1; kind < FACILITY_COUNT; kind++) {
+    const size = FACILITY_SPECS[kind].span * 64;
+    const thumb = globalThis.document.createElement('canvas') as any;
+    thumb.width = thumb.height = size;
+    await paintFacilityThumbnail(thumb.getContext('2d'), kind);
+    assert.deepEqual(
+      thumb.getContext('2d').getImageData(0, 0, size, size).data,
+      liveCanvas
+        .getContext('2d')
+        .getImageData(
+          FACILITY_ATLAS_COLUMN[kind] * size,
+          facilityBandY(FACILITY_SPECS[kind].span),
+          size,
+          size,
+        ).data,
+      `food facility ${kind}: menu matches city`,
     );
   }
   const warn = console.warn;

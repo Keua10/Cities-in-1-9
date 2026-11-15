@@ -6,6 +6,7 @@ import { COST_ROAD, COST_ZONE, TERRAIN_COST } from '../sim/simConstants';
 import { PIPE_COST, WATER_SPECS } from '../sim/config/water';
 import { POWER_SPECS, WIRE_COST } from '../sim/config/power';
 import { RUNWAY_COST, TAXIWAY_COST } from '../sim/config/transport';
+import { FOOD_SPECS } from '../sim/config/food';
 
 export const BUILD_CATEGORIES = [
   { id: 'zones', name: '구역', icon: 'zones', color: '#9bca80', hint: '주거 · 상업 · 공업' },
@@ -27,6 +28,7 @@ export const BUILD_CATEGORIES = [
   },
   { id: 'park', name: '공원', icon: 'park', color: '#a8c87b', hint: '공원 · 체육 · 장식' },
   { id: 'environment', name: '환경', icon: 'environment', color: '#c1afa0', hint: '쓰레기 · 장의' },
+  { id: 'farm', name: '농업', icon: 'farm', color: '#d9c46a', hint: '농장 · 목축 · 어업 · 저장' },
 ] as const;
 export type BuildCategory = (typeof BUILD_CATEGORIES)[number]['id'];
 export interface BuildItem {
@@ -127,6 +129,25 @@ for (const spec of FACILITY_SPECS) {
     const entry = items.find((i) => i.tool === 'metroStation')!;
     entry.kind = k;
     entry.unlock = 1;
+    continue;
+  }
+  const food = FOOD_SPECS[k];
+  if (food) {
+    items.push({
+      id: `facility-${k}`,
+      category: 'farm',
+      tool: 'facility',
+      kind: k,
+      name: spec.name,
+      cost: spec.cost,
+      unlock: spec.unlockLevel,
+      icon: 'farm',
+      detail:
+        `${spec.span}×${spec.span} · 유지 ${formatMoney(spec.upkeepPerDay)}/일 · ` +
+        (food.output ? `식량 ${food.output.toLocaleString('ko-KR')}/일 · ` : '') +
+        food.blurb +
+        ' · 도로 필요',
+    });
     continue;
   }
   const category: BuildCategory =

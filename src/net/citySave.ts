@@ -1,8 +1,18 @@
-import { collection, deleteDoc, doc, getDocs, runTransaction } from 'firebase/firestore';
+import {
+  collection,
+  deleteDoc,
+  doc,
+  getDoc,
+  getDocs,
+  runTransaction,
+  writeBatch,
+} from 'firebase/firestore';
 import { CHUNK_TILES, SCHEMA_VERSION } from '../core/constants';
 import { chunkKey } from '../core/iso';
 import { START_MONEY } from '../sim/simConstants';
 import type { ChunkOverride, ChunkSnapshot } from '../world/world';
+import { MAP_VERSION } from '../world/continent';
+import { originKey, parseOriginKey, type Origin } from '../world/sites';
 import type { Session } from './auth';
 import { decodeOverride, encodeOverride } from './codec';
 import { getFirebase } from './firebase';
@@ -47,12 +57,31 @@ export async function loadCity(session: Session): Promise<LoadedCity> {
   const token = newSaveToken();
   const now = Date.now();
 
+  let needsWipe = false;
   const city = await runTransaction(db, async (tx) => {
+    needsWipe = false;
     const citySnap = await tx.get(cityRef);
 
     if (citySnap.exists()) {
       const saved = citySnap.data() as Partial<CityDoc>;
       const merged = normalizeCity(saved, session, token, now);
+      if (saved.mapVersion !== MAP_VERSION) {
+        // 예전 지도(v1)의 도시. 지도가 통째로 바뀌었으므로 도시를 비우고 시작
+        // 화면에서 자리를 새로 고르게 한다. 청크 문서는 트랜잭션 밖에서 지운다.
+        merged.macro = emptyMacro();
+        merged.explored = [];
+        merged.mapVersion = MAP_VERSION;
+        delete merged.origin;
+        tx.update(cityRef, {
+          saveToken: token,
+          updatedAt: now,
+          macro: merged.macro,
+          explored: [],
+          mapVersion: MAP_VERSION,
+        });
+        needsWipe = true;
+        return merged;
+      }
       // 접속 표식만 새로 박는다. 이 순간부터 예전 기기의 저장은 거부된다.
       tx.update(cityRef, { saveToken: token, updatedAt: now });
       return merged;
@@ -73,6 +102,7 @@ export async function loadCity(session: Session): Promise<LoadedCity> {
       cityIndex,
       displayName: session.loginId,
       cityName: `${session.loginId}번 도시`,
+      mapVersion: MAP_VERSION,
       explored: [],
       macro: emptyMacro(),
       saveToken: token,
@@ -84,8 +114,81 @@ export async function loadCity(session: Session): Promise<LoadedCity> {
     return fresh;
   });
 
-  const overrides = await loadOverrides(session.uid);
+  if (needsWipe) await wipeChunks(session.uid);
+  const overrides = needsWipe ? new Map<string, ChunkOverride>() : await loadOverrides(session.uid);
   return { city, overrides };
+}
+
+/** 예전 지도의 청크 수정분을 모두 지운다. 한 번에 400개씩. */
+async function wipeChunks(uid: string): Promise<void> {
+  const fb = getFirebase();
+  if (!fb) return;
+  const snap = await getDocs(collection(fb.db, 'cities', uid, 'chunks'));
+  for (let i = 0; i < snap.docs.length; i += 400) {
+    const batch = writeBatch(fb.db);
+    for (const d of snap.docs.slice(i, i + 400)) batch.delete(d.ref);
+    await batch.commit();
+  }
+}
+
+/* ---------------------------------------------------------------- *
+ * 시작 자리
+ * ---------------------------------------------------------------- */
+
+/** 자리를 잡지 못했을 때. 화면에 그대로 보여줄 문장을 담는다. */
+export class ClaimError extends Error {}
+
+/**
+ * 이미 자리를 잡은 도시들의 기본 영역. 누구의 도시인지는 담지 않는다
+ * (시작 화면은 막힌 곳만 보여주고 주인은 숨긴다).
+ */
+export async function loadClaimedOrigins(): Promise<Origin[]> {
+  const fb = getFirebase();
+  if (!fb) return [];
+  const snap = await getDoc(doc(fb.db, 'meta', 'bases'));
+  return parseOrigins(snap.exists() ? snap.data().origins : []);
+}
+
+function parseOrigins(raw: unknown): Origin[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((v) => (typeof v === 'string' ? parseOriginKey(v) : null))
+    .filter((o): o is Origin => o !== null);
+}
+
+/**
+ * 고른 자리를 확정한다. 자리 목록(meta/bases)과 도시 문서를 한 트랜잭션에서
+ * 고치므로, 두 학생이 동시에 가까운 자리를 골라도 한 명만 성공한다. 늦은
+ * 쪽은 최신 목록으로 다시 검사해 ClaimError 를 받는다.
+ *
+ * check(claimed) 는 막히는 이유를 돌려준다(빈 문자열이면 통과).
+ */
+export async function claimOrigin(
+  session: Session,
+  origin: Origin,
+  check: (claimed: readonly Origin[]) => string,
+): Promise<Origin> {
+  const fb = getFirebase();
+  if (!fb) throw new OfflineError('서버 설정이 없습니다.');
+  const { db } = fb;
+  const basesRef = doc(db, 'meta', 'bases');
+  const cityRef = doc(db, 'cities', session.uid);
+  return runTransaction(db, async (tx) => {
+    const citySnap = await tx.get(cityRef);
+    const basesSnap = await tx.get(basesRef);
+    const mine = citySnap.exists() ? (citySnap.data() as Partial<CityDoc>).origin : undefined;
+    const already = typeof mine === 'string' ? parseOriginKey(mine) : null;
+    if (already) return already;
+    const keys: string[] =
+      basesSnap.exists() && Array.isArray(basesSnap.data().origins) ? basesSnap.data().origins : [];
+    const reason = check(parseOrigins(keys));
+    if (reason) throw new ClaimError(reason);
+    const key = originKey(origin);
+    if (basesSnap.exists()) tx.update(basesRef, { origins: [...keys, key] });
+    else tx.set(basesRef, { origins: [key] });
+    tx.update(cityRef, { origin: key, updatedAt: Date.now() });
+    return origin;
+  });
 }
 
 async function loadOverrides(uid: string): Promise<Map<string, ChunkOverride>> {
@@ -276,6 +379,8 @@ function normalizeCity(
     cityIndex: Number(saved.cityIndex) || 0,
     displayName: saved.displayName ?? session.loginId,
     cityName: saved.cityName ?? `${session.loginId}번 도시`,
+    ...(typeof saved.origin === 'string' ? { origin: saved.origin } : {}),
+    ...(typeof saved.mapVersion === 'number' ? { mapVersion: saved.mapVersion } : {}),
     explored: Array.isArray(saved.explored) ? saved.explored : [],
     macro: normalizeMacro(saved.macro),
     saveToken: token,

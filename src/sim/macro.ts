@@ -1,3 +1,4 @@
+import { FoodSystem } from './food';
 import { NatureSystem } from './nature';
 import { ConstructionSystem } from './construction';
 import { groundPollutionFor, type GroundPollution } from './groundPollution';
@@ -145,6 +146,8 @@ export class MacroSim {
   readonly services = new ServiceField();
   readonly water = new WaterField();
   readonly power = new PowerField();
+  /** 식량 자급(농업·목축·어업). 비축량만 macro.food 로 저장한다. */
+  readonly food: FoodSystem;
   readonly disasters: DisasterSim;
   private assignment: AssignmentTable | null = null;
   private congestion: CongestionMap | null = null;
@@ -185,6 +188,7 @@ export class MacroSim {
       this.onMacroChange?.(),
     );
     this.disasters = new DisasterSim(macro.disasters, macro.tick);
+    this.food = new FoodSystem(world);
     this.water.power = this.power;
     this.services.power = this.power;
     this.macro.policies = normalizePolicies(macro.policies);
@@ -237,13 +241,16 @@ export class MacroSim {
       income +=
         this.stats.tiers[ZONE_I][t].filled * TAX_PER_JOB[t] * (taxRate(policies, ZONE_I) / 9);
     }
+    // 식량: 남아서 내다 판 몫은 수입, 모자라 사 온 몫은 지출이다.
+    const food = this.food.summary;
     return {
-      income,
+      income: income + food.exportIncome,
       upkeep:
         this.stats.roads * UPKEEP_ROAD_PER_DAY +
         this.services.dailyUpkeep() +
         this.water.upkeep +
-        this.power.upkeep,
+        this.power.upkeep +
+        food.importCost,
     };
   }
 
@@ -861,6 +868,7 @@ export class MacroSim {
       amenityFulfilled: homesCounted === 0 ? 0 : homesFulfilled / homesCounted,
     };
     this.macro.population = Math.round(population);
+    this.food.refresh(this.services.facilityList(), population, this.macro.food ?? 0);
 
     if (updateDemand) this.updateDemand(tiers, population, this.stats.occupancy);
   }
@@ -986,6 +994,10 @@ export class MacroSim {
 
   private accrueFinance(deltaMs: number): void {
     if (!(deltaMs > 0)) return;
+    // 비축량을 먼저 움직이고, 창고가 차거나 빈 상태로 오늘의 수출·수입을 정한다.
+    const stock = this.food.advanceStock(this.macro.food ?? 0, deltaMs / DAYTIME_DAY_MS);
+    this.macro.food = Math.round(stock * 100) / 100;
+    this.food.applyStock(this.macro.food);
     const { income, upkeep } = this.financeEstimate();
     this.stats.dailyIncome = income;
     this.stats.dailyUpkeep = upkeep;
@@ -1042,6 +1054,7 @@ export class MacroSim {
     this.macro.tick = 0;
     this.macro.tickedAt = nowMs;
     delete this.macro.disasters;
+    delete this.macro.food;
     delete this.macro.prosperity;
     delete this.macro.waterStartTick;
     delete this.macro.powerStartTick;

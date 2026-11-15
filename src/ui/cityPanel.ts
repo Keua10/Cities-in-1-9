@@ -7,6 +7,7 @@ import { SERVICE_KIND_COUNT } from '../sim/services';
 import { FACILITY_NAMES } from '../sim/simConstants';
 import { sessionDaytimeAt } from '../sim/time';
 import { sewerOutletHint } from '../sim/sewerHint';
+import type { FoodSummary } from '../sim/food';
 import type { World } from '../world/world';
 import { DEFAULT_POLICIES, type CityPolicies } from '../sim/policies';
 import { cityAdvice } from './cityAdvice';
@@ -37,6 +38,7 @@ export class CityPanel {
   private unlockEl: HTMLElement;
   private waterEl: HTMLElement;
   private powerEl: HTMLElement;
+  private foodEl: HTMLElement;
   private popEl: HTMLElement;
   private dateEl: HTMLElement;
   private occupancyEl: HTMLElement;
@@ -80,6 +82,7 @@ export class CityPanel {
     this.unlockEl = must(el, '.cp-unlock');
     this.waterEl = must(el, '.cp-water-status');
     this.powerEl = must(el, '.cp-power');
+    this.foodEl = must(el, '.cp-food');
     this.popEl = must(el, '.cp-pop');
     this.dateEl = must(el, '.cp-date');
     this.occupancyEl = must(el, '.cp-occupancy-value');
@@ -245,6 +248,7 @@ export class CityPanel {
           : '상·하수도관은 한 칸 이상 띄워 설치하세요') +
         (sim.waterGraceDaysLeft > 0 ? `\n부족 감점 유예 ${sim.waterGraceDaysLeft}일 남음` : ''),
     );
+    setText(this.foodEl, describeFood(sim.food.summary));
     this.updateSafety(sim);
     const finance = sim.financeEstimate();
     const advice = cityAdvice({
@@ -256,6 +260,7 @@ export class CityPanel {
       sanitation: sim.sanitation,
       netIncome: finance.income - finance.upkeep,
       sewerHint: this.world && water.drainage <= 0 ? sewerOutletHint(this.world) : '',
+      food: sim.food.summary,
     });
     setText(
       this.noteEl,
@@ -281,7 +286,8 @@ export class CityPanel {
     const { income, upkeep } = this.sim.financeEstimate();
     setText(
       must(this.root, '.cp-finance'),
-      `하루 예상 세입 ${formatMoney(income)} · 지출 ${formatMoney(upkeep)}\n수지 ${formatMoney(income - upkeep)} (현재 입주 기준)`,
+      `하루 예상 세입 ${formatMoney(income)} · 지출 ${formatMoney(upkeep)}\n수지 ${formatMoney(income - upkeep)} (현재 입주 기준)` +
+        foodFinanceLine(this.sim.food.summary),
     );
   }
 
@@ -414,6 +420,8 @@ function template(): string {
     <div class="cp-water cp-water-status"></div>
     <div class="cp-section-title">전기</div>
     <div class="cp-power cp-water"></div>
+    <div class="cp-section-title">식량</div>
+    <div class="cp-food cp-water"></div>
     <div class="cp-section-title">위생·장의</div>
     <div class="cp-sanitation cp-water"></div>
     <div class="cp-safety">
@@ -459,4 +467,39 @@ function gaugeRow(cls: string, label: string, attrs: string): string {
 /** Skip unchanged text to avoid replacing DOM text nodes and repeating live announcements. */
 function setText(element: HTMLElement, value: string): void {
   if (element.textContent !== value) element.textContent = value;
+}
+
+/**
+ * 식량 한 덩어리. 자급률이 핵심이고, 남는지 모자라는지와 그 돈을 함께 보인다.
+ */
+function describeFood(f: FoodSummary): string {
+  const n = (v: number) => Math.round(v).toLocaleString('ko-KR');
+  const ratio =
+    f.consumption > 0 ? `자급률 ${Math.round(f.selfSufficiency * 100)}%` : '먹을 시민 없음';
+  const flow =
+    f.importPerDay > 0
+      ? `모자라 사 오는 중 ${n(f.importPerDay)}/일 · −${formatMoney(f.importCost)}/일`
+      : f.exportPerDay > 0
+        ? `창고가 가득 차 내다 파는 중 ${n(f.exportPerDay)}/일 · +${formatMoney(f.exportIncome)}/일`
+        : f.production >= f.consumption
+          ? '남는 식량을 창고에 쌓는 중'
+          : '창고의 식량을 꺼내 먹는 중';
+  const farms =
+    f.farms === 0
+      ? '농장이 없습니다 · 농업 메뉴에서 하천 가까운 평지에 지으면 잘 자랍니다'
+      : `생산 시설 ${f.activeFarms}/${f.farms}곳 가동` +
+        (f.processingBonus > 0 ? ` · 가공 +${Math.round(f.processingBonus * 100)}%` : '');
+  return (
+    `${ratio} · 생산 ${n(f.production)} / 소비 ${n(f.consumption)} (하루)` +
+    (f.localSupply > 0 ? ` · 근교 농가 ${n(f.localSupply)} 포함` : '') +
+    '\n' +
+    `비축 ${n(f.stock)} / ${n(f.capacity)} · ${flow}\n` +
+    farms
+  );
+}
+
+function foodFinanceLine(f: FoodSummary): string {
+  if (f.importCost > 0) return `\n지출 중 식량 수입 ${formatMoney(f.importCost)}`;
+  if (f.exportIncome > 0) return `\n세입 중 식량 수출 ${formatMoney(f.exportIncome)}`;
+  return '';
 }

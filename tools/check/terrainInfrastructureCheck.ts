@@ -2,35 +2,39 @@ import { strict as assert } from 'node:assert';
 import { BASE_CHUNK_SPAN, CHUNK_SIZE } from '../../src/core/constants';
 import { World } from '../../src/world/world';
 import {
-  generateChunk,
-  heightAt,
-  isWater,
-  outerTerrainAt,
-  terrainAt,
-} from '../../src/world/terrain';
+  CONTINENT_H,
+  CONTINENT_W,
+  CONTINENT_X0,
+  CONTINENT_Y0,
+  generateContinentChunk,
+  quickSite,
+  sampleSite,
+} from '../../src/world/continent';
 import { utilityPenalty } from '../../src/sim/config/infrastructure';
 import { satisfaction } from '../../src/sim/satisfaction';
 import { NEEDS_PENALTY_MAX, SATISFACTION_FLOOR } from '../../src/sim/simConstants';
 import { ZONE_R } from '../../src/sim/buildings';
 
-const counts = [0, 0, 0],
-  legacy = [0, 0, 0];
-let total = 0;
-for (let y = -2048; y < 2048; y += 8)
-  for (let x = -2048; x < 2048; x += 8) {
-    if (x >= 0 && x < 128 && y >= 0 && y < 128) continue;
-    const t = outerTerrainAt(x, y);
-    counts[isWater(t.tile) ? 2 : t.height >= 5 ? 1 : 0]++;
-    legacy[isWater(terrainAt(x, y)) ? 2 : heightAt(x, y) >= 5 ? 1 : 0]++;
-    if (isWater(t.tile)) assert.equal(t.height, 0);
-    total++;
+// 지도 v2: 대륙 육지의 평지/산/물 비율. 큰 강은 필요 없다는 결정에 따라 물길은
+// 좁고(개울) 드물며, 산맥이 도시 사이를 가르는 주된 장애물이다.
+const counts = [0, 0, 0];
+let land = 0;
+for (let y = CONTINENT_Y0 * CHUNK_SIZE; y < (CONTINENT_Y0 + CONTINENT_H) * CHUNK_SIZE; y += 16)
+  for (let x = CONTINENT_X0 * CHUNK_SIZE; x < (CONTINENT_X0 + CONTINENT_W) * CHUNK_SIZE; x += 16) {
+    const s = quickSite(x, y);
+    if (s.water === 3) continue;
+    land++;
+    counts[s.water ? 2 : s.height >= 5 ? 1 : 0]++;
+    if (s.water) assert.equal(s.height, 0);
   }
-const percentages = counts.map((v) => (v / total) * 100);
-for (let i = 0; i < 3; i++) assert.ok(Math.abs(percentages[i] - [60, 30, 10][i]) < 3);
-console.log('Flat/mountain/water:', {
-  before: legacy.map((v) => +((v / total) * 100).toFixed(2)),
-  after: percentages.map((v) => +v.toFixed(2)),
-});
+const percentages = counts.map((v) => (v / land) * 100);
+assert.ok(percentages[0] > 62 && percentages[0] < 80, `평지 ${percentages[0]}`);
+assert.ok(percentages[1] > 20 && percentages[1] < 34, `산 ${percentages[1]}`);
+assert.ok(percentages[2] > 0.3 && percentages[2] < 6, `물길 ${percentages[2]}`);
+console.log(
+  'Continent land flat/mountain/water:',
+  percentages.map((v) => +v.toFixed(2)),
+);
 
 for (const city of [0, 1, 7]) {
   const world = new World(city);
@@ -39,9 +43,9 @@ for (const city of [0, 1, 7]) {
       const cx = world.baseCx + dx,
         cy = world.baseCy + dy;
       const base = world.getChunk(cx, cy),
-        old = generateChunk(cx, cy);
-      assert.deepEqual(base.tiles, old.tiles, 'base terrain unchanged');
-      assert.deepEqual(base.heights, old.heights, 'base heights unchanged');
+        gen = generateContinentChunk(cx, cy);
+      assert.deepEqual(base.tiles, gen.tiles, 'base terrain = continent');
+      assert.deepEqual(base.heights, gen.heights, 'base heights = continent');
     }
   const cx = world.baseCx + 3,
     cy = world.baseCy - 2;
@@ -51,19 +55,11 @@ for (const city of [0, 1, 7]) {
         ty = cy * 64 + y;
       const sampled = world.sampleHeight(tx, ty);
       assert.equal(sampled, world.getHeight(tx, ty), 'unloaded and rendered heights agree');
-      assert.equal(world.getTile(tx, ty), outerTerrainAt(tx, ty).tile);
+      assert.equal(world.getTile(tx, ty), sampleSite(tx, ty).tile);
     }
   const snapshot = world.getChunk(cx, cy).heights.slice();
   world.unloadChunk(cx, cy);
   assert.deepEqual(world.getChunk(cx, cy).heights, snapshot, 'regeneration deterministic');
-  const metadata = JSON.parse(JSON.stringify({ legacyTerrainChunks: [`${cx},${cy}`] }));
-  world.preserveTerrainChunks(metadata.legacyTerrainChunks);
-  assert.deepEqual(
-    world.getChunk(cx, cy).tiles,
-    generateChunk(cx, cy).tiles,
-    'saved explored land preserved',
-  );
-  assert.deepEqual(world.getChunk(cx, cy).heights, generateChunk(cx, cy).heights);
   world.setHeight(cx * CHUNK_SIZE, cy * CHUNK_SIZE, 7);
   world.unloadChunk(cx, cy);
   assert.equal(world.sampleHeight(cx * CHUNK_SIZE, cy * CHUNK_SIZE), 7, 'user override wins');

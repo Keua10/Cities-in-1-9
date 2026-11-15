@@ -33,6 +33,8 @@ export interface MacroState {
   powerStartTick?: number;
   waterStartTick?: number;
   prosperity?: number;
+  /** 식량 비축량 (sim/food.ts). */
+  food?: number;
   /** Hybrid harbor passenger/cargo allocation. Old saves simply have no field. */
   transport?: TransportState;
   /**
@@ -64,7 +66,15 @@ export function emptyMacro(): MacroState {
 
 export interface CityDoc {
   schemaVersion: number;
+  /** 도시 번호. 지도 v2 부터 위치와 무관하고 이름·관리용으로만 쓴다. */
   cityIndex: number;
+  /**
+   * 학생이 시작 화면에서 고른 기본 영역 왼쪽 위 청크 "cx,cy".
+   * 한 번 정해지면 Firestore 규칙이 바꾸지 못하게 막는다.
+   */
+  origin?: string;
+  /** 이 도시가 만들어진 지도 판. 다르면 도시를 초기화하고 자리를 다시 고른다. */
+  mapVersion?: number;
   displayName: string;
   cityName: string;
   explored: string[];

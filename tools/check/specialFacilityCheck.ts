@@ -23,7 +23,7 @@ import { Build } from '../../src/world/build';
 import { Terrain } from '../../src/world/terrain';
 import { World } from '../../src/world/world';
 
-assert.equal(FACILITY_COUNT, 27); // 지하철역(26)까지 포함한다
+assert.equal(FACILITY_COUNT, 36); // 지하철역(26), 식량 시설(27~35)까지 포함한다
 assert.deepEqual(
   [FAC_COMM_TOWER, FAC_AIRPORT, FAC_HARBOR, FAC_PRISON],
   [17, 18, 19, 20],
@@ -39,7 +39,10 @@ for (let kind = 17; kind < FACILITY_COUNT; kind++) {
   assert.equal(isFacilityAnchor(facCode(kind)), true);
   assert.equal(FACILITY_SPECS[kind].kind, kind);
 }
-assert.deepEqual(FACILITY_UNLOCK_LEVEL.slice(17), [2, 3, 3, 3, 3, 4, 5, 4, 5, 1]); // 끝은 지하철역
+assert.deepEqual(
+  FACILITY_UNLOCK_LEVEL.slice(17),
+  [2, 3, 3, 3, 3, 4, 5, 4, 5, 1, 1, 1, 2, 2, 2, 3, 2, 1, 3],
+); // 지하철역(26) 뒤는 식량 시설
 assert.deepEqual(
   [
     FACILITY_SPECS[FAC_HARBOR].span,

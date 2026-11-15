@@ -75,7 +75,7 @@ function valueNoise(x: number, y: number, seed: number): number {
   return (a + (b - a) * fx) * (1 - fy) + (c + (d - c) * fx) * fy;
 }
 
-function fbm(x: number, y: number, seed: number, octaves = 4): number {
+export function fbm(x: number, y: number, seed: number, octaves = 4): number {
   let amp = 1;
   let freq = 1;
   let sum = 0;

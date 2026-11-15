@@ -7,6 +7,7 @@ import { edgeNeighbors } from './roadGraph';
 import { FACILITY_UNLOCK_LEVEL } from './progression';
 import { WATER_SPECS } from './config/water';
 import { SPECIAL_SPECS } from './config/special';
+import { FOOD_SPECS } from './config/food';
 import {
   FACILITY_CAPACITY,
   FACILITY_CAPACITY_IS_BUILDINGS,
@@ -128,6 +129,10 @@ export function canPlaceFacility(
 
   if (SPECIAL_SPECS[kind]?.needsWater && !touchesWater(world, tx, ty, span)) {
     return { ok: false, reason: '항구는 수역에 바로 닿은 평평한 육지에 지어야 합니다' };
+  }
+
+  if (FOOD_SPECS[kind]?.needsWater && !touchesWater(world, tx, ty, span)) {
+    return { ok: false, reason: '어업 기지는 바다나 강에 바로 닿은 평평한 육지에 지어야 합니다' };
   }
 
   return roadWarning ? { ok: true, reason: '', warning: roadWarning } : OK;

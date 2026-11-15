@@ -19,7 +19,22 @@ export function facilityBandY(span: number): number {
 /** Retain existing atlas coordinates/IDs for all 26 facilities. */
 export const FACILITY_ATLAS_COLUMN: readonly number[] = [
   0, 1, 0, 1, 0, 2, 2, 3, 4, 5, 3, 6, 4, 5, 6, 7, 7, 1, 8, 9, 10, 11, 0, 0, 1, 1, 2,
+  // 식량 시설 27~35: 기존 칸 오른쪽의 빈 열에 코드로 그린다(PNG 시트는 그대로).
+  2, 12, 13, 3, 14, 15, 8, 9, 16,
 ];
+/** facilities-v2.png 에 들어 있는 시설(0~25). 그 뒤는 코드로 그린다. */
+export const FACILITY_SHEET_KINDS = 26;
+const SHEET_KINDS = FACILITY_SHEET_KINDS;
+/** PNG 시트 크기. 시트에 없는 시설이 늘어도 시트 규격은 바뀌지 않는다. */
+export const FACILITY_SHEET_W = Math.max(
+  ...FACILITY_SPECS.filter((s) => s.kind < SHEET_KINDS).map(
+    (s) => (FACILITY_ATLAS_COLUMN[s.kind] + 1) * facilityCellSize(s.span),
+  ),
+);
+/** 코드로 그리는 시설: 지하철역(26)과 식량 시설(27~). */
+export function isCodePaintedFacility(kind: number): boolean {
+  return kind >= SHEET_KINDS;
+}
 export const FACILITY_ATLAS_W = Math.max(
   ...FACILITY_SPECS.map((s) => (FACILITY_ATLAS_COLUMN[s.kind] + 1) * facilityCellSize(s.span)),
 );
@@ -69,7 +84,7 @@ export function loadFacilitySpriteSheet(
       const image = new Image();
       image.src = source;
       await image.decode();
-      if (image.naturalWidth !== FACILITY_ATLAS_W || image.naturalHeight !== FACILITY_ATLAS_H)
+      if (image.naturalWidth !== FACILITY_SHEET_W || image.naturalHeight !== FACILITY_ATLAS_H)
         throw new Error(`시설 아틀라스 규격 오류: ${image.naturalWidth}x${image.naturalHeight}`);
       return image;
     })();
@@ -85,7 +100,7 @@ export async function paintFacilityThumbnail(
   kind: number,
 ): Promise<void> {
   const size = facilityCellSize(FACILITY_SPECS[kind].span);
-  if (kind === 26) {
+  if (isCodePaintedFacility(kind)) {
     facilityArt(kind).paint(ctx);
     return;
   }
@@ -124,7 +139,14 @@ export async function loadFacilityAtlas(source = FACILITY_SPRITE_SOURCE): Promis
     console.warn('시설 아틀라스를 읽지 못해 기존 코드 그림으로 대체합니다.', error);
     drawFacilityAtlas(ctx);
   }
-  facilityArt(26).paint(ctx, FACILITY_ATLAS_COLUMN[26] * 64, 0);
+  for (let kind = SHEET_KINDS; kind < FACILITY_COUNT; kind++) {
+    const span = FACILITY_SPECS[kind].span;
+    facilityArt(kind).paint(
+      ctx,
+      FACILITY_ATLAS_COLUMN[kind] * facilityCellSize(span),
+      facilityBandY(span),
+    );
+  }
   const texture = Texture.from(canvas);
   texture.source.scaleMode = 'nearest';
   texture.source.autoGenerateMipmaps = false;

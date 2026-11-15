@@ -1,5 +1,5 @@
 import { FACILITY_SPAN } from '../sim/config/facilities';
-import { MATERIAL as M, PixelArt, type Material } from './pixelArt';
+import { MATERIAL as M, PixelArt, type Material, type PixelColor } from './pixelArt';
 
 function office(
   a: PixelArt,
@@ -64,11 +64,148 @@ function solar(a: PixelArt, u: number, v: number): void {
   a.line(a.p(u + 0.03, v + 0.2, 5), a.p(u + 0.62, v + 0.2, 5), 'glassLight');
 }
 
-/** All 26 civic facilities share the residential pixel grid and prop dimensions. */
+/* ---------------- 식량 시설 (27~35) ---------------- */
+
+function cropField(
+  a: PixelArt,
+  u: number,
+  v: number,
+  w: number,
+  d: number,
+  base: PixelColor,
+  row: PixelColor,
+): void {
+  a.slab(u, v, w, d, 0, base, 'soil');
+  for (let t = v + 0.12; t < v + d - 0.05; t += 0.16)
+    a.line(a.p(u + 0.05, t), a.p(u + w - 0.05, t), row);
+}
+function barn(a: PixelArt, u: number, v: number, w: number, d: number, h: number): void {
+  a.box(u, v, w, d, h, M.red);
+  a.gable(u - 0.03, v - 0.03, w + 0.06, d + 0.06, h, M.roof);
+  const door = a.p(u + w / 2, v + d, 0);
+  a.rect(door[0] - 3, door[1] - 9, 6, 9, 'redDark');
+  a.line([door[0] - 3, door[1] - 9], [door[0] + 3, door[1]], 'white');
+  a.line([door[0] + 3, door[1] - 9], [door[0] - 3, door[1]], 'white');
+}
+function silo(a: PixelArt, u: number, v: number, h: number): void {
+  a.box(u, v, 0.3, 0.3, h, M.steel);
+  a.slab(u + 0.03, v + 0.03, 0.24, 0.24, h + 2, 'stone', 'stoneDark');
+  for (let z = 6; z < h; z += 6) a.line(a.p(u, v + 0.3, z), a.p(u + 0.3, v + 0.3, z), 'stoneDark');
+}
+function animal(a: PixelArt, u: number, v: number, body: PixelColor, spot: PixelColor): void {
+  const p = a.p(u, v, 2);
+  a.rect(p[0] - 3, p[1] - 3, 6, 3, body);
+  a.dot(p[0] + 3, p[1] - 4, body);
+  a.dot(p[0] - 1, p[1] - 3, spot);
+  a.dot(p[0] - 3, p[1], 'ink');
+  a.dot(p[0] + 2, p[1], 'ink');
+}
+function longShed(a: PixelArt, u: number, v: number, w: number, d: number, m: Material): void {
+  a.box(u, v, w, d, 8, m);
+  a.gable(u - 0.02, v - 0.02, w + 0.04, d + 0.04, 8, M.roof);
+  for (let t = u + 0.2; t < u + w - 0.1; t += 0.3) {
+    const p = a.p(t, v + d, 4);
+    a.rect(p[0] - 1, p[1] - 2, 3, 2, 'glassDark');
+  }
+}
+function glasshouse(a: PixelArt, u: number, v: number, w: number, d: number): void {
+  a.box(u, v, w, d, 9, M.glass);
+  a.gable(u, v, w, d, 9, M.glass);
+  for (let t = u + 0.15; t < u + w; t += 0.18)
+    a.line(a.p(t, v + d, 0), a.p(t, v + d, 9), 'glassLight');
+  a.slab(u + 0.05, v + 0.05, w - 0.1, d - 0.1, 1, 'leafLight');
+}
+
+function foodArt(a: PixelArt, kind: number, n: number): void {
+  if (kind === 27) {
+    // 곡물 농장: 누런 밀밭 셋, 붉은 헛간, 사일로 둘.
+    cropField(a, 0.15, 0.15, 2.3, 2.1, 'yellow', 'yellowDark');
+    cropField(a, 0.15, 2.4, 2.3, 2.4, 'yellowLight', 'yellow');
+    cropField(a, 2.6, 2.4, 2.25, 2.4, 'leafLight', 'leaf');
+    barn(a, 2.75, 0.25, 1.2, 0.8, 14);
+    silo(a, 4.15, 0.3, 26);
+    silo(a, 4.15, 0.85, 22);
+    a.slab(2.6, 1.3, 2.2, 0.9, 0, 'soil');
+    a.box(3.2, 1.55, 0.35, 0.22, 4, M.yellow);
+  } else if (kind === 28) {
+    cropField(a, 0.15, 0.15, n - 0.3, 1.6, 'soil', 'leaf');
+    cropField(a, 0.15, 1.85, 1.6, n - 2, 'soil', 'leafLight');
+    a.box(2, 2, 0.75, 0.6, 9, M.wood);
+    a.gable(1.98, 1.98, 0.79, 0.64, 9, M.roof);
+  } else if (kind === 29) {
+    a.slab(0.1, 0.1, n - 0.2, n - 0.2, 0, 'grassDark');
+    for (let v = 0.45; v < n - 0.2; v += 0.7)
+      for (let u = 0.45; u < n - 0.2; u += 0.7) a.tree(u, v);
+    a.box(0.15, n - 0.5, 0.4, 0.3, 6, M.wood);
+  } else if (kind === 30) {
+    // 목장: 울타리 친 풀밭과 소, 헛간.
+    a.slab(0.1, 0.1, n - 0.2, n - 0.2, 0, 'grassLight', 'grassDark');
+    fence(a, n);
+    barn(a, 0.35, 0.3, 1.4, 0.95, 15);
+    silo(a, 1.95, 0.35, 22);
+    a.box(3.4, 0.5, 1, 0.25, 3, M.wood);
+    for (const [u, v] of [
+      [1.2, 2.2],
+      [2.1, 2.7],
+      [3.2, 2],
+      [2.8, 3.6],
+      [1.6, 3.8],
+      [3.9, 3.1],
+    ])
+      animal(a, u, v, (u * 10) % 2 < 1 ? 'white' : 'woodLight', 'ink');
+  } else if (kind === 31) {
+    longShed(a, 0.25, 0.3, 2.4, 0.6, M.cream);
+    longShed(a, 0.25, 1.25, 2.4, 0.6, M.cream);
+    silo(a, 2.35, 2.25, 18);
+    for (const [u, v] of [
+      [0.6, 2.4],
+      [1, 2.6],
+      [1.4, 2.35],
+    ])
+      animal(a, u, v, 'white', 'red');
+  } else if (kind === 32) {
+    glasshouse(a, 0.2, 0.25, 1.15, 1.1);
+    glasshouse(a, 1.6, 0.25, 1.15, 1.1);
+    glasshouse(a, 0.2, 1.6, 1.15, 1.1);
+    a.box(1.65, 1.7, 0.6, 0.5, 10, M.cream);
+    a.box(2.4, 1.9, 0.3, 0.3, 14, M.steel);
+  } else if (kind === 33) {
+    // 어업 기지: 나무 부두와 고깃배, 생선 창고.
+    a.slab(0.1, 0.1, n - 0.2, n - 0.2, 0, 'paving', 'pavingDark');
+    a.slab(1.05, 0.1, 0.85, 1.8, 1, 'woodLight', 'wood');
+    for (let v = 0.25; v < 1.9; v += 0.2) a.line(a.p(1.05, v, 1), a.p(1.9, v, 1), 'wood');
+    a.box(0.25, 0.3, 0.7, 0.8, 11, M.blue);
+    a.gable(0.23, 0.28, 0.74, 0.84, 11, M.roof);
+    a.box(1.3, 1.3, 0.45, 0.25, 4, M.red);
+    a.line(a.p(1.5, 1.4, 4), a.p(1.5, 1.4, 16), 'ink');
+    a.box(0.25, 1.35, 0.3, 0.3, 4, M.wood);
+  } else if (kind === 34) {
+    silo(a, 0.3, 0.3, 30);
+    silo(a, 0.8, 0.3, 30);
+    silo(a, 0.3, 0.85, 26);
+    a.box(1.05, 0.95, 0.75, 0.75, 10, M.wood);
+    a.gable(1.03, 0.93, 0.79, 0.79, 10, M.roof);
+  } else if (kind === 35) {
+    office(a, 0.2, 0.25, 1.6, 1.1, 16, M.cream);
+    chimney(a, 2.1, 0.4, 34);
+    for (const u of [2.05, 2.5]) {
+      a.box(u, 1, 0.35, 0.35, 14, M.steel);
+      a.slab(u + 0.03, 1.03, 0.29, 0.29, 15, 'stone', 'stoneDark');
+    }
+    a.box(0.3, 1.75, 0.5, 0.3, 5, M.blue);
+    a.box(1, 1.75, 0.5, 0.3, 5, M.yellow);
+  }
+}
+
+/** All civic facilities share the residential pixel grid and prop dimensions. */
 export function facilityArt(kind: number): PixelArt {
   const n = FACILITY_SPAN[kind],
     a = new PixelArt(n * 64);
-  a.ground(n, kind === 4 || kind === 5 || kind === 16);
+  a.ground(n, kind === 4 || kind === 5 || kind === 16 || (kind >= 27 && kind <= 32));
+  if (kind >= 27) {
+    foodArt(a, kind, n);
+    return a;
+  }
   if (kind === 26) {
     // One native 64px tile, 2:1 footprint. Low station hall with covered stairs.
     a.box(0.12, 0.12, 0.72, 0.55, 15, M.cream);

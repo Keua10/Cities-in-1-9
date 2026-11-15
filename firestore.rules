@@ -6,8 +6,10 @@ rules_version = '2';
 //  - 도시 문서 ID = 로그인 UID. 그래서 소유권 검사가 uid 비교 한 줄로 끝나고,
 //    규칙 안에서 다른 문서를 get() 할 필요가 없다(= 읽기 요금이 안 붙는다).
 //  - 남의 도시는 읽기만 된다. 6단계 전쟁에서 이웃 도시를 봐야 하기 때문이다.
-//  - 도시 번호(cityIndex)는 한 번 정해지면 본인도 못 바꾼다. 바꾸면 도시가
-//    지도 위에서 순간이동하고 남의 땅과 겹친다.
+//  - 도시 번호(cityIndex)는 한 번 정해지면 본인도 못 바꾼다.
+//  - 시작 자리(origin)도 한 번 정해지면 본인도 못 바꾼다. 바꾸면 도시가 지도
+//    위에서 순간이동하고 남의 땅과 겹친다. 자리 목록(meta/bases)은 한 번에
+//    정확히 하나씩만 늘어나고, 이미 있는 자리는 지울 수 없다.
 //  - 삭제는 아무도 못 한다. 실수로든 홧김에든 도시가 사라지는 걸 막는다.
 
 service cloud.firestore {
@@ -29,16 +31,35 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // 시작 자리 목록. 문서 하나에 "cx,cy" 문자열 배열 origins 하나만 들어 있다.
+    // 누구의 자리인지는 적지 않는다(시작 화면은 막힌 곳만 보여준다).
+    match /meta/bases {
+      allow read: if signedIn();
+      allow create: if signedIn()
+                    && request.resource.data.keys().hasOnly(['origins'])
+                    && request.resource.data.origins is list
+                    && request.resource.data.origins.size() == 1;
+      allow update: if signedIn()
+                    && request.resource.data.keys().hasOnly(['origins'])
+                    && request.resource.data.origins is list
+                    && request.resource.data.origins.size() == resource.data.origins.size() + 1
+                    && request.resource.data.origins.hasAll(resource.data.origins);
+      allow delete: if false;
+    }
+
     match /cities/{cityId} {
       allow read: if signedIn();
 
       allow create: if signedIn()
                     && request.auth.uid == cityId
-                    && request.resource.data.cityIndex is int;
+                    && request.resource.data.cityIndex is int
+                    && !('origin' in request.resource.data);
 
       allow update: if signedIn()
                     && request.auth.uid == cityId
-                    && request.resource.data.cityIndex == resource.data.cityIndex;
+                    && request.resource.data.cityIndex == resource.data.cityIndex
+                    && (!('origin' in resource.data)
+                        || request.resource.data.origin == resource.data.origin);
 
       allow delete: if false;
 

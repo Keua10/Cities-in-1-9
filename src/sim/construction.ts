@@ -1,3 +1,4 @@
+import { isFoodKind } from './config/food';
 import type { MacroState } from '../net/types';
 import type { World } from '../world/world';
 import { Build } from '../world/build';
@@ -17,7 +18,10 @@ export interface ConstructionJob {
 }
 export function constructionMinutes(kind: number): number {
   const spec = FACILITY_SPECS[kind];
-  return Math.min(1440 * 3, 120 + spec.span * spec.span * 90);
+  // 밭·목장은 넓지만 건물이 거의 없다. 넓이로 공사 기간을 잡으면 곡물 농장(5×5)이
+  // 공항급으로 오래 걸리므로 식량 시설은 칸당 공사량을 낮게 잡는다.
+  const perTile = isFoodKind(kind) ? 30 : 90;
+  return Math.min(1440 * 3, 120 + spec.span * spec.span * perTile);
 }
 export function completionLabel(elapsed: number): string {
   const t = sessionDaytimeAt(elapsed, 0);

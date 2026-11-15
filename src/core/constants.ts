@@ -20,7 +20,7 @@ export const WALL_ART = 32;
 export const CHUNK_SIZE = 64; // 청크 한 변의 타일 수
 export const CHUNK_TILES = CHUNK_SIZE * CHUNK_SIZE; // 4096
 export const BASE_CHUNK_SPAN = 2; // 도시 기본 영역 2x2 청크 (=128x128 타일)
-export const BASE_SPACING_CHUNKS = 8; // 도시 간 기본 간격. 산 장벽 예외는 spawn.ts에서 4청크까지 완화
+export const BASE_SPACING_CHUNKS = 16; // 평지로 이어진 도시 간 최소 중심 간격. 장애물 예외는 sites.ts(SITE_NEAR)
 export const WORLD_SEED = 20260901;
 
 /* ---------- 아틀라스 규격 ---------- */

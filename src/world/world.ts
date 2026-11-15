@@ -15,8 +15,9 @@ import {
 } from '../sim/buildings';
 import { facilitySpan } from '../sim/facilities';
 import { Build, DIRS } from './build';
-import { baseOriginChunk } from './spawn';
-import { generateChunk, outerTerrainAt, type TerrainId } from './terrain';
+import { continentHeight, generateContinentChunk } from './continent';
+import { defaultOrigin, type Origin } from './sites';
+import type { TerrainId } from './terrain';
 
 /** 생성값과 달라진 칸만 담는 배열. OVERRIDE_NONE 인 칸은 "생성값 그대로". */
 export interface ChunkOverride {
@@ -150,34 +151,14 @@ export interface BuildingInfo {
 export class World {
   signalOverrides: Record<string, boolean> = {};
   signalRevision = 0;
-  private legacyTerrain = new Set<string>();
-
-  /** Configure once, before loading/rendering chunks. Persist this list in macro metadata. */
+  /**
+   * 예전(지도 v1) 지형 보존용 API. 지도 v2 는 모든 도시를 초기화하고 시작하므로
+   * 보존할 예전 지형이 없다. 호출부 호환을 위해 남겨 두지만 아무 일도 하지 않는다.
+   */
   preserveTerrainChunks(keys: readonly string[]): void {
-    this.legacyTerrain = new Set(keys.filter((key) => /^-?\d+,-?\d+$/.test(key)));
-    this.chunks.clear();
+    void keys;
   }
 
-  private terrainBlend = (tx: number, ty: number): number => {
-    const distance = (x0: number, y0: number, span: number) =>
-      Math.max(x0 - tx, tx - (x0 + span - 1), y0 - ty, ty - (y0 + span - 1), 0);
-    let d = distance(
-      this.baseCx * CHUNK_SIZE,
-      this.baseCy * CHUNK_SIZE,
-      BASE_CHUNK_SPAN * CHUNK_SIZE,
-    );
-    if (d === 0) return 0;
-    // Only nearby preserved chunks can affect the 32-tile transition belt.
-    const cx = chunkIndexOf(tx),
-      cy = chunkIndexOf(ty);
-    for (let y = cy - 1; y <= cy + 1; y++)
-      for (let x = cx - 1; x <= cx + 1; x++) {
-        if (this.legacyTerrain.has(chunkKey(x, y)))
-          d = Math.min(d, distance(x * CHUNK_SIZE, y * CHUNK_SIZE, CHUNK_SIZE));
-      }
-    const t = Math.min(1, d / 32);
-    return t * t * (3 - 2 * t);
-  };
   utilityRevision = 0;
   /** 타일 수가 같아도 연결 편집을 감지한다. */
   roadRevision = 0;
@@ -214,8 +195,12 @@ export class World {
   baseCx = 0;
   baseCy = 0;
 
-  constructor(cityIndex = 0) {
-    const origin = baseOriginChunk(cityIndex);
+  /**
+   * origin: 학생이 시작 화면에서 고른 기본 영역(2×2 청크)의 왼쪽 위 청크.
+   * 숫자를 주면 점검 도구용 기본 자리(sites.defaultOrigin)를 쓴다.
+   */
+  constructor(origin: Origin | number = 0) {
+    if (typeof origin === 'number') origin = defaultOrigin(origin);
     this.baseCx = origin.cx;
     this.baseCy = origin.cy;
     for (let dy = 0; dy < BASE_CHUNK_SPAN; dy++) {
@@ -324,7 +309,7 @@ export class World {
     const key = chunkKey(cx, cy);
     let chunk = this.chunks.get(key);
     if (!chunk) {
-      const { tiles, heights } = generateChunk(cx, cy, this.terrainBlend);
+      const { tiles, heights } = generateContinentChunk(cx, cy);
       const parcel = this.getParcel(cx, cy);
       chunk = {
         cx,
@@ -388,7 +373,7 @@ export class World {
       const v = p.heightOverride[i];
       if (v !== OVERRIDE_NONE) return v;
     }
-    return outerTerrainAt(tx, ty, this.terrainBlend(tx, ty)).height;
+    return continentHeight(tx, ty);
   }
 
   /** 지형 편집(터레이닝)용. 지금은 안 쓰지만 렌더러가 이미 대응한다. */
