@@ -20,7 +20,7 @@ export const RESOURCE_NAMES: Record<ResourceId, string> = {
 /** 지도·패널 색. */
 export const RESOURCE_COLORS: Record<ResourceId, number> = {
   iron: 0xc8643c,
-  coal: 0x4a4f57,
+  coal: 0xd6dde4,
   oil: 0xe0b23a,
 };
 

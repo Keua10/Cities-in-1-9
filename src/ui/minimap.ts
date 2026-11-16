@@ -245,7 +245,7 @@ export class Minimap {
       const d = depositAt(cx, cy);
       if (!d) continue;
       const left = this.resourceRemaining ? this.resourceRemaining(cx, cy) : d.reserve;
-      const c = left <= 0 ? 0x808996 : RESOURCE_COLORS[d.resource];
+      const c = left <= 0 ? 0x4a4f57 : RESOURCE_COLORS[d.resource];
       const share = Math.max(0, Math.min(1, left / d.reserve));
       ctx.fillStyle = `rgba(${c >> 16}, ${(c >> 8) & 255}, ${c & 255}, ${0.35 + 0.5 * share})`;
       const x0 = this.mapX(cx * S);

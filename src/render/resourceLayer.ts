@@ -8,8 +8,8 @@ import type { World } from '../world/world';
 /**
  * 자원 매장지 지도 (지도 보기 → 자원 매장지, 광산을 고를 때 자동).
  *
- * 탐사한 청크만 보인다(시작 지점을 고를 때는 모른다). 색 = 자원(철 주황·석탄 검정·석유 노랑),
- * 진하기 = 남은 양, 테두리 굵기 = 난이도(얕음 가늘게 → 깊음 굵게). 다 캔 곳은 회색.
+ * 탐사한 청크만 보인다(시작 지점을 고를 때는 모른다). 색 = 자원(철 주황·석탄 흰색·석유 노랑),
+ * 진하기 = 남은 양, 테두리 굵기 = 난이도(얕음 가늘게 → 깊음 굵게). 다 캔 곳은 검정.
  */
 export class ResourceLayer {
   readonly graphics = new Graphics();
@@ -42,7 +42,7 @@ export class ResourceLayer {
         if (!d) continue;
         const left = this.remaining ? this.remaining(cx, cy) : d.reserve;
         const share = Math.max(0, Math.min(1, left / d.reserve));
-        const color = left <= 0 ? 0x808996 : RESOURCE_COLORS[d.resource];
+        const color = left <= 0 ? 0x4a4f57 : RESOURCE_COLORS[d.resource];
         const t0x = cx * CHUNK_SIZE;
         const t0y = cy * CHUNK_SIZE;
         const t1x = t0x + CHUNK_SIZE - 1;

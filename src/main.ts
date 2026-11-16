@@ -455,6 +455,7 @@ async function boot(): Promise<void> {
   };
   let roamRevision = -1;
 
+
   const cityLabel = city
     ? `${city.cityName} (${city.cityIndex}번)`
     : session
