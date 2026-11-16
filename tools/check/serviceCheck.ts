@@ -215,11 +215,17 @@ function addUtilities(world: World, ox: number, oy: number, size: number): void 
 }
 
 function newSim(world: World, money = START_MONEY): MacroSim {
+  // 이 점검은 서비스·복지 밸런스를 본다. 도시 레벨이 번영도만으로 오르던 때와 같은
+  // 조건이 되게 영토를 넉넉히(15×15 청크) 준다 — 영토 조건은 territory 점검이 본다.
+  const owned: string[] = [];
+  for (let dy = -6; dy < 9; dy++)
+    for (let dx = -6; dx < 9; dx++) owned.push(`${world.baseCx + dx},${world.baseCy + dy}`);
   const sim = new MacroSim(world, {
     money,
     population: 0,
     tick: 0,
     tickedAt: 0,
+    territory: { owned, capitalLevel: 1, capital: `${world.baseCx + 1},${world.baseCy + 1}` },
   });
   sim.attachTraffic(new CongestionMap(), new AssignmentTable());
   sim.primeCatchup(0);

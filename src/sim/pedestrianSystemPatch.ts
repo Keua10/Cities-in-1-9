@@ -25,8 +25,8 @@ import type { Vehicle } from './traffic/vehicles';
  * 화면 밖에서도 보행 흐름이 이어지는 반경.
  * 차량 마이크로 시뮬보다 한 겹 넓은 5x5 청크를 유지하되, 렌더러는 화면 안만 그린다.
  */
-const PEDESTRIAN_SIM_RADIUS_CHUNKS = 2;
-const PEDESTRIAN_KEEP_MARGIN_CHUNKS = 1;
+const PEDESTRIAN_SIM_RADIUS_CHUNKS = 4;
+const PEDESTRIAN_KEEP_MARGIN_CHUNKS = 2;
 const MAX_WALKERS = 140;
 const SPAWN_RATE_PER_SEC = 5.0;
 const MAX_SPAWNS_PER_UPDATE = 1;
@@ -654,7 +654,10 @@ function findSignalWalkPath(
     if (at === startI) break;
     at = prev[at];
   }
-  if (path[path.length - 1]?.[0] !== start[0] - 0.5 || path[path.length - 1]?.[1] !== start[1] - 0.5)
+  if (
+    path[path.length - 1]?.[0] !== start[0] - 0.5 ||
+    path[path.length - 1]?.[1] !== start[1] - 0.5
+  )
     return [];
   path.reverse();
   return path;
@@ -683,7 +686,6 @@ function edgeCost(
   return 1.35;
 }
 
-
 function physicalEdgeAllowed(world: World, a: GridPoint, b: GridPoint): boolean {
   const land = ([tx, ty]: GridPoint) =>
     world.isExplored(chunkIndexOf(tx), chunkIndexOf(ty)) && !isWater(world.getTile(tx, ty));
@@ -697,11 +699,7 @@ function physicalEdgeAllowed(world: World, a: GridPoint, b: GridPoint): boolean 
   return !(ab && bb && ab.tx === bb.tx && ab.ty === bb.ty);
 }
 
-function crossingJunction(
-  traffic: TrafficSim,
-  a: GridPoint,
-  b: GridPoint,
-): Junction | null {
+function crossingJunction(traffic: TrafficSim, a: GridPoint, b: GridPoint): Junction | null {
   const index = (traffic as unknown as TrafficInternals).junctionIndex;
   const directA = index.at(a[0], a[1]);
   if (directA?.signalized) return directA;

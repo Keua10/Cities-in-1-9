@@ -210,8 +210,8 @@ export const INDUSTRY_NUISANCE_MAX = 0.35;
 /** 재개발 포화 판정 단위. 자기 섹터와 인접 8개 섹터를 함께 확인한다. */
 export const REDEVELOPMENT_SECTOR_SIZE = 16;
 
-/** 매 틱 한 청크에서 새로 지을 수 있는 건물 수 상한. */
-export const MAX_BUILDS_PER_TICK = 2;
+/** 매 틱 한 청크에서 새로 지을 수 있는 건물 수 상한(32칸 청크 기준). */
+export const MAX_BUILDS_PER_TICK = 1;
 /** 매 틱 한 청크에서 재건축할 수 있는 건물 수 상한. */
 export const MAX_REBUILDS_PER_TICK = 1;
 
@@ -225,8 +225,11 @@ export const REBUILD_MIN_AGE_DAYS = 30;
  */
 export const REBUILD_DEMAND_GAP = 0.35;
 
-/** 한 틱에 훑는 재건축 후보 칸 수. 청크 전체를 매번 훑지 않기 위한 예산. */
-export const REBUILD_SCAN_BUDGET = 512;
+/**
+ * 한 틱에 훑는 재건축 후보 칸 수. 청크 전체를 매번 훑지 않기 위한 예산.
+ * 청크 32칸(1024칸) 기준 128 = 예전 64칸 청크의 512 와 같은 면적당 속도.
+ */
+export const REBUILD_SCAN_BUDGET = 128;
 
 /* ---------------- 도로망 ---------------- */
 

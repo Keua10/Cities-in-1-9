@@ -39,10 +39,12 @@ for (let kind = 17; kind < FACILITY_COUNT; kind++) {
   assert.equal(isFacilityAnchor(facCode(kind)), true);
   assert.equal(FACILITY_SPECS[kind].kind, kind);
 }
+// 도시 레벨 9단계(군사 1단계): 예전 1→1, 2→2~3, 3→4~5, 4→6~7, 5→8~9.
 assert.deepEqual(
   FACILITY_UNLOCK_LEVEL.slice(17),
-  [2, 3, 3, 3, 3, 4, 5, 4, 5, 1, 1, 1, 2, 2, 2, 3, 2, 1, 3],
+  [3, 5, 5, 4, 5, 7, 9, 6, 8, 1, 1, 1, 2, 2, 3, 4, 3, 1, 5],
 ); // 지하철역(26) 뒤는 식량 시설
+const L = (kind: number) => FACILITY_UNLOCK_LEVEL[kind];
 assert.deepEqual(
   [
     FACILITY_SPECS[FAC_HARBOR].span,
@@ -91,25 +93,25 @@ for (let dy = -4; dy < 30; dy++)
     world.setHeight(x + dx, y + dy, 0);
   }
 
-assert.equal(canPlaceFacility(world, x, y, FAC_COMM_TOWER, 1).ok, false);
-assert.equal(canPlaceFacility(world, x, y, FAC_COMM_TOWER, 2).ok, true);
+assert.equal(canPlaceFacility(world, x, y, FAC_COMM_TOWER, L(FAC_COMM_TOWER) - 1).ok, false);
+assert.equal(canPlaceFacility(world, x, y, FAC_COMM_TOWER, L(FAC_COMM_TOWER)).ok, true);
 
 world.setBuild(x + 8, y - 1, Build.Road, false);
-assert.equal(canPlaceFacility(world, x + 8, y, FAC_AIRPORT, 2).ok, false);
-assert.equal(canPlaceFacility(world, x + 8, y, FAC_AIRPORT, 3).ok, true);
-assert.equal(canPlaceFacility(world, x + 8, y, FAC_AIRPORT_L2, 3).ok, false);
-assert.equal(canPlaceFacility(world, x + 8, y, FAC_AIRPORT_L2, 4).ok, true);
-assert.equal(canPlaceFacility(world, x + 8, y, FAC_AIRPORT_L3, 4).ok, false);
-assert.equal(canPlaceFacility(world, x + 8, y, FAC_AIRPORT_L3, 5).ok, true);
+assert.equal(canPlaceFacility(world, x + 8, y, FAC_AIRPORT, L(FAC_AIRPORT) - 1).ok, false);
+assert.equal(canPlaceFacility(world, x + 8, y, FAC_AIRPORT, L(FAC_AIRPORT)).ok, true);
+assert.equal(canPlaceFacility(world, x + 8, y, FAC_AIRPORT_L2, L(FAC_AIRPORT_L2) - 1).ok, false);
+assert.equal(canPlaceFacility(world, x + 8, y, FAC_AIRPORT_L2, L(FAC_AIRPORT_L2)).ok, true);
+assert.equal(canPlaceFacility(world, x + 8, y, FAC_AIRPORT_L3, L(FAC_AIRPORT_L3) - 1).ok, false);
+assert.equal(canPlaceFacility(world, x + 8, y, FAC_AIRPORT_L3, L(FAC_AIRPORT_L3)).ok, true);
 
 const hx = x;
 const hy = y + 12;
 world.setBuild(hx, hy - 1, Build.Road, false);
-const dryHarbor = canPlaceFacility(world, hx, hy, FAC_HARBOR, 3);
+const dryHarbor = canPlaceFacility(world, hx, hy, FAC_HARBOR, L(FAC_HARBOR));
 assert.equal(dryHarbor.ok, false);
 assert.match(dryHarbor.reason, /수역/);
 world.setTile(hx + 3, hy + 1, Terrain.WaterShallow);
-assert.equal(canPlaceFacility(world, hx, hy, FAC_HARBOR, 3).ok, true);
+assert.equal(canPlaceFacility(world, hx, hy, FAC_HARBOR, L(FAC_HARBOR)).ok, true);
 
 world.placeFacility(x, y, FAC_COMM_TOWER, 0);
 assert.equal(world.buildingCovering(x, y)?.kind, FAC_COMM_TOWER);

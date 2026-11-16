@@ -1125,6 +1125,39 @@ body.clean-view #minimap-shell {
   line-height: 1.6;
   color: #aed9c4;
 }
+.cp-territory {
+  padding: 8px 0 10px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: #aed9c4;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+.cp-terr-line,
+.cp-prosperity {
+  white-space: pre-line;
+}
+.cp-terr-warn {
+  color: #ffb08a;
+  font-size: 11px;
+  white-space: pre-line;
+}
+.cp-terr-warn:empty {
+  display: none;
+}
+.cp-terr-actions {
+  display: flex;
+  gap: 6px;
+  margin: 6px 0;
+  flex-wrap: wrap;
+}
+.cp-terr-actions button {
+  font-size: 11px;
+  padding: 5px 8px;
+}
+.cp-terr-actions button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
 .cp-unlock,
 .cp-progression-help {
   font-size: 10px;

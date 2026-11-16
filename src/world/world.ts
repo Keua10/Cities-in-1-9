@@ -191,12 +191,19 @@ export class World {
    */
   onStructureEvent: ((e: StructureEvent) => void) | null = null;
 
-  /** 이 클라이언트가 조종하는 도시의 base 청크 왼쪽 위 좌표. */
+  /**
+   * 영토 규칙 (sim/territory.ts). 'zone' 은 주거·상업·공업 지구, 'owned' 는 내 땅에만
+   * 짓는 공공·행정·군사 시설이다. 막히면 이유 문장, 되면 빈 문자열. 없으면 제한 없음
+   * (점검 도구·둘러보기 전 단계).
+   */
+  landRule: ((cx: number, cy: number, use: 'zone' | 'owned') => string) | null = null;
+
+  /** 이 클라이언트가 조종하는 도시의 시작 영토(4×4 청크) 왼쪽 위 좌표. */
   baseCx = 0;
   baseCy = 0;
 
   /**
-   * origin: 학생이 시작 화면에서 고른 기본 영역(2×2 청크)의 왼쪽 위 청크.
+   * origin: 학생이 시작 화면에서 고른 시작 영토(4×4 청크)의 왼쪽 위 청크.
    * 숫자를 주면 점검 도구용 기본 자리(sites.defaultOrigin)를 쓴다.
    */
   constructor(origin: Origin | number = 0) {

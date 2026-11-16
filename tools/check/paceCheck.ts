@@ -47,11 +47,14 @@ assert.ok(
   Math.max(...CONSTRUCTION_SECONDS) < 3 * 3600,
   '민간 시설은 최종 군사 시설(3시간)보다 짧다',
 );
-// 레벨이 높을수록 공사가 길다(같은 레벨 안에서 순서는 자유).
+// 레벨이 높을수록 공사가 길다(같은 레벨 안에서 순서는 자유). 공사 등급은 예전 5단계
+// 기준이고, 9단계 레벨은 1→1, 2~3→2, 4~5→3, 6~7→4, 8~9→5 등급으로 묶인다.
+const GRADE = [1, 2, 2, 3, 3, 4, 4, 5, 5];
 const byLevel = new Map<number, number[]>();
-FACILITY_SPECS.forEach((s, k) =>
-  byLevel.set(s.unlockLevel, [...(byLevel.get(s.unlockLevel) ?? []), constructionSeconds(k)]),
-);
+FACILITY_SPECS.forEach((s, k) => {
+  const g = GRADE[s.unlockLevel - 1];
+  byLevel.set(g, [...(byLevel.get(g) ?? []), constructionSeconds(k)]);
+});
 assert.ok(Math.max(...byLevel.get(4)!) > Math.max(...byLevel.get(3)!));
 assert.ok(Math.min(...byLevel.get(5)!) > Math.max(...byLevel.get(4)!));
 console.log('  OK   공사 등급: 기초 ≤40초 · 일반 1~3분 · 고급 10~20분 · L4 40분 · L5 2시간');

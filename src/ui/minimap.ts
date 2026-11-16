@@ -3,6 +3,7 @@ import { CHUNK_SIZE } from '../core/constants';
 import { parseChunkKey, tileToWorldX, tileToWorldY, worldToTileF } from '../core/iso';
 import { isWelfareKind } from '../sim/buildings';
 import type { ServiceField } from '../sim/services';
+import type { TerritorySystem } from '../sim/territory';
 import { Build } from '../world/build';
 import { isWater } from '../world/terrain';
 import type { World } from '../world/world';
@@ -64,6 +65,8 @@ export class Minimap {
   private lastBasePaint = -Infinity;
   /** 지금 그려진 오버레이 종류. 바뀌면 다시 칠한다. */
   private overlayKey = '';
+  /** 영토 테두리(군사 1단계). */
+  territory: TerritorySystem | null = null;
 
   constructor(
     private world: World,
@@ -225,6 +228,44 @@ export class Minimap {
     }
 
     if (overlay) this.paintOverlay(ctx, overlay);
+    this.paintTerritory(ctx);
+  }
+
+  /** 영토 경계(청록), 끊긴 청크(빨강), 수도(금색). */
+  private paintTerritory(ctx: CanvasRenderingContext2D): void {
+    const t = this.territory;
+    if (!t) return;
+    const S = CHUNK_SIZE;
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = 'rgba(111, 211, 184, 0.95)';
+    ctx.beginPath();
+    for (const key of t.ownedKeys()) {
+      const { cx, cy } = parseChunkKey(key);
+      const x0 = this.mapX(cx * S);
+      const y0 = this.mapY(cy * S);
+      const x1 = this.mapX((cx + 1) * S);
+      const y1 = this.mapY((cy + 1) * S);
+      if (t.isCut(cx, cy)) {
+        ctx.save();
+        ctx.fillStyle = 'rgba(226, 87, 76, 0.35)';
+        ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
+        ctx.restore();
+      }
+      if (!t.isOwned(cx, cy - 1)) (ctx.moveTo(x0, y0), ctx.lineTo(x1, y0));
+      if (!t.isOwned(cx + 1, cy)) (ctx.moveTo(x1, y0), ctx.lineTo(x1, y1));
+      if (!t.isOwned(cx, cy + 1)) (ctx.moveTo(x0, y1), ctx.lineTo(x1, y1));
+      if (!t.isOwned(cx - 1, cy)) (ctx.moveTo(x0, y0), ctx.lineTo(x0, y1));
+    }
+    ctx.stroke();
+    const cap = t.capitalRect();
+    ctx.strokeStyle = '#f2cf7a';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(
+      this.mapX(cap.cx * S),
+      this.mapY(cap.cy * S),
+      this.mapX((cap.cx + cap.span) * S) - this.mapX(cap.cx * S),
+      this.mapY((cap.cy + cap.span) * S) - this.mapY(cap.cy * S),
+    );
   }
 
   /**

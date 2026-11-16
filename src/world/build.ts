@@ -208,6 +208,8 @@ export function canConnectRoads(
 
 export function canPlaceZone(world: World, tx: number, ty: number, zone: number): PlaceResult {
   if (!exploredOk(world, tx, ty)) return { ok: false, reason: '아직 개척하지 않은 땅입니다' };
+  const land = world.landRule?.(chunkIndexOf(tx), chunkIndexOf(ty), 'zone');
+  if (land) return { ok: false, reason: land };
   if (isWater(world.getTile(tx, ty)))
     return { ok: false, reason: '물 위에는 지구를 지정할 수 없습니다' };
   const cur = world.getBuild(tx, ty);

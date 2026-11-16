@@ -10,7 +10,7 @@ import {
 } from './continent';
 
 /**
- * 도시 시작 자리(2×2 청크) 규칙.
+ * 도시 시작 자리(시작 영토 4×4 청크) 규칙.
  *
  *  1. 땅: 대륙 안쪽(가장자리 2청크 제외), 평지가 물+산보다 많다.
  *  2. 하천: 2×2 안에 개울이나 강이 흐른다. 하수 방류에 꼭 필요하다.
@@ -22,12 +22,12 @@ import {
  *     능선(고도 1~4 언덕)과 개울은 장애물이 아니다.
  */
 
-export const SITE_NEAR = 6;
+export const SITE_NEAR = 12;
 export const SITE_FAR = BASE_SPACING_CHUNKS;
 /** 산맥으로 인정하는 연속 길이(칸). 한두 개 봉우리는 장애물이 아니다. */
 export const MOUNTAIN_BARRIER_TILES = 24;
-const EDGE_MARGIN = 2;
-/** 청크 통계 표본 간격(칸). 청크당 8×8 = 64점. */
+const EDGE_MARGIN = 4;
+/** 청크 통계 표본 간격(칸). 32칸 청크당 4×4 = 16점(대륙 전체 표본 수는 지도 v2 와 같다). */
 export const STAT_STEP = 8;
 export const STAT_SAMPLES = (CHUNK_SIZE / STAT_STEP) ** 2;
 /** 표본에서 이만큼 안에 물길이 있으면 "청크에 하천이 흐른다" 로 본다. */
@@ -41,9 +41,9 @@ export const CHUNK_BIG_RIVER = 8;
 /** 청크 하나의 요약. 시작 화면이 미리 계산된 표로 받는다(4바이트). */
 export interface ChunkStat {
   flags: number;
-  /** 0~64 평지 표본 수(물 아님, 고도 5 미만). */
+  /** 0~16 평지 표본 수(물 아님, 고도 5 미만). */
   flat: number;
-  /** 0~64 산 표본 수(고도 5 이상). */
+  /** 0~16 산 표본 수(고도 5 이상). */
   mountain: number;
   /** 0~255 평균 비옥도 × 200. */
   fertility: number;
@@ -315,8 +315,14 @@ export function defaultOrigin(index: number): Origin {
   const target = Math.max(0, Math.floor(index));
   while (defaultOrigins.length <= target) {
     const c = squareSpiral(spiralIndex++);
-    const o = { cx: c.x * 2 - 1, cy: c.y * 2 - 1 };
-    if (Math.abs(c.x) * 2 > CONTINENT_W / 2 && Math.abs(c.y) * 2 > CONTINENT_H / 2)
+    const o = {
+      cx: c.x * BASE_CHUNK_SPAN - BASE_CHUNK_SPAN / 2,
+      cy: c.y * BASE_CHUNK_SPAN - BASE_CHUNK_SPAN / 2,
+    };
+    if (
+      Math.abs(c.x) * BASE_CHUNK_SPAN > CONTINENT_W / 2 &&
+      Math.abs(c.y) * BASE_CHUNK_SPAN > CONTINENT_H / 2
+    )
       throw new Error('대륙에 더 이상 시작 자리가 없습니다');
     if (canStartAt(o, defaultOrigins).ok) defaultOrigins.push(o);
   }

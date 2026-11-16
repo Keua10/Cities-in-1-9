@@ -135,7 +135,7 @@ check('RLE 저장 왕복·연결 없는 0 보존·옛 저장 도로 보존', () 
   assert(!old.roadsConnected(x - 1, y, x, y));
 });
 check('청크 경계 양쪽 저장·철거 후 재설치 자동 재연결 금지', () => {
-  const ax = (w.baseCx + 1) * CHUNK_SIZE - 1;
+  const ax = (w.baseCx + 2) * CHUNK_SIZE - 1;
   w.setBuild(ax, y, Build.Road);
   w.setBuild(ax + 1, y, Build.Road);
   w.takeDirty();

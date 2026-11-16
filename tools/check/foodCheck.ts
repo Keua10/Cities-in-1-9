@@ -116,7 +116,13 @@ let shore: { tx: number; ty: number } | null = null;
 let inland: { tx: number; ty: number } | null = null;
 for (let ty = y0 + 2; ty < y0 + 124 && !(shore && inland); ty++)
   for (let tx = x0 + 2; tx < x0 + 124; tx++) {
-    const ok = canPlaceFacility(world, tx, ty, FAC_FISHERY, 3);
+    const ok = canPlaceFacility(
+      world,
+      tx,
+      ty,
+      FAC_FISHERY,
+      FACILITY_SPECS[FAC_FISHERY].unlockLevel,
+    );
     if (ok.ok && !shore) shore = { tx, ty };
     if (!ok.ok && ok.reason.includes('어업') && !inland) inland = { tx, ty };
     if (shore && inland) break;
@@ -130,7 +136,7 @@ assert.ok(food.summary.production > 0);
 const farmItems = BUILD_ITEMS.filter((i) => i.category === 'farm');
 assert.equal(farmItems.length, Object.keys(FOOD_SPECS).length);
 assert.equal(FACILITY_SPECS[FAC_GRAIN_FARM].unlockLevel, 1);
-assert.equal(FACILITY_SPECS[FAC_GREENHOUSE].unlockLevel, 3);
+assert.equal(FACILITY_SPECS[FAC_GREENHOUSE].unlockLevel, 4);
 assert.ok(constructionSeconds(FAC_GRAIN_FARM) <= 60, '기초 농장은 1분 안에 지어진다');
 assert.ok(constructionSeconds(FAC_GRAIN_FARM) < constructionSeconds(22));
 console.log(

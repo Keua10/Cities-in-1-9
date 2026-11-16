@@ -2,7 +2,13 @@ import { audio } from '../audio/audio';
 import { LEVEL_COUNT, TIER_NAMES, ZONE_C, ZONE_I, ZONE_NAMES, ZONE_R } from '../sim/buildings';
 import { formatMoney } from './money';
 import type { MacroSim } from '../sim/macro';
-import { BUILDING_UNLOCK_LEVEL, CITY_LEVELS } from '../sim/progression';
+import { BUILDING_UNLOCK_LEVEL, CITY_LEVELS, prosperityLevelFor } from '../sim/progression';
+import {
+  CAPITAL_CITY_LEVEL,
+  CAPITAL_SPANS,
+  OCCUPY_FLOATING,
+  OCCUPY_RESIDENTS,
+} from '../sim/territory';
 import { SERVICE_KIND_COUNT } from '../sim/services';
 import { FACILITY_NAMES } from '../sim/simConstants';
 import { sessionDaytimeAt } from '../sim/time';
@@ -26,6 +32,12 @@ import { cityAdvice } from './cityAdvice';
 export class CityPanel {
   private sim: MacroSim | null = null;
   onIncidentFocus: (() => void) | null = null;
+  /** "수도 옮기기" 를 누르면 불린다. main 이 다음 지도 탭을 새 수도 자리로 받는다. */
+  onCapitalMove: (() => void) | null = null;
+  private terrLineEl: HTMLElement;
+  private terrWarnEl: HTMLElement;
+  private expandButton: HTMLButtonElement;
+  private moveButton: HTMLButtonElement;
   /** 하수 안내 문장을 만들 때 지형을 읽는다. 없으면 안내를 생략한다. */
   world: World | null = null;
   private safetyEl: HTMLElement;
@@ -76,6 +88,28 @@ export class CityPanel {
     this.incidentButton = must(el, '.cp-incident-focus') as HTMLButtonElement;
     this.incidentButton.addEventListener('click', () => this.onIncidentFocus?.());
 
+    this.terrLineEl = must(el, '.cp-terr-line');
+    this.terrWarnEl = must(el, '.cp-terr-warn');
+    this.expandButton = must(el, '.cp-capital-expand') as HTMLButtonElement;
+    this.moveButton = must(el, '.cp-capital-move') as HTMLButtonElement;
+    this.expandButton.addEventListener('click', () => {
+      const sim = this.sim;
+      if (!sim) return;
+      const why = sim.territory.expandCapital(sim.cityLevel);
+      setText(this.terrWarnEl, why ? `수도를 넓힐 수 없습니다 · ${why}` : '수도를 넓혔습니다');
+      if (!why) audio.play('grow');
+      this.lastPaint = 0;
+    });
+    this.moveButton.addEventListener('click', () => {
+      const sim = this.sim;
+      if (!sim) return;
+      if (sim.territory.moving) {
+        sim.territory.cancelMove();
+        this.lastPaint = 0;
+        return;
+      }
+      this.onCapitalMove?.();
+    });
     this.moneyEl = must(el, '.cp-money');
     this.levelEl = must(el, '.cp-city-level');
     this.prosperityEl = must(el, '.cp-prosperity');
@@ -153,14 +187,19 @@ export class CityPanel {
     setText(this.popEl, Math.round(sim.stats.population).toLocaleString('ko-KR'));
     const milestone = CITY_LEVELS[sim.cityLevel - 1];
     const next = CITY_LEVELS[sim.cityLevel];
+    const land = sim.territory.count;
     setText(this.levelEl, `도시 Lv.${sim.cityLevel} · ${milestone.name}`);
     setText(
       this.prosperityEl,
       next
-        ? `번영도 ${sim.prosperity.toLocaleString('ko-KR')} / ${next.points.toLocaleString('ko-KR')}`
+        ? `번영도 ${sim.prosperity.toLocaleString('ko-KR')} / ${next.points.toLocaleString('ko-KR')} · 영토 ${land} / ${next.territory}청크` +
+            (prosperityLevelFor(sim.prosperity) > sim.cityLevel
+              ? `\n번영도는 충분합니다 · 영토 ${next.territory - land}청크를 더 넓히세요`
+              : '')
         : `번영도 ${sim.prosperity.toLocaleString('ko-KR')} · 최고 레벨`,
     );
     setText(this.unlockEl, next ? `다음: ${next.unlock}` : '현재 모든 건물·시설 잠금해제');
+    this.updateTerritory(sim);
 
     const occupancy = Math.max(0, Math.min(1, sim.stats.occupancy));
     const vacancy = 1 - occupancy;
@@ -292,6 +331,40 @@ export class CityPanel {
     );
   }
 
+  private updateTerritory(sim: MacroSim): void {
+    const t = sim.territory;
+    const span = CAPITAL_SPANS[t.capitalLevel - 1];
+    const moving = t.moving;
+    setText(
+      this.terrLineEl,
+      `영토 ${t.count}청크 · 수도 Lv.${t.capitalLevel} (${span}×${span})` +
+        (moving ? `\n수도 이전 중 · ${Math.ceil(moving.leftMs / 1000)}초 남음` : ''),
+    );
+    const cut = t.cutChunks();
+    if (cut.length) {
+      const soonest = Math.min(...cut.map((c) => c.leftMs));
+      setText(
+        this.terrWarnEl,
+        `⚠ 본 도시와 길이 끊긴 청크 ${cut.length}곳 · ${Math.ceil(soonest / 60000)}분 안에 이으지 않으면 잃습니다 (지도에 빨간 테두리)`,
+      );
+    } else if (this.terrWarnEl.textContent?.startsWith('⚠')) setText(this.terrWarnEl, '');
+    const nextCap = t.capitalLevel < CAPITAL_SPANS.length ? t.capitalLevel + 1 : 0;
+    const plan = nextCap ? t.expansionPlan(sim.cityLevel) : null;
+    this.expandButton.hidden = !nextCap || sim.cityLevel < CAPITAL_CITY_LEVEL[t.capitalLevel];
+    this.expandButton.disabled = !plan?.rect;
+    this.expandButton.textContent = nextCap
+      ? `수도 넓히기 → ${CAPITAL_SPANS[nextCap - 1]}×${CAPITAL_SPANS[nextCap - 1]}`
+      : '수도 최고 레벨';
+    this.expandButton.title = plan?.reason || '지금 수도를 둘러싼 내 영토로 수도를 넓힙니다';
+    const cooldown = t.moveCooldownLeftMs;
+    this.moveButton.textContent = moving
+      ? '수도 이전 취소'
+      : cooldown > 0
+        ? `수도 옮기기 (${Math.ceil(cooldown / 3_600_000)}시간 뒤)`
+        : '수도 옮기기';
+    this.moveButton.disabled = !moving && cooldown > 0;
+  }
+
   private updateSafety(sim: MacroSim): void {
     const [fires, crimes, illnesses] = sim.disasters.counts;
     setText(this.safetyEl, `화재 ${fires} · 범죄 ${crimes} · 질병 ${illnesses}`);
@@ -392,7 +465,19 @@ function template(): string {
       <b class="cp-city-level" role="status">도시 Lv.1 · 마을</b>
       <div class="cp-prosperity">번영도 0 / 100</div>
       <div class="cp-unlock"></div>
-      <div class="cp-progression-help">인구·입주율·하루 수지에 따라 매일 누적<br>L3 건물은 공원·전기·수도 부족에 특히 민감합니다.</div>
+      <div class="cp-progression-help">인구·입주율·하루 수지에 따라 매일 누적<br>레벨을 올리려면 번영도와 영토가 둘 다 필요합니다.</div>
+    </div>
+    <div class="cp-territory">
+      <div class="cp-section-title">영토와 수도</div>
+      <div class="cp-terr-line">영토 16청크 · 수도 Lv.1 (2×2)</div>
+      <div class="cp-terr-warn" role="status"></div>
+      <div class="cp-terr-actions">
+        <button type="button" class="cp-capital-expand" hidden>수도 넓히기</button>
+        <button type="button" class="cp-capital-move">수도 옮기기</button>
+      </div>
+      <div class="cp-progression-help">거주 ${OCCUPY_RESIDENTS}명 또는 유동인구 ${OCCUPY_FLOATING}명이 넘고 본 도시와 길로 이어진 청크는 내 땅이 됩니다.
+      지구는 내 땅과 맞닿은 청크까지 놓을 수 있고, 공공 시설은 내 땅에만 짓습니다.
+      길이 끊긴 땅은 10분 뒤 잃습니다. 수도 이전은 하루 한 번, 5분 걸립니다.</div>
     </div>
     <div class="cp-occupancy">
       <div class="cp-occupancy-head"><span>공실률</span><b class="cp-occupancy-value">100%</b></div>

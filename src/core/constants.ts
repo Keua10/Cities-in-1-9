@@ -17,10 +17,15 @@ export const MAX_HEIGHT = 8; // 고도 단계 0 ~ 8 (0 = 해수면)
 export const WALL_ART = 32;
 
 /* ---------- 월드 구조 ---------- */
-export const CHUNK_SIZE = 64; // 청크 한 변의 타일 수
-export const CHUNK_TILES = CHUNK_SIZE * CHUNK_SIZE; // 4096
-export const BASE_CHUNK_SPAN = 2; // 도시 기본 영역 2x2 청크 (=128x128 타일)
-export const BASE_SPACING_CHUNKS = 16; // 평지로 이어진 도시 간 최소 중심 간격. 장애물 예외는 sites.ts(SITE_NEAR)
+/**
+ * 청크 한 변의 타일 수. 군사 콘텐츠(2026-11)에서 64 → 32 로 바꿨다. 영토·점령·징병의
+ * 단위가 청크이기 때문이다. 실제 거리(타일)는 그대로 두고 청크 수만 두 배가 되게 환산했다.
+ */
+export const CHUNK_SIZE = 32;
+export const CHUNK_TILES = CHUNK_SIZE * CHUNK_SIZE; // 1024
+/** 시작 영토 4×4 청크(=128×128 타일). 수도 2×2 는 이 한가운데에 있다(territory.ts). */
+export const BASE_CHUNK_SPAN = 4;
+export const BASE_SPACING_CHUNKS = 32; // 평지로 이어진 도시 간 최소 중심 간격. 장애물 예외는 sites.ts(SITE_NEAR)
 export const WORLD_SEED = 20260901;
 
 /* ---------- 아틀라스 규격 ---------- */
@@ -40,8 +45,8 @@ export const PAN_MIN_SPEED = 0.02; // 이하로 떨어지면 관성 정지 (px/m
 
 /* ---------- 렌더링 예산 ---------- */
 export const RENDER_MARGIN_PX = 192; // 화면 밖으로 미리 채워두는 여유
-export const CHUNK_MESH_BUDGET = 28; // 동시에 메모리에 올려두는 청크 메시 상한
-export const SIM_RADIUS_CHUNKS = 1; // 마이크로 시뮬 반경 (카메라 기준 3x3)
+export const CHUNK_MESH_BUDGET = 112; // 동시에 메모리에 올려두는 청크 메시 상한
+export const SIM_RADIUS_CHUNKS = 3; // 마이크로 시뮬 반경 (카메라 기준 7x7, 32칸 청크)
 export const MAX_ACTIVE_VEHICLES = 1000; // 3.2단계에서 사용
 
 /* ---------- 저장(1단계) ---------- */

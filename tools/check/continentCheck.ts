@@ -36,13 +36,13 @@ import { World } from '../../src/world/world';
 
 let t = Date.now();
 const table = ChunkStatTable.compute();
-const bin = new Uint8Array(readFileSync('public/maps/continent-v2.bin'));
+const bin = new Uint8Array(readFileSync('public/maps/continent-v3.bin'));
 assert.equal(bin.length, table.raw.length, '지도 표 크기');
 assert.ok(
   bin.every((v, i) => v === table.raw[i]),
-  'public/maps/continent-v2.bin 이 생성기와 다릅니다 · npm run map:build 로 다시 만드세요',
+  'public/maps/continent-v3.bin 이 생성기와 다릅니다 · npm run map:build 로 다시 만드세요',
 );
-const png = readFileSync('public/maps/continent-v2.png');
+const png = readFileSync('public/maps/continent-v3.png');
 assert.equal(png.readUInt32BE(16), (CONTINENT_W * CHUNK_SIZE) / 16, '미리보기 지도 가로');
 assert.equal(png.readUInt32BE(20), (CONTINENT_H * CHUNK_SIZE) / 16, '미리보기 지도 세로');
 console.log(`  OK   지도 자료가 생성기와 같다 (${Date.now() - t}ms)`);

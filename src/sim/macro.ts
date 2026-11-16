@@ -1,6 +1,7 @@
 import { FoodSystem } from './food';
 import { NatureSystem } from './nature';
 import { ConstructionSystem } from './construction';
+import { SHOP_VISITORS_PER_JOB, TerritorySystem, type ChunkPeople } from './territory';
 import { groundPollutionFor, type GroundPollution } from './groundPollution';
 import { CHUNK_SIZE } from '../core/constants';
 import { MetroNetwork } from './metro';
@@ -140,6 +141,8 @@ export class MacroSim {
   readonly metro: MetroNetwork;
   readonly construction: ConstructionSystem;
   readonly nature: NatureSystem;
+  /** 영토·수도 (군사 1단계). 도시 레벨이 영토 청크 수를 본다. */
+  readonly territory: TerritorySystem;
   get lifeElapsedMs(): number {
     return this.macro.lifeElapsedMs ?? 0;
   }
@@ -211,6 +214,7 @@ export class MacroSim {
       this.onMacroChange?.(),
     );
     this.disasters = new DisasterSim(macro.disasters, macro.tick);
+    this.territory = new TerritorySystem(world, macro, () => this.onMacroChange?.());
     this.food = new FoodSystem(world);
     this.water.power = this.power;
     this.services.power = this.power;
@@ -314,7 +318,7 @@ export class MacroSim {
   }
 
   get cityLevel(): number {
-    return cityLevelFor(this.prosperity);
+    return cityLevelFor(this.prosperity, this.territory.count);
   }
 
   get maxBuildingTier(): number {
@@ -529,6 +533,7 @@ export class MacroSim {
     this.macro.tickedAt = now;
     this.power.ensure(this.world);
     this.water.ensure(this.world);
+    this.territory.update(now);
   }
 
   /* ---------------- 스타트 버닝 ---------------- */
@@ -580,6 +585,7 @@ export class MacroSim {
   update(deltaMs: number, budget: number, realMs = deltaMs): void {
     const boosted = this.consumeBoost(realMs);
     this.advanceLifeClock(deltaMs, boosted);
+    this.territory.update();
     this.power.ensure(this.world);
     this.water.ensure(this.world);
     if (this.catchupLeft > 0) {
@@ -751,10 +757,13 @@ export class MacroSim {
     const coveredByKind = new Array<number>(SERVICE_KIND_COUNT).fill(0);
     let homesCounted = 0;
     let homesFulfilled = 0;
+    const people = new Map<string, ChunkPeople>();
 
     for (const p of parcels) {
       roads += p.roadCount;
       if (!p.bld) continue;
+      const here: ChunkPeople = { residents: 0, floating: 0 };
+      people.set(p.key, here);
 
       let occArr = this.occ.get(p.key);
       if (!occArr || occArr.length !== p.bld.length) {
@@ -912,6 +921,8 @@ export class MacroSim {
           this.services.accrueLoad(tx, ty, level, filled);
           tiers[zone][level - 1].capacity += cap;
           tiers[zone][level - 1].filled += filled;
+          if (zone === ZONE_R) here.residents += filled;
+          else here.floating += filled * (zone === ZONE_C ? 1 + SHOP_VISITORS_PER_JOB : 1);
           capacityTotal += cap;
           filledTotal += filled;
         }
@@ -921,6 +932,7 @@ export class MacroSim {
     // 적립된 부하로 품질을 확정하고 카운터를 비운다. 도시를 두 바퀴 도는 것보다
     // 싸고, 결정론은 깨지지 않는다 — 부하 초기값은 항상 0 이고 저장하지 않는다.
     this.services.settleLoads();
+    this.territory.people = people;
     this.sanitation = {
       waste: wasteDemand ? wasteServed / wasteDemand : 1,
       funeral: funeralDemand ? funeralServed / funeralDemand : 1,
@@ -984,14 +996,16 @@ export class MacroSim {
     }
     for (const p of parcels) {
       let sum = raw.get(p.key) ?? 0;
-      for (let dy = -1; dy <= 1; dy++) {
-        for (let dx = -1; dx <= 1; dx++) {
+      // 32칸 청크라 둘레 2청크(약 64칸)까지 섞는다. 예전 64칸 청크의 둘레 1청크와 같은 거리다.
+      for (let dy = -2; dy <= 2; dy++) {
+        for (let dx = -2; dx <= 2; dx++) {
           if (dx === 0 && dy === 0) continue;
           sum += (raw.get(`${p.cx + dx},${p.cy + dy}`) ?? 0) * 0.4;
         }
       }
-      // 청크 하나를 공업이 가득 채우면 대략 4096. 그 절반에서 최대치에 닿게 잡는다.
-      const v = Math.min(1, sum / 2000) * INDUSTRY_NUISANCE_MAX;
+      // 예전 기준(64칸 청크를 공업이 가득 채우면 대략 4096, 그 절반에서 최대치)을
+      // 섞는 넓이 비율(10.6 / 16.8 청크 면적)로 환산했다.
+      const v = Math.min(1, sum / 1260) * INDUSTRY_NUISANCE_MAX;
       this.nuisance.set(p.key, v);
     }
   }
@@ -1155,6 +1169,7 @@ export class MacroSim {
     // 않은 도시" 이고, 대도시를 원하면 호출부가 이 뒤에 다시 적는다.
     delete this.macro.genSeed;
     delete this.macro.metropolisRequest;
+    this.territory.reset();
     this.services.budget = 1;
     this.onMacroChange?.();
   }

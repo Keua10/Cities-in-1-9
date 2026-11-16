@@ -8,8 +8,9 @@ rules_version = '2';
 //  - 남의 도시는 읽기만 된다. 6단계 전쟁에서 이웃 도시를 봐야 하기 때문이다.
 //  - 도시 번호(cityIndex)는 한 번 정해지면 본인도 못 바꾼다.
 //  - 시작 자리(origin)도 한 번 정해지면 본인도 못 바꾼다. 바꾸면 도시가 지도
-//    위에서 순간이동하고 남의 땅과 겹친다. 자리 목록(meta/bases)은 한 번에
-//    정확히 하나씩만 늘어나고, 이미 있는 자리는 지울 수 없다.
+//    위에서 순간이동하고 남의 땅과 겹친다. 자리 목록(meta/bases_vN)은 한 번에
+//    정확히 하나씩만 늘어나고, 이미 있는 자리는 지울 수 없다. 지도 판이 올라갈
+//    때만(청크 32칸 전환 등) 도시 문서의 자리를 지우고 새 판의 목록에 다시 고른다.
 //  - 삭제는 아무도 못 한다. 실수로든 홧김에든 도시가 사라지는 걸 막는다.
 
 service cloud.firestore {
@@ -33,13 +34,16 @@ service cloud.firestore {
 
     // 시작 자리 목록. 문서 하나에 "cx,cy" 문자열 배열 origins 하나만 들어 있다.
     // 누구의 자리인지는 적지 않는다(시작 화면은 막힌 곳만 보여준다).
-    match /meta/bases {
-      allow read: if signedIn();
+    // 지도 판마다 문서가 따로 있다: bases(v2), bases_v3(청크 32칸) ...
+    match /meta/{basesId} {
+      allow read: if signedIn() && basesId.matches('bases(_v[0-9]+)?');
       allow create: if signedIn()
+                    && basesId.matches('bases(_v[0-9]+)?')
                     && request.resource.data.keys().hasOnly(['origins'])
                     && request.resource.data.origins is list
                     && request.resource.data.origins.size() == 1;
       allow update: if signedIn()
+                    && basesId.matches('bases(_v[0-9]+)?')
                     && request.resource.data.keys().hasOnly(['origins'])
                     && request.resource.data.origins is list
                     && request.resource.data.origins.size() == resource.data.origins.size() + 1
@@ -55,11 +59,17 @@ service cloud.firestore {
                     && request.resource.data.cityIndex is int
                     && !('origin' in request.resource.data);
 
+      // 자리(origin)는 못 바꾼다. 단 지도 판(mapVersion)이 올라가는 순간에는 자리를
+      // 지울 수 있다(새 지도에서 다시 고른다). 지우기만 되고 다른 값으로 바꾸지는 못한다.
       allow update: if signedIn()
                     && request.auth.uid == cityId
                     && request.resource.data.cityIndex == resource.data.cityIndex
                     && (!('origin' in resource.data)
-                        || request.resource.data.origin == resource.data.origin);
+                        || request.resource.data.origin == resource.data.origin
+                        || (!('origin' in request.resource.data)
+                            && request.resource.data.mapVersion is int
+                            && request.resource.data.mapVersion
+                                 > resource.data.get('mapVersion', 0)));
 
       allow delete: if false;
 

@@ -3,6 +3,7 @@ import type { ConstructionJob } from '../sim/construction';
 import type { DisasterState } from '../sim/disasterTypes';
 import type { MetroState } from '../sim/metro';
 import type { CityPolicies } from '../sim/policies';
+import type { TerritoryState } from '../sim/territory';
 import { START_MONEY } from '../sim/simConstants';
 
 export interface HarborAllocation {
@@ -41,6 +42,8 @@ export interface MacroState {
   prosperity?: number;
   /** 식량 비축량 (sim/food.ts). */
   food?: number;
+  /** 영토·수도 (sim/territory.ts). 없으면 시작 영토 4×4 로 만든다. */
+  territory?: TerritoryState;
   /** Hybrid harbor passenger/cargo allocation. Old saves simply have no field. */
   transport?: TransportState;
   /**
@@ -75,7 +78,7 @@ export interface CityDoc {
   /** 도시 번호. 지도 v2 부터 위치와 무관하고 이름·관리용으로만 쓴다. */
   cityIndex: number;
   /**
-   * 학생이 시작 화면에서 고른 기본 영역 왼쪽 위 청크 "cx,cy".
+   * 학생이 시작 화면에서 고른 시작 영토(4×4 청크) 왼쪽 위 청크 "cx,cy".
    * 한 번 정해지면 Firestore 규칙이 바꾸지 못하게 막는다.
    */
   origin?: string;

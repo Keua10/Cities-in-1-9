@@ -108,7 +108,7 @@ export function seedCityUtilities(world: World, bornDay: number, seed = 0): void
   const need = (value: number, per: number, range: number): number =>
     Math.max(1, Math.ceil((value * 1.15) / per), reach(range));
 
-  place(FAC_INCINERATOR, need(demand.total, 10_000, 64));
+  place(FAC_INCINERATOR, need(demand.total, 10_000, 56));
   // 화장장(정원 6,000)과 묘지(5,000)는 같은 서비스 채널을 쓴다. 둘을 합쳐
   // 주거 정원을 덮되, 6:4 로 나눠 화장장 쪽에 조금 더 싣는다.
   place(FAC_CREMATORIUM, need(demand.residents * 0.6, 6_000, 64));

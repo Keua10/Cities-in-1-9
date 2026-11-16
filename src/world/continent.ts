@@ -21,13 +21,14 @@ import { fbm, moistureAt, Terrain, type TerrainId } from './terrain';
  * 노이즈 원본 함수(hash2·valueNoise·fbm)와 WORLD_SEED 는 그대로 쓴다.
  */
 
-/** 대륙 크기(청크). 64칸 청크라 타일로는 10,240 × 7,168칸. */
-export const CONTINENT_W = 160;
-export const CONTINENT_H = 112;
+/** 대륙 크기(청크). 32칸 청크라 타일로는 10,240 × 7,168칸(지도 v2 와 같은 땅). */
+export const CONTINENT_W = 320;
+export const CONTINENT_H = 224;
 /** 대륙 왼쪽 위 청크. 가운데가 (0,0) 근처가 되게 둔다. */
 export const CONTINENT_X0 = -CONTINENT_W / 2;
 export const CONTINENT_Y0 = -CONTINENT_H / 2;
-export const MAP_VERSION = 2;
+/** 3 = 청크 32칸 전환. 바뀌면 다음 로그인 때 도시를 비우고 자리를 다시 고른다. */
+export const MAP_VERSION = 3;
 
 const HALF_W_TILES = (CONTINENT_W * CHUNK_SIZE) / 2;
 const HALF_H_TILES = (CONTINENT_H * CHUNK_SIZE) / 2;

@@ -1,6 +1,7 @@
 import {
   collection,
   deleteDoc,
+  deleteField,
   doc,
   getDoc,
   getDocs,
@@ -66,8 +67,9 @@ export async function loadCity(session: Session): Promise<LoadedCity> {
       const saved = citySnap.data() as Partial<CityDoc>;
       const merged = normalizeCity(saved, session, token, now);
       if (saved.mapVersion !== MAP_VERSION) {
-        // 예전 지도(v1)의 도시. 지도가 통째로 바뀌었으므로 도시를 비우고 시작
-        // 화면에서 자리를 새로 고르게 한다. 청크 문서는 트랜잭션 밖에서 지운다.
+        // 예전 지도(v1·v2)의 도시. 지도나 청크 크기가 바뀌었으므로 도시를 비우고
+        // 시작 화면에서 자리를 새로 고르게 한다. 청크 문서는 트랜잭션 밖에서 지운다.
+        // 예전 자리(origin)도 지운다 — 규칙은 지도 판이 올라갈 때만 이걸 허락한다.
         merged.macro = emptyMacro();
         merged.explored = [];
         merged.mapVersion = MAP_VERSION;
@@ -78,6 +80,7 @@ export async function loadCity(session: Session): Promise<LoadedCity> {
           macro: merged.macro,
           explored: [],
           mapVersion: MAP_VERSION,
+          ...(saved.origin !== undefined ? { origin: deleteField() } : {}),
         });
         needsWipe = true;
         return merged;
@@ -135,6 +138,12 @@ async function wipeChunks(uid: string): Promise<void> {
  * 시작 자리
  * ---------------------------------------------------------------- */
 
+/**
+ * 자리 목록 문서. 지도 판마다 따로 둔다 — 청크 크기가 바뀌면 예전 "cx,cy" 는 다른
+ * 자리를 가리키고, 규칙상 목록에서 지울 수도 없기 때문이다.
+ */
+const BASES_DOC = `bases_v${MAP_VERSION}`;
+
 /** 자리를 잡지 못했을 때. 화면에 그대로 보여줄 문장을 담는다. */
 export class ClaimError extends Error {}
 
@@ -145,7 +154,7 @@ export class ClaimError extends Error {}
 export async function loadClaimedOrigins(): Promise<Origin[]> {
   const fb = getFirebase();
   if (!fb) return [];
-  const snap = await getDoc(doc(fb.db, 'meta', 'bases'));
+  const snap = await getDoc(doc(fb.db, 'meta', BASES_DOC));
   return parseOrigins(snap.exists() ? snap.data().origins : []);
 }
 
@@ -171,7 +180,7 @@ export async function claimOrigin(
   const fb = getFirebase();
   if (!fb) throw new OfflineError('서버 설정이 없습니다.');
   const { db } = fb;
-  const basesRef = doc(db, 'meta', 'bases');
+  const basesRef = doc(db, 'meta', BASES_DOC);
   const cityRef = doc(db, 'cities', session.uid);
   return runTransaction(db, async (tx) => {
     const citySnap = await tx.get(cityRef);

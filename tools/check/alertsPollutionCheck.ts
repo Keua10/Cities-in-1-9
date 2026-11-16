@@ -75,12 +75,13 @@ for (const kind of [FAC_INCINERATOR, FAC_CREMATORIUM, FAC_GAS]) {
 }
 world.placeFacility(40, 40, FAC_WIND, 0);
 assert.equal(groundPollutionFor(world).tiles.size, 0, 'Clean energy does not pollute');
-world.placeBuilding(20, 20, ZONE_I, 1, 0);
+// 청크 32칸: 같은 청크(1,1)에 둬야 필지가 개발된 것으로 잡힌다(실제 게임에서는 지구 위에만 짓는다).
+world.placeBuilding(46, 46, ZONE_I, 1, 0);
 assert(
-  (groundPollutionFor(world).at(21, 20)?.value ?? 0) > 0,
+  (groundPollutionFor(world).at(47, 46)?.value ?? 0) > 0,
   'New industry invalidates renderer cache',
 );
-world.demolishAt(20, 20);
+world.demolishAt(46, 46);
 assert.equal(groundPollutionFor(world).tiles.size, 0);
 console.log(
   'PASS: alert clustering/count conservation, overlap, issue retention, pollution sources, borders, cache invalidation and demolition',

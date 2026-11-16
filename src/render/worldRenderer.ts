@@ -39,6 +39,8 @@ import { PedestrianLayer } from './pedestrianLayer';
 import { SignalLayer } from './signalLayer';
 import { MetroLayer } from './metroLayer';
 import type { MetroNetwork } from '../sim/metro';
+import type { TerritorySystem } from '../sim/territory';
+import { parseChunkKey } from '../core/iso';
 import type { VehicleAtlas } from './vehicleAtlas';
 import { VehicleMesh } from './vehicleMesh';
 import { BuildingAlertLayer } from './buildingAlertLayer';
@@ -115,6 +117,14 @@ export class WorldRenderer {
   private gridLayer = new Graphics();
   private baseBorder: number[] = [];
   private baseBorderKey = '';
+  /** 영토 테두리(군사 1단계). 없으면 예전처럼 시작 영토만 그린다. */
+  territory: TerritorySystem | null = null;
+  private borders: { owned: number[][]; cut: number[][]; capital: number[]; move: number[] } = {
+    owned: [],
+    cut: [],
+    capital: [],
+    move: [],
+  };
   private cursorLayer = new Graphics();
   /** 시설 배치 미리보기 사각형. 커서 레이어와 따로 둬야 서로 지우지 않는다. */
   private previewLayer = new Graphics();
@@ -603,22 +613,42 @@ export class WorldRenderer {
       g.stroke({ width: px, color: 0xffffff, alpha: 0.14 });
     }
 
-    // 내 도시의 base 영역은 항상 표시한다. 여기가 전쟁에서 안 뺏기는 땅이다.
-    //
-    // 테두리는 **지면 높이를 따라** 그린다. 예전에는 네 꼭짓점만 이은 고도 0
-    // 마름모라, 언덕 위의 실제 경계보다 높이 × 8px 아래(화면상)에 선이 떠서
-    // 엉뚱한 풀밭을 가로질렀다.
+    // 내 도시의 땅은 항상 표시한다. 테두리는 **지면 높이를 따라** 그린다. 예전에는 네
+    // 꼭짓점만 이은 고도 0 마름모라, 언덕 위의 실제 경계보다 아래(화면상)에 선이 떴다.
     const b = this.world;
-    const t0x = b.baseCx * CHUNK_SIZE;
-    const t0y = b.baseCy * CHUNK_SIZE;
-    const t1x = t0x + BASE_CHUNK_SPAN * CHUNK_SIZE - 1;
-    const t1y = t0y + BASE_CHUNK_SPAN * CHUNK_SIZE - 1;
-    if (this.baseBorderKey !== `${t0x},${t0y},${b.walkRevision}`) {
-      this.baseBorderKey = `${t0x},${t0y},${b.walkRevision}`;
-      this.baseBorder = baseBorderPath(b, t0x, t0y, t1x, t1y);
+    const t = this.territory;
+    if (!t) {
+      const t0x = b.baseCx * CHUNK_SIZE;
+      const t0y = b.baseCy * CHUNK_SIZE;
+      const t1x = t0x + BASE_CHUNK_SPAN * CHUNK_SIZE - 1;
+      const t1y = t0y + BASE_CHUNK_SPAN * CHUNK_SIZE - 1;
+      if (this.baseBorderKey !== `${t0x},${t0y},${b.walkRevision}`) {
+        this.baseBorderKey = `${t0x},${t0y},${b.walkRevision}`;
+        this.baseBorder = baseBorderPath(b, t0x, t0y, t1x, t1y);
+      }
+      g.poly(this.baseBorder, true);
+      g.stroke({ width: px * 2, color: 0x6fd3b8, alpha: 0.75 });
+      return;
     }
-    g.poly(this.baseBorder, true);
-    g.stroke({ width: px * 2, color: 0x6fd3b8, alpha: 0.75 });
+    const moving = t.moving;
+    const key = `${t.revision},${b.walkRevision},${moving ? 1 : 0}`;
+    if (this.baseBorderKey !== key) {
+      this.baseBorderKey = key;
+      this.borders = territoryBorders(b, t);
+    }
+    // 영토 경계: 청록. 끊긴 청크: 빨강(10분 뒤 잃음). 수도: 금색.
+    for (const line of this.borders.owned) g.poly(line, false);
+    g.stroke({ width: px * 2, color: 0x6fd3b8, alpha: 0.8 });
+    if (this.borders.cut.length) {
+      for (const line of this.borders.cut) g.poly(line, true);
+      g.stroke({ width: px * 2, color: 0xe2574c, alpha: 0.85 });
+    }
+    g.poly(this.borders.capital, true);
+    g.stroke({ width: px * 3, color: 0xf2cf7a, alpha: 0.9 });
+    if (this.borders.move.length) {
+      g.poly(this.borders.move, true);
+      g.stroke({ width: px * 2, color: 0xf2cf7a, alpha: 0.45 });
+    }
   }
 
   private drawCursor(): void {
@@ -747,4 +777,72 @@ function baseBorderPath(
     corner(t0x, ty, 0, -1);
   }
   return out;
+}
+
+/** 영토 경계(바깥 청크와 맞닿은 변만), 끊긴 청크, 수도, 이전 중인 새 수도. */
+function territoryBorders(
+  world: World,
+  t: TerritorySystem,
+): { owned: number[][]; cut: number[][]; capital: number[]; move: number[] } {
+  const owned: number[][] = [];
+  const cut: number[][] = [];
+  const point = (out: number[], tx: number, ty: number, dx: number, dy: number) => {
+    const h = world.sampleHeight(tx, ty);
+    out.push(tileToWorldX(tx, ty) + dx * TILE_HW, tileToWorldY(tx, ty, h) + dy * TILE_HH);
+  };
+  for (const key of t.ownedKeys()) {
+    const { cx, cy } = parseChunkKey(key);
+    const t0x = cx * CHUNK_SIZE;
+    const t0y = cy * CHUNK_SIZE;
+    const t1x = t0x + CHUNK_SIZE - 1;
+    const t1y = t0y + CHUNK_SIZE - 1;
+    if (t.isCut(cx, cy)) cut.push(baseBorderPath(world, t0x, t0y, t1x, t1y));
+    if (!t.isOwned(cx, cy - 1)) {
+      const line: number[] = [];
+      for (let tx = t0x; tx <= t1x; tx++) {
+        point(line, tx, t0y, 0, -1);
+        point(line, tx, t0y, 1, 0);
+      }
+      owned.push(line);
+    }
+    if (!t.isOwned(cx + 1, cy)) {
+      const line: number[] = [];
+      for (let ty = t0y; ty <= t1y; ty++) {
+        point(line, t1x, ty, 1, 0);
+        point(line, t1x, ty, 0, 1);
+      }
+      owned.push(line);
+    }
+    if (!t.isOwned(cx, cy + 1)) {
+      const line: number[] = [];
+      for (let tx = t1x; tx >= t0x; tx--) {
+        point(line, tx, t1y, 0, 1);
+        point(line, tx, t1y, -1, 0);
+      }
+      owned.push(line);
+    }
+    if (!t.isOwned(cx - 1, cy)) {
+      const line: number[] = [];
+      for (let ty = t1y; ty >= t0y; ty--) {
+        point(line, t0x, ty, -1, 0);
+        point(line, t0x, ty, 0, -1);
+      }
+      owned.push(line);
+    }
+  }
+  const rectPath = (r: { cx: number; cy: number; span: number }) =>
+    baseBorderPath(
+      world,
+      r.cx * CHUNK_SIZE,
+      r.cy * CHUNK_SIZE,
+      (r.cx + r.span) * CHUNK_SIZE - 1,
+      (r.cy + r.span) * CHUNK_SIZE - 1,
+    );
+  const moving = t.moving;
+  return {
+    owned,
+    cut,
+    capital: rectPath(t.capitalRect()),
+    move: moving ? rectPath(moving.to) : [],
+  };
 }

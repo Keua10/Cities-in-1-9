@@ -16,16 +16,18 @@ import './startPicker.css';
 /**
  * 시작 지점 선택 화면 (Warnament 방식).
  *
- * 대륙 전체 지도에서 2×2 청크 기본 영역을 고른다. 초록 칸은 지금 고를 수 있는
+ * 대륙 전체 지도에서 4×4 청크 시작 영토(가운데 2×2 가 수도)를 고른다. 초록 칸은 지금 고를 수 있는
  * 곳, 어두운 칸은 다른 도시와 가까워 막힌 곳이다. **누구의 도시인지는 보여주지
  * 않는다.** 한 번 정한 자리는 바꿀 수 없으므로 두 번 눌러야 확정된다.
  */
 
 /** 미리 만든 대륙 자료 (tools/map/buildContinentMap.ts). */
-const MAP_BIN = '/maps/continent-v2.bin';
-const MAP_PNG = '/maps/continent-v2.png';
-/** 미리보기 지도 1청크 = 4픽셀 (16칸/픽셀). */
-const PX_PER_CHUNK = 4;
+const MAP_BIN = '/maps/continent-v3.bin';
+const MAP_PNG = '/maps/continent-v3.png';
+/** 미리보기 지도 1청크 = 2픽셀 (16칸/픽셀). */
+const PX_PER_CHUNK = 2;
+const SPAN = BASE_CHUNK_SPAN;
+const HALF = SPAN / 2;
 const ORIGINS_W = CONTINENT_W - BASE_CHUNK_SPAN + 1;
 const ORIGINS_H = CONTINENT_H - BASE_CHUNK_SPAN + 1;
 
@@ -118,7 +120,7 @@ class StartPicker {
     r.innerHTML = `
       <header class="sp-head">
         <h1>시작할 땅을 고르세요</h1>
-        <p>초록색 칸만 고를 수 있습니다. 하천이 흐르고 평지가 넉넉한 2×2 청크입니다.
+        <p>초록색 칸만 고를 수 있습니다. 하천이 흐르고 평지가 넉넉한 4×4 청크(가운데 2×2 가 수도)입니다.
         산·큰 강·바다로 갈린 곳은 다른 도시 가까이에도 지을 수 있지만, 평지로 이어진
         곳은 멀리 떨어져야 합니다.</p>
       </header>
@@ -243,8 +245,8 @@ class StartPicker {
       for (let x = 0; x < CONTINENT_W; x++) {
         let ok = false;
         let blocked = false;
-        for (let dy = -1; dy <= 0; dy++)
-          for (let dx = -1; dx <= 0; dx++) {
+        for (let dy = 1 - SPAN; dy <= 0; dy++)
+          for (let dx = 1 - SPAN; dx <= 0; dx++) {
             const ox = x + dx;
             const oy = y + dy;
             if (ox < 0 || oy < 0 || ox >= ORIGINS_W || oy >= ORIGINS_H) continue;
@@ -267,15 +269,15 @@ class StartPicker {
     const cy = Math.floor(fy);
     let best: Origin | null = null;
     let bestScore = Infinity;
-    for (let dy = -1; dy <= 0; dy++)
-      for (let dx = -1; dx <= 0; dx++) {
+    for (let dy = 1 - SPAN; dy <= 0; dy++)
+      for (let dx = 1 - SPAN; dx <= 0; dx++) {
         const o = { cx: cx + dx, cy: cy + dy };
         const ix = o.cx - CONTINENT_X0;
         const iy = o.cy - CONTINENT_Y0;
         if (ix < 0 || iy < 0 || ix >= ORIGINS_W || iy >= ORIGINS_H) continue;
         const i = this.idx(o);
         const rank = !this.terrainOk[i] ? 2 : this.spacing[i] === Spacing.Blocked ? 1 : 0;
-        const dist = Math.hypot(o.cx + 1 - fx, o.cy + 1 - fy);
+        const dist = Math.hypot(o.cx + HALF - fx, o.cy + HALF - fy);
         const score = rank * 100 + dist;
         if (score < bestScore) {
           bestScore = score;
@@ -342,7 +344,10 @@ class StartPicker {
       const y = this.oy + (o.cy - CONTINENT_Y0) * s;
       ctx.strokeStyle = color;
       ctx.lineWidth = width;
-      ctx.strokeRect(x, y, s * BASE_CHUNK_SPAN, s * BASE_CHUNK_SPAN);
+      ctx.strokeRect(x, y, s * SPAN, s * SPAN);
+      // 가운데 2×2 = 수도
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x + s * (HALF - 1), y + s * (HALF - 1), s * 2, s * 2);
     };
     if (this.hover && !sameOrigin(this.hover, this.selected))
       frame(this.hover, 'rgba(255,255,255,0.7)', 1);
@@ -518,8 +523,8 @@ function sameOrigin(a: Origin | null, b: Origin | null): boolean {
 
 /** "대륙 북서부" 처럼 대략의 위치. 좌표 숫자는 학생에게 의미가 없다. */
 function regionName(o: Origin): string {
-  const fx = (o.cx + 1 - CONTINENT_X0) / CONTINENT_W;
-  const fy = (o.cy + 1 - CONTINENT_Y0) / CONTINENT_H;
+  const fx = (o.cx + HALF - CONTINENT_X0) / CONTINENT_W;
+  const fy = (o.cy + HALF - CONTINENT_Y0) / CONTINENT_H;
   const ns = fy < 0.36 ? '북' : fy > 0.64 ? '남' : '';
   const ew = fx < 0.36 ? '서' : fx > 0.64 ? '동' : '';
   return ns || ew ? `대륙 ${ns}${ew}부` : '대륙 중부';

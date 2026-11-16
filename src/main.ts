@@ -7,7 +7,7 @@ import { Application } from 'pixi.js';
 import { Camera } from './core/camera';
 import { BASE_CHUNK_SPAN, CHUNK_SIZE, DEFAULT_ZOOM, TILE_HH, TILE_HW } from './core/constants';
 import { attachInput } from './core/input';
-import { chunkIndexOf, tileToWorldX, tileToWorldY, worldToTile } from './core/iso';
+import { chunkIndexOf, parseChunkKey, tileToWorldX, tileToWorldY, worldToTile } from './core/iso';
 import { pickTile } from './core/pick';
 import { claimOrigin, ClaimError, loadCity, loadClaimedOrigins } from './net/citySave';
 import { OfflineSaveManager, SaveManager, type AnySaveManager } from './net/saveManager';
@@ -57,7 +57,8 @@ import { bindGameChrome } from './ui/gameChrome';
 import './ui/gameChrome.css';
 
 /** 카메라가 base 밖으로 나갈 수 있는 거리(청크). 이웃의 안개까지는 보이게 둔다. */
-const ROAM_CHUNKS = 8;
+/** 탐사한 땅 바깥으로 카메라가 더 갈 수 있는 거리(청크). */
+const ROAM_CHUNKS = 16;
 
 async function boot(): Promise<void> {
   const loading = document.getElementById('loading');
@@ -117,7 +118,6 @@ async function boot(): Promise<void> {
 
   if (loading) loading.textContent = '지형을 그리는 중…';
   const world = new World(origin);
-  revealBaseRing(world);
   if (city) {
     world.setExploredKeys(city.explored);
     world.setPersistedOverrides(overrides);
@@ -218,6 +218,10 @@ async function boot(): Promise<void> {
   let cursor: { tx: number; ty: number } | null = null;
 
   const sim = new MacroSim(world, macro);
+  // 영토 규칙: 지구는 내 땅·개척지, 공공 시설은 내 땅에만.
+  world.landRule = sim.territory.landRule;
+  renderer.territory = sim.territory;
+  minimap.territory = sim.territory;
   const constructionPanel = new ConstructionPanel(sim.construction);
   const natureLayer = new NatureLayer(world, sim);
   renderer.root.addChild(natureLayer.graphics);
@@ -260,6 +264,13 @@ async function boot(): Promise<void> {
 
   const cityPanel = new CityPanel();
   cityPanel.world = world;
+  /** 수도 이전: 패널에서 버튼을 누르면 다음 탭 한 번이 새 수도 자리가 된다. */
+  let pickCapital = false;
+  cityPanel.onCapitalMove = () => {
+    pickCapital = true;
+    tools.setTool('select');
+    tools.announce('새 수도의 가운데가 될 곳을 지도에서 누르세요 · 내 영토 안이어야 합니다');
+  };
   const facilityFinder = new FacilityFinder(world, sim, (f) => {
     renderer.setFacilityFocus(f);
     if (!f) return;
@@ -301,6 +312,15 @@ async function boot(): Promise<void> {
       alertPanel.hide();
       cursor = pickTile(world, wx, wy);
       renderer.setCursorTile(cursor);
+      if (pickCapital) {
+        pickCapital = false;
+        const target = sim.territory.moveTarget(chunkIndexOf(cursor.tx), chunkIndexOf(cursor.ty));
+        const why = sim.territory.startMove(target);
+        tools.announce(
+          why ? `수도를 옮길 수 없습니다 · ${why}` : '수도 이전 시작 · 실제 5분 뒤 완료',
+        );
+        return;
+      }
       if (tools.tool === 'select' && sim.construction.at(cursor.tx, cursor.ty)) {
         chrome.closePanels();
         constructionPanel.show(cursor.tx, cursor.ty);
@@ -413,6 +433,15 @@ async function boot(): Promise<void> {
   constructionPanel.onCancel = (tx, ty) => tools.cancelConstruction(tx, ty);
   if (boostGranted)
     tools.announce('🔥 스타트 버닝 시작! 10분(플레이 시간) 동안 건설 속도 ×10 · 수입 ×10');
+  sim.territory.onChange = (gained, lost) => {
+    if (lost.length)
+      tools.announce(
+        `영토 ${lost.length}청크를 잃었습니다 · 본 도시와 길이 끊긴 지 10분이 지났습니다`,
+      );
+    else if (gained.length)
+      tools.announce(`영토 +${gained.length}청크 · 지금 영토 ${sim.territory.count}청크`);
+  };
+  let roamRevision = -1;
 
   const cityLabel = city
     ? `${city.cityName} (${city.cityIndex}번)`
@@ -447,6 +476,10 @@ async function boot(): Promise<void> {
       sim.update(gameDelta, CATCHUP_TICKS_PER_FRAME, playDelta);
       transport.update();
     } else sim.holdClock();
+    if (sim.territory.revision !== roamRevision) {
+      roamRevision = sim.territory.revision;
+      camera.limit = roamLimit(world);
+    }
 
     const camTile = worldToTile(camera.x, camera.y);
     traffic.setActiveChunk(
@@ -535,24 +568,28 @@ function takeMetropolisRequest(): number | undefined {
   }
 }
 
-function revealBaseRing(world: World): void {
-  for (let dy = -1; dy <= BASE_CHUNK_SPAN; dy++) {
-    for (let dx = -1; dx <= BASE_CHUNK_SPAN; dx++) {
-      world.explore(world.baseCx + dx, world.baseCy + dy);
-    }
-  }
-}
-
 function roamLimit(world: World): {
   minX: number;
   minY: number;
   maxX: number;
   maxY: number;
 } {
-  const t0x = (world.baseCx - ROAM_CHUNKS) * CHUNK_SIZE;
-  const t0y = (world.baseCy - ROAM_CHUNKS) * CHUNK_SIZE;
-  const t1x = (world.baseCx + BASE_CHUNK_SPAN + ROAM_CHUNKS) * CHUNK_SIZE;
-  const t1y = (world.baseCy + BASE_CHUNK_SPAN + ROAM_CHUNKS) * CHUNK_SIZE;
+  // 탐사한 땅 전체 + 둘레 ROAM_CHUNKS. 영토가 넓어지면 같이 넓어진다.
+  let minCx = world.baseCx;
+  let minCy = world.baseCy;
+  let maxCx = world.baseCx + BASE_CHUNK_SPAN - 1;
+  let maxCy = world.baseCy + BASE_CHUNK_SPAN - 1;
+  for (const key of world.exploredKeys()) {
+    const { cx, cy } = parseChunkKey(key);
+    minCx = Math.min(minCx, cx);
+    minCy = Math.min(minCy, cy);
+    maxCx = Math.max(maxCx, cx);
+    maxCy = Math.max(maxCy, cy);
+  }
+  const t0x = (minCx - ROAM_CHUNKS) * CHUNK_SIZE;
+  const t0y = (minCy - ROAM_CHUNKS) * CHUNK_SIZE;
+  const t1x = (maxCx + 1 + ROAM_CHUNKS) * CHUNK_SIZE;
+  const t1y = (maxCy + 1 + ROAM_CHUNKS) * CHUNK_SIZE;
   return {
     minX: tileToWorldX(t0x, t1y) - TILE_HW,
     maxX: tileToWorldX(t1x, t0y) + TILE_HW,

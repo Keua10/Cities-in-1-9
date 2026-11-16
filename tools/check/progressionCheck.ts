@@ -14,8 +14,8 @@ import { World } from '../../src/world/world';
 
 const macro = (): MacroState => ({ money: 100000, population: 0, tick: 0, tickedAt: 1000 });
 assert.deepEqual(
-  [0, 99, 100, 499, 500, 1499, 1500, 4000].map(cityLevelFor),
-  [1, 1, 2, 2, 3, 3, 4, 5],
+  [0, 99, 100, 249, 250, 499, 500, 1500, 6000].map((p) => cityLevelFor(p)),
+  [1, 1, 2, 2, 3, 3, 4, 6, 9],
 );
 assert.equal(dailyProsperity(0, 1, 100), 0);
 assert.ok(dailyProsperity(100, 1, 100) > dailyProsperity(100, 0, -100));
@@ -55,7 +55,7 @@ for (let i = 0; i < 32; i++) assert.equal(growParcel(world, parcel, ctx).built, 
 world.placeBuilding(x, y, ZONE_R, 3, 0);
 const old = macro();
 initializeProsperity(old, world);
-assert.equal(cityLevelFor(old.prosperity!), 4);
+assert.equal(cityLevelFor(old.prosperity!), 6);
 old.prosperity = 1512;
 initializeProsperity(old, world);
 assert.equal(old.prosperity, 1512);

@@ -8,6 +8,12 @@ import { FACILITY_UNLOCK_LEVEL } from './progression';
 import { WATER_SPECS } from './config/water';
 import { SPECIAL_SPECS } from './config/special';
 import { FOOD_SPECS } from './config/food';
+
+/**
+ * 공공 서비스·행정 시설(소방·경찰·병원·학교·소공원·공원·체육·교도소). 내 영토에만 짓는다.
+ * 발전·상하수도·위생·농장·교통 시설은 탐사한 땅이면 어디든 지을 수 있다(보호는 안 됨).
+ */
+export const OWNED_ONLY_FACILITIES: ReadonlySet<number> = new Set([0, 1, 2, 3, 4, 5, 6, 20]);
 import {
   FACILITY_CAPACITY,
   FACILITY_CAPACITY_IS_BUILDINGS,
@@ -97,6 +103,10 @@ export function canPlaceFacility(
       const y = ty + dy;
       if (!world.isExplored(chunkIndexOf(x), chunkIndexOf(y))) {
         return { ok: false, reason: '아직 개척하지 않은 땅입니다' };
+      }
+      if (OWNED_ONLY_FACILITIES.has(kind) && world.landRule) {
+        const land = world.landRule(chunkIndexOf(x), chunkIndexOf(y), 'owned');
+        if (land) return { ok: false, reason: land };
       }
       if (isWater(world.getTile(x, y))) {
         return { ok: false, reason: '물 위에는 지을 수 없습니다' };
