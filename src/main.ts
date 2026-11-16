@@ -234,6 +234,8 @@ async function boot(): Promise<void> {
   const assignment = new AssignmentTable();
   sim.attachTraffic(congestion, assignment);
   sim.primeCatchup(Date.now());
+  // 도시마다 한 번: 스타트 버닝(플레이 시간 10분 동안 건설 ×10 · 수입 ×10).
+  const boostGranted = sim.grantStartBoost();
   transport.update();
 
   const traffic = new TrafficSim(world, sim, congestion, assignment);
@@ -408,6 +410,8 @@ async function boot(): Promise<void> {
   });
   bindToolButtons(tools);
   const chrome = bindGameChrome(camera, tools, centerCamera);
+  if (boostGranted)
+    tools.announce('🔥 스타트 버닝 시작! 10분(플레이 시간) 동안 건설 속도 ×10 · 수입 ×10');
 
   const cityLabel = city
     ? `${city.cityName} (${city.cityIndex}번)`
@@ -429,11 +433,17 @@ async function boot(): Promise<void> {
     cursor: () => cursor,
   });
 
+  let lastFrameAt = performance.now();
   app.ticker.add((ticker) => {
     const now = performance.now();
     const gameDelta = Math.min(ticker.deltaMS, 100) * chrome.speed;
+    // 스타트 버닝은 실제 플레이 시간으로 줄인다. 느린 기기(프레임 100ms 이상)에서도
+    // 버닝이 덜 들어가지 않게 1초까지는 그대로 센다. 탭이 숨겨졌다 돌아온 큰 공백은 뺀다.
+    // (Pixi 의 deltaMS 는 프레임당 100ms 로 잘리므로 실제 시계로 직접 잰다.)
+    const playDelta = Math.min(Math.max(0, now - lastFrameAt), 1000);
+    lastFrameAt = now;
     if (chrome.speed > 0) {
-      sim.update(gameDelta, CATCHUP_TICKS_PER_FRAME);
+      sim.update(gameDelta, CATCHUP_TICKS_PER_FRAME, playDelta);
       transport.update();
     } else sim.holdClock();
 

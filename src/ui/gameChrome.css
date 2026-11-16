@@ -908,3 +908,50 @@ body.game-ui {
 .game-ui #toolbar .settings-audio .cp-section-title {
   margin: 0 0 4px;
 }
+
+/* 스타트 버닝: 도시를 처음 시작하면 10분(플레이 시간) 동안 건설 ×10 · 수입 ×10 */
+#start-boost {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 58px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border: 1px solid #f2a65a;
+  border-bottom-width: 3px;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #5a2c17f0, #3a1d12f0);
+  color: #ffe2b8;
+  font-size: 13px;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 0 14px #ff8a3d66;
+  animation: boost-glow 1.6s ease-in-out infinite alternate;
+}
+#start-boost[hidden] {
+  display: none;
+}
+#start-boost b {
+  color: #ffc46b;
+}
+#start-boost-time {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+#start-boost small {
+  color: #f6c99d;
+  font-size: 11px;
+}
+@keyframes boost-glow {
+  to {
+    box-shadow: 0 0 22px #ff8a3daa;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  #start-boost {
+    animation: none;
+  }
+}

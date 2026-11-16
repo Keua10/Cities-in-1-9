@@ -56,12 +56,7 @@ export class NatureLayer {
           .lineTo(x + 24 * (s - n), y + 12 * (s + n))
           .stroke({ color: 0x594535, width: 2 });
       g.rect(x - 20, y - 18, 40, 5).fill(0x253a41);
-      g.rect(
-        x - 20,
-        y - 18,
-        40 * Math.min(1, (this.sim.lifeElapsedMs - j.started) / (j.finishes - j.started)),
-        5,
-      ).fill(0xffd16a);
+      g.rect(x - 20, y - 18, 40 * this.sim.construction.progress(j), 5).fill(0xffd16a);
     }
     const c = this.sim.nature.center(),
       h = this.sim.nature.state.hazard;

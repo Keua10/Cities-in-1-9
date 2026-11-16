@@ -12,7 +12,7 @@ import {
   FOOD_LOCAL_SUPPLY,
   FOOD_SPECS,
 } from '../../src/sim/config/food';
-import { constructionMinutes } from '../../src/sim/construction';
+import { constructionSeconds } from '../../src/sim/construction';
 import { canPlaceFacility, FACILITY_SPECS } from '../../src/sim/facilities';
 import { FoodSystem, footprintFertility } from '../../src/sim/food';
 import type { FacilityRecord } from '../../src/sim/services';
@@ -131,7 +131,8 @@ const farmItems = BUILD_ITEMS.filter((i) => i.category === 'farm');
 assert.equal(farmItems.length, Object.keys(FOOD_SPECS).length);
 assert.equal(FACILITY_SPECS[FAC_GRAIN_FARM].unlockLevel, 1);
 assert.equal(FACILITY_SPECS[FAC_GREENHOUSE].unlockLevel, 3);
-assert.ok(constructionMinutes(FAC_GRAIN_FARM) < constructionMinutes(22));
+assert.ok(constructionSeconds(FAC_GRAIN_FARM) <= 60, '기초 농장은 1분 안에 지어진다');
+assert.ok(constructionSeconds(FAC_GRAIN_FARM) < constructionSeconds(22));
 console.log(
   'Food passed: fertility matters, local supply, stock, import/export, processing, fishery, menu.',
 );

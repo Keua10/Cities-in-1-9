@@ -7,6 +7,8 @@
  * 반대로 src/sim/buildings.ts 의 ID 는 저장되므로 절대 순서를 바꾸면 안 된다.
  */
 
+import { OFFLINE_GAME_DAYS_PER_REAL_DAY, OFFLINE_MAX_REAL_MS } from './pace';
+
 /* ---------------- 시간 ---------------- */
 
 /**
@@ -39,21 +41,20 @@ export const MIN_WORK_HOURS_AFTER_ARRIVAL = 2;
 export const LATEST_HOME_DEPARTURE_HOUR = 22;
 
 /**
- * 아무도 접속해 있지 않은 동안 시간이 흐르는 속도.
+ * 아무도 접속해 있지 않은 동안 시간이 흐르는 속도(실시간 대비 게임 시간 비율).
  *
- * 설계 원칙이 "아무도 없으면 시간이 느려지다가 멈춘다" 이므로, 오프라인
- * 실시간은 이 비율만큼만 게임 시간으로 환산한다.
+ * 설계 원칙이 "접속하지 않으면 아주 천천히 흐른다" 이므로, 현실 하루를 비우면
+ * 게임 시간으로 OFFLINE_GAME_DAYS_PER_REAL_DAY 일(기본 2일)만 흐른다.
+ * 공사는 이 값과 상관없이 실제 시계로 진행된다(config/pace.ts).
  */
-export const OFFLINE_SPEED = 0.1;
+export const OFFLINE_SPEED =
+  (OFFLINE_GAME_DAYS_PER_REAL_DAY * TICKS_PER_DAY * MS_PER_TICK) / OFFLINE_MAX_REAL_MS;
 
 /**
- * 오프라인 따라잡기 상한(틱). 12게임일.
- *
- * 이 상한이 곧 "시간이 멈춘다" 의 구현이다. 학생이 방학 내내 안 들어와도
- * 첫 로그인이 몇 분씩 멈추면 안 되고, 안 들어온 사람이 그 사이 도시가 다
- * 자라 있는 것도 이상하다.
+ * 오프라인 따라잡기 상한(틱). 현실 하루를 비웠을 때의 양과 같다.
+ * 그보다 오래 비워도 더 흐르지 않는다 — 이 상한이 곧 "시간이 멈춘다" 의 구현이다.
  */
-export const MAX_CATCHUP_TICKS = TICKS_PER_DAY * 12;
+export const MAX_CATCHUP_TICKS = TICKS_PER_DAY * OFFLINE_GAME_DAYS_PER_REAL_DAY;
 
 /** 따라잡기를 한 프레임에 다 돌리면 화면이 언다. 이 개수씩 끊어서 돌린다. */
 export const CATCHUP_TICKS_PER_FRAME = 24;

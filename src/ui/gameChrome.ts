@@ -1,6 +1,7 @@
 import { WEEKDAY_NAMES, type DaytimeSnapshot } from '../sim/time';
 import { decorateGameIcons } from './gameIcons';
 import { formatMoney } from './money';
+import { PEACE_SPEED } from '../sim/simConstants';
 import type { Camera } from '../core/camera';
 import type { Tools } from './tools';
 import type { MacroSim } from '../sim/macro';
@@ -10,7 +11,6 @@ export function bindGameChrome(camera: Camera, tools: Tools, center: () => void)
   decorateGameIcons();
   const ids = ['hud', 'city-panel', 'toolbar', 'map-layers'];
   const panels = ids.map((id) => document.getElementById(id)!);
-  let speed = 1;
   let lastPaint = -Infinity;
   const setText = (id: string, text: string) => {
     const el = document.getElementById(id)!;
@@ -72,15 +72,6 @@ export function bindGameChrome(camera: Camera, tools: Tools, center: () => void)
       closePanels();
     });
   }
-  for (const b of document.querySelectorAll<HTMLButtonElement>('[data-speed]')) {
-    b.addEventListener('click', () => {
-      speed = Number(b.dataset.speed);
-      document
-        .querySelectorAll<HTMLButtonElement>('[data-speed]')
-        .forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
-      setText('speed-label', speed === 0 ? '정지' : `${speed}×`);
-    });
-  }
   document
     .getElementById('zoom-in')!
     .addEventListener('click', () => camera.zoomAt(camera.screenW / 2, camera.screenH / 2, 1.25));
@@ -93,8 +84,9 @@ export function bindGameChrome(camera: Camera, tools: Tools, center: () => void)
     showInspection() {
       openPanel('hud', true);
     },
+    /** 접속 중에는 일시정지·배속 없이 항상 평시 배속으로 흐른다. */
     get speed() {
-      return speed;
+      return PEACE_SPEED;
     },
     update(now: number, sim: MacroSim, life: DaytimeSnapshot) {
       if (now - lastPaint < 250) return;
@@ -105,16 +97,23 @@ export function bindGameChrome(camera: Camera, tools: Tools, center: () => void)
       setText('strip-money', formatMoney(sim.money, true));
       document.getElementById('strip-money')!.title = formatMoney(sim.money);
       const finance = sim.financeEstimate();
-      const net = finance.income - finance.upkeep;
+      const net = finance.income * sim.incomeMultiplier - finance.upkeep;
       setText('strip-income', `${formatMoney(net, true, true)} /일`);
       document.getElementById('strip-income')!.title =
-        `${formatMoney(net, false, true)} /일 · 생활 하루(기본 10분)에 걸쳐 수입과 유지비가 일정하게 반영됩니다`;
+        `${formatMoney(net, false, true)} /일 · 생활 하루(실제 5분)에 걸쳐 수입과 유지비가 일정하게 반영됩니다`;
       document.getElementById('strip-income')!.classList.toggle('negative', net < 0);
       setText(
         'strip-date',
         `${life.absoluteDay + 1}일차 ${WEEKDAY_NAMES[life.weekday]} ${String(life.hourOfDay).padStart(2, '0')}:${String(life.minuteOfDay % 60).padStart(2, '0')} ${life.isDay ? '낮' : '밤'}`,
       );
       setText('game-notice', tools.activeMessage(now));
+      const boost = sim.startBoostLeftMs;
+      const badge = document.getElementById('start-boost')!;
+      badge.hidden = boost <= 0;
+      if (boost > 0) {
+        const s = Math.ceil(boost / 1000);
+        setText('start-boost-time', `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`);
+      }
     },
   };
 }

@@ -77,6 +77,8 @@ import {
   NEEDS_PENALTY_MAX,
   OCCUPANCY_HEALTHY,
   OFFLINE_SPEED,
+  START_BOOST_INCOME,
+  START_BOOST_MS,
   PROSPERITY_FULL,
   RESIDENTS_PER_JOB,
   ROAD_DIST_UNREACHABLE,
@@ -484,15 +486,55 @@ export class MacroSim {
     this.water.ensure(this.world);
   }
 
-  /** 실시간 프레임에서 부른다. 지나간 만큼 틱을 돌린다. */
-  advanceLifeClock(deltaMs: number): void {
+  /* ---------------- 스타트 버닝 ---------------- */
+
+  /** 도시마다 한 번, 처음 시작할 때 스타트 버닝을 준다. 준 경우 true. */
+  grantStartBoost(): boolean {
+    if (this.macro.startBoostGiven) return false;
+    this.macro.startBoostGiven = true;
+    this.macro.startBoostMs = START_BOOST_MS;
+    this.onMacroChange?.();
+    return true;
+  }
+  /** 남은 스타트 버닝(플레이 시간 ms). */
+  get startBoostLeftMs(): number {
+    return Math.max(0, this.macro.startBoostMs ?? 0);
+  }
+  /** 지금 수입 배수. 버닝 중이면 10, 아니면 1. 유지비에는 붙지 않는다. */
+  get incomeMultiplier(): number {
+    return this.startBoostLeftMs > 0 ? START_BOOST_INCOME : 1;
+  }
+  /** 플레이 시간 realMs 만큼 버닝을 쓰고, 실제로 버닝이 켜져 있던 ms 를 돌려준다. */
+  private consumeBoost(realMs: number): number {
+    const left = this.startBoostLeftMs;
+    if (!(left > 0) || !(realMs > 0)) return 0;
+    const used = Math.min(left, realMs);
+    const rest = left - used;
+    if (rest > 0) this.macro.startBoostMs = rest;
+    else {
+      delete this.macro.startBoostMs;
+      this.onMacroChange?.();
+    }
+    return used;
+  }
+
+  /**
+   * 실시간 프레임에서 부른다. deltaMs 는 게임 시간(배속 적용), boostedMs 는 이번 프레임에
+   * 스타트 버닝이 켜져 있던 실제 ms. 공사는 배속과 상관없이 실제 시계로 진행된다.
+   */
+  advanceLifeClock(deltaMs: number, boostedMs = 0): void {
     this.macro.lifeElapsedMs = this.lifeElapsedMs + Math.max(0, deltaMs);
-    this.construction.update();
+    this.construction.update(Date.now(), boostedMs);
     this.nature.update();
   }
 
-  update(deltaMs: number, budget: number): void {
-    this.advanceLifeClock(deltaMs);
+  /**
+   * deltaMs: 게임 시간(배속 적용). realMs: 실제로 흐른 플레이 시간(버닝을 여기서 쓴다).
+   * realMs 를 주지 않으면 deltaMs 와 같다고 본다(점검 도구).
+   */
+  update(deltaMs: number, budget: number, realMs = deltaMs): void {
+    const boosted = this.consumeBoost(realMs);
+    this.advanceLifeClock(deltaMs, boosted);
     this.power.ensure(this.world);
     this.water.ensure(this.world);
     if (this.catchupLeft > 0) {
@@ -505,7 +547,7 @@ export class MacroSim {
       return;
     }
 
-    this.accrueFinance(deltaMs);
+    this.accrueFinance(deltaMs, boosted > 0 ? START_BOOST_INCOME : 1);
     this.accumulatorMs += deltaMs;
     // 탭이 뒤로 갔다 오면 deltaMs 가 크게 튄다. 한 프레임에 도는 틱을 제한한다.
     let guard = 0;
@@ -992,7 +1034,7 @@ export class MacroSim {
 
   private financeRemainder = 0;
 
-  private accrueFinance(deltaMs: number): void {
+  private accrueFinance(deltaMs: number, incomeMul = 1): void {
     if (!(deltaMs > 0)) return;
     // 비축량을 먼저 움직이고, 창고가 차거나 빈 상태로 오늘의 수출·수입을 정한다.
     const stock = this.food.advanceStock(this.macro.food ?? 0, deltaMs / DAYTIME_DAY_MS);
@@ -1003,7 +1045,7 @@ export class MacroSim {
     this.stats.dailyUpkeep = upkeep;
     this.stats.facilityUpkeep = this.services.dailyUpkeep();
     // One displayed life day earns exactly one quoted daily net amount.
-    this.financeRemainder += ((income - upkeep) * deltaMs) / DAYTIME_DAY_MS;
+    this.financeRemainder += ((income * incomeMul - upkeep) * deltaMs) / DAYTIME_DAY_MS;
     const won = Math.trunc(
       this.financeRemainder * 10_000 + Math.sign(this.financeRemainder) * 1e-7,
     );
@@ -1044,6 +1086,9 @@ export class MacroSim {
     this.financeRemainder = 0;
     delete this.macro.lifeElapsedMs;
     delete this.macro.construction;
+    delete this.macro.constructionAt;
+    delete this.macro.startBoostMs;
+    delete this.macro.startBoostGiven;
     delete this.macro.nature;
     this.metro.reset();
     delete this.macro.signalOverrides;

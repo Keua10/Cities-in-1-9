@@ -4,7 +4,7 @@ import { Terrain } from '../../src/world/terrain';
 import { Build } from '../../src/world/build';
 import { MacroSim } from '../../src/sim/macro';
 import { NatureSystem } from '../../src/sim/nature';
-import { ConstructionSystem, completionLabel } from '../../src/sim/construction';
+import { ConstructionSystem, constructionSeconds } from '../../src/sim/construction';
 import { MetroNetwork } from '../../src/sim/metro';
 import type { MacroState } from '../../src/net/types';
 import { DAYTIME_DAY_MS } from '../../src/sim/simConstants';
@@ -50,7 +50,10 @@ assert.equal(world.getBuild(10, 10), Build.Civic, 'reserved footprint blocks oth
 tools.tapTile(10, 10);
 tools.confirmPlacement();
 assert.equal(sim.construction.jobs.length, 1, 'no duplicate charges or overlapping jobs');
-assert.equal(completionLabel(job.finishes), '1일 15:30');
+assert.equal(job.workMs, constructionSeconds(0) * 1000, 'work is real-time seconds');
+// 공사는 실제 시계로 진행된다. 저장 후 접속하지 않은 동안에도 이어서 계산한다.
+const t0 = 1_000_000;
+state.constructionAt = t0;
 const restoredState = JSON.parse(JSON.stringify(state));
 const restored = new ConstructionSystem(
   world,
@@ -58,14 +61,36 @@ const restored = new ConstructionSystem(
   new MetroNetwork(world, restoredState, () => {}),
   () => {},
 );
-restoredState.lifeElapsedMs = job.finishes - 1;
-restored.update();
+restored.update(t0 + job.workMs! - 1);
 assert.equal(world.buildingCovering(10, 10), null);
-restoredState.lifeElapsedMs++;
-restored.update();
+assert(restored.progress(restored.jobs[0]) > 0.99);
+restored.update(t0 + job.workMs!);
 assert.equal(world.buildingCovering(10, 10)?.kind, 0);
 assert.equal(restored.jobs.length, 0);
 assert.equal(restoredState.money, state.money, 'completion never charges again');
+
+// 스타트 버닝 구간은 10배로 진행한다.
+const boosted = fixture();
+boosted.sim.construction.start(40, 40, 2, 99); // 병원 3분
+const bj = boosted.sim.construction.jobs[0];
+boosted.state.constructionAt = t0;
+boosted.state.startBoostMs = 60_000;
+assert.equal(boosted.sim.construction.remainingMs(bj), bj.workMs! / 10);
+boosted.sim.construction.update(t0 + 10_000, 10_000);
+assert.equal(bj.doneMs, 100_000);
+boosted.sim.construction.update(t0 + 20_000, 0);
+assert.equal(bj.doneMs, 110_000);
+
+// 예전 저장(생활 시계 started/finishes)도 남은 비율 그대로 옮겨진다.
+const legacy = fixture();
+legacy.state.lifeElapsedMs = 5_000;
+legacy.state.construction = [
+  { tx: 50, ty: 50, kind: 0, span: 2, cost: 0, started: 0, finishes: 20_000 },
+];
+const lj = legacy.sim.construction.jobs[0];
+assert.equal(lj.workMs, 20_000);
+assert.equal(lj.doneMs, 5_000);
+assert.equal(lj.started, undefined);
 
 const station = fixture();
 station.world.setBuild(20, 19, Build.Road);
@@ -73,8 +98,8 @@ station.sim.construction.start(20, 20, 26, 99);
 assert.equal(station.sim.metro.stationAtSurface(20, 20), undefined);
 const sj = station.sim.construction.jobs[0];
 assert(sj);
-station.state.lifeElapsedMs = sj.finishes;
-station.sim.construction.update();
+station.state.constructionAt = 0;
+station.sim.construction.update(sj.workMs!);
 assert(station.sim.metro.stationAtSurface(20, 20));
 assert.equal(station.state.money, 982000);
 station.sim.construction.start(30, 30, 0, 99);

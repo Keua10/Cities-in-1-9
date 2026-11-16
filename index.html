@@ -68,13 +68,16 @@
       ><button id="cancel-build" aria-label="건설 취소">×</button>
     </div>
     <div id="game-notice" role="status"></div>
+    <div id="start-boost" role="status" hidden>
+      <b>🔥 스타트 버닝</b><span id="start-boost-time">10:00</span
+      ><small>건설 ×10 · 수입 ×10</small>
+    </div>
     <footer id="game-bottom">
       <div class="time-controls">
         <span id="strip-date">1일차 00시</span
-        ><button data-speed="0" aria-label="일시정지" data-icon="pause"></button
-        ><button data-speed="1" aria-label="보통 속도" aria-pressed="true" data-icon="play"></button
-        ><button data-speed="2" aria-label="2배속" data-icon="fast"></button
-        ><span id="speed-label">1×</span>
+        ><span id="speed-label" title="평화로운 동안 시간은 2배로 흐릅니다. 일시정지는 없습니다."
+          >평시 2×</span
+        >
       </div>
       <button class="finance-strip" data-panel="city-panel" aria-label="재정 상세">
         <span data-icon="coin"></span><b id="strip-money">₩0</b

@@ -1,4 +1,4 @@
-import { completionLabel, type ConstructionSystem } from '../sim/construction';
+import { formatDuration, type ConstructionSystem } from '../sim/construction';
 import { FACILITY_SPECS } from '../sim/facilities';
 
 export class ConstructionPanel {
@@ -33,14 +33,9 @@ export class ConstructionPanel {
     if (!this.point) return;
     const job = this.system.at(this.point.tx, this.point.ty);
     const text = document.createElement('p');
-    const progress = job
-      ? Math.min(
-          100,
-          Math.floor(((this.system.elapsed - job.started) / (job.finishes - job.started)) * 100),
-        )
-      : 100;
+    const progress = job ? Math.floor(this.system.progress(job) * 100) : 100;
     text.textContent = job
-      ? `${FACILITY_SPECS[job.kind].name} 공사 중 · ${progress}% · 완공 예정 ${completionLabel(job.finishes)} (왼쪽 아래 생활 시계 기준). 공사 중에는 가동되지 않습니다. 철거 도구로 공사를 취소할 수 있으며 공사비는 반환되지 않습니다.`
+      ? `${FACILITY_SPECS[job.kind].name} 공사 중 · ${progress}% · 약 ${formatDuration(this.system.remainingMs(job) / 1000)} 남음 (실제 시간 · 접속하지 않아도 진행). 공사 중에는 가동되지 않습니다. 철거 도구로 공사를 취소할 수 있으며 공사비는 반환되지 않습니다.`
       : '건설이 완료되었습니다.';
     if (text.textContent === this.lastText && !this.element.hidden) return;
     this.lastText = text.textContent;

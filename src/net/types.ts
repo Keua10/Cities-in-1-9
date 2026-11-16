@@ -23,6 +23,12 @@ export interface MacroState {
   lifeElapsedMs?: number;
   nature?: NatureState;
   construction?: ConstructionJob[];
+  /** 공사를 마지막으로 진행시킨 실제 시각(ms). 접속하지 않은 동안의 공사를 이어서 계산한다. */
+  constructionAt?: number;
+  /** 스타트 버닝 남은 시간(접속한 플레이 시간 ms). */
+  startBoostMs?: number;
+  /** 스타트 버닝을 이미 받았는지. 도시마다 한 번만 준다. */
+  startBoostGiven?: boolean;
   metro?: MetroState;
   /** Explicit road signal controls: true installs, false suppresses automatic placement. */
   signalOverrides?: Record<string, boolean>;

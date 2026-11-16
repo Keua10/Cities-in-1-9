@@ -1,4 +1,4 @@
-import { constructionMinutes } from '../sim/construction';
+import { constructionSeconds, formatDuration } from '../sim/construction';
 import { audio } from '../audio/audio';
 import { pickTile } from '../core/pick';
 import type { WorldRenderer } from '../render/worldRenderer';
@@ -11,7 +11,13 @@ import { METRO_STATION_COST, METRO_TUNNEL_COST } from '../sim/metro';
 import type { UtilityMode } from '../render/utilityLayer';
 import { MAX_HEIGHT } from '../core/constants';
 import { chunkIndexOf } from '../core/iso';
-import { COST_ROAD, COST_ZONE, TERRAIN_COST, TERRAIN_SOFT_TILES } from '../sim/simConstants';
+import {
+  COST_ROAD,
+  COST_ZONE,
+  START_BOOST_BUILD,
+  TERRAIN_COST,
+  TERRAIN_SOFT_TILES,
+} from '../sim/simConstants';
 import {
   Build,
   canConnectRoads,
@@ -111,14 +117,6 @@ const TOOL_VERBS: Partial<Record<ToolId, string>> = {
   terrainRaise: '정리',
   terrainLower: '정리',
 };
-
-/** 공사 기간 표기. "8.0게임 시간" 대신 "8시간", "3시간 30분". */
-function formatHours(minutes: number): string {
-  const h = Math.floor(minutes / 60);
-  const m = Math.round(minutes % 60);
-  if (h === 0) return `${m}분`;
-  return m ? `${h}시간 ${m}분` : `${h}시간`;
-}
 
 const MESSAGE_MS = 2500;
 
@@ -528,8 +526,9 @@ export class Tools {
           ? `${formatMoney(cost, true)} · 자금 부족`
           : formatMoney(cost, true);
     if (facilityLike && plan.buildCount > 0) {
-      const minutes = constructionMinutes(this.tool === 'metroStation' ? 26 : this.facilityKind);
-      detail += ` · 공사 ${formatHours(minutes)}`;
+      const seconds = constructionSeconds(this.tool === 'metroStation' ? 26 : this.facilityKind);
+      const boosted = this.sim.startBoostLeftMs > 0;
+      detail += ` · 공사 ${formatDuration(boosted ? seconds / START_BOOST_BUILD : seconds)}${boosted ? ' (버닝)' : ''}`;
     }
     if (this.tool === 'facility' && plan.buildCount > 0) detail += this.foodPreview();
     if (plan.warning) detail += ` · ⚠ ${plan.warning}`;
@@ -890,6 +889,12 @@ export class Tools {
    * 실패는 소리로 먼저 안다 — 메시지는 읽기 전에 사라지기도 한다. 그래서 거부음은
    * **실패와 경고에만** 낸다. 예전에는 "20칸 건설 완료" 에도 거부음이 났다.
    */
+  /** 소리 없이 조금 오래(약 7초) 보여주는 안내. 스타트 버닝 시작 같은 알림에 쓴다. */
+  announce(text: string): void {
+    this.message = text;
+    this.messageAt = performance.now() + 4500;
+  }
+
   private note(text: string, sound: 'deny' | 'none' = 'deny'): void {
     this.message = text;
     this.messageAt = performance.now();
