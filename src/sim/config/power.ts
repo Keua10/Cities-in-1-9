@@ -16,11 +16,14 @@ export const WIRE_UPKEEP = 0.08;
 export const FAC_WIND = 11;
 export const FAC_GAS = 12;
 export const FAC_SOLAR = 13;
+/** 석탄 화력(config/resources.ts FAC_COAL_POWER). 석탄이 있어야 돈다. */
+export const FAC_COAL_POWER = 47;
 
 export const POWER_SPECS: Readonly<Record<number, { capacity: number }>> = {
   [FAC_WIND]: { capacity: 5000 },
   [FAC_GAS]: { capacity: 30000 },
   [FAC_SOLAR]: { capacity: 15000 },
+  [FAC_COAL_POWER]: { capacity: 45000 },
 };
 
 /** Parks and the STEP 5-reserved communication tower do not consume power. */
@@ -38,5 +41,8 @@ export function facilityPowerDemand(kind: number): number {
   // 식량 시설 27~35: 밭·목장은 적게, 온실·가공 공장은 많이 쓴다.
   const food = [40, 20, 20, 60, 120, 250, 60, 30, 300][kind - 27];
   if (food !== undefined) return food;
+  // 자원 36~46: 광산 1·2·3단계, 제철소, 정유소.
+  const res = [150, 150, 150, 260, 260, 260, 420, 420, 420, 900, 700][kind - 36];
+  if (res !== undefined) return res;
   return 100;
 }

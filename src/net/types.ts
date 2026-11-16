@@ -42,6 +42,10 @@ export interface MacroState {
   prosperity?: number;
   /** 식량 비축량 (sim/food.ts). */
   food?: number;
+  /** 자원 비축 {iron, coal, oil} (sim/resources.ts). */
+  resources?: Record<string, number>;
+  /** 청크별로 캔 양 "cx,cy" → 단위. 매장량 = 처음 매장량 - 이 값. */
+  mined?: Record<string, number>;
   /** 영토·수도 (sim/territory.ts). 없으면 시작 영토 4×4 로 만든다. */
   territory?: TerritoryState;
   /** Hybrid harbor passenger/cargo allocation. Old saves simply have no field. */

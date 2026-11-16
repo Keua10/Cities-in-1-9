@@ -10,7 +10,8 @@ import {
   ZONE_I,
 } from './buildings';
 import { FACILITY_SPAN } from './config/facilities';
-import { FAC_GAS } from './config/power';
+import { FAC_COAL_POWER, FAC_GAS } from './config/power';
+import { FAC_REFINERY, FAC_STEEL_MILL } from './config/resources';
 import { FAC_INCINERATOR, FAC_CREMATORIUM } from './config/sanitation';
 import { INDUSTRY_NUISANCE_RADIUS } from './simConstants';
 
@@ -20,6 +21,9 @@ export const FACILITY_EMISSIONS: Readonly<Record<number, { radius: number; peak:
   [FAC_INCINERATOR]: { radius: 9, peak: 0.95 },
   [FAC_CREMATORIUM]: { radius: 5, peak: 0.5 },
   [FAC_GAS]: { radius: 7, peak: 0.65 },
+  [FAC_COAL_POWER]: { radius: 10, peak: 0.85 },
+  [FAC_STEEL_MILL]: { radius: 8, peak: 0.6 },
+  [FAC_REFINERY]: { radius: 8, peak: 0.55 },
 };
 export interface PollutedTile {
   tx: number;

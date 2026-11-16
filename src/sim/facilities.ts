@@ -8,6 +8,8 @@ import { FACILITY_UNLOCK_LEVEL } from './progression';
 import { WATER_SPECS } from './config/water';
 import { SPECIAL_SPECS } from './config/special';
 import { FOOD_SPECS } from './config/food';
+import { isMineKind } from './config/resources';
+import { mineSiteProblem } from './resources';
 
 /**
  * 공공 서비스·행정 시설(소방·경찰·병원·학교·소공원·공원·체육·교도소). 내 영토에만 짓는다.
@@ -141,6 +143,10 @@ export function canPlaceFacility(
     return { ok: false, reason: '항구는 수역에 바로 닿은 평평한 육지에 지어야 합니다' };
   }
 
+  if (isMineKind(kind)) {
+    const why = world.mineRule ? world.mineRule(kind, tx, ty) : mineSiteProblem(kind, tx, ty, null);
+    if (why) return { ok: false, reason: why };
+  }
   if (FOOD_SPECS[kind]?.needsWater && !touchesWater(world, tx, ty, span)) {
     return { ok: false, reason: '어업 기지는 바다나 강에 바로 닿은 평평한 육지에 지어야 합니다' };
   }

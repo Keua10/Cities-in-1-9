@@ -141,10 +141,13 @@ export class ServiceField {
    *  - 그 밖(공원·농장·공항·항구 등): 항상 100%
    * 도로가 끊긴 시설은 이용률과 상관없이 100%를 낸다(도로를 이어 주라는 신호).
    */
+  /** 종류별 유지비 배수(정유소가 있으면 가스 발전 할인 등). */
+  kindUpkeepMul: ((kind: number) => number) | null = null;
+
   operatingUpkeep(utilityUse: (kind: number) => number | null = () => null): number {
     let sum = 0;
     for (const f of this.facilities) {
-      const full = this.upkeepOfKind(f.kind);
+      const full = this.upkeepOfKind(f.kind) * (this.kindUpkeepMul?.(f.kind) ?? 1);
       if (!full) continue;
       const spec = FACILITY_SPECS[f.kind];
       let use: number | null = utilityUse(f.kind);

@@ -16,6 +16,7 @@ const paths: Record<string, string> = {
   service: 'M6 2h8v5h5v7h-5v5H6v-5H1V7h5z M8 4v5H3v3h5v5h4v-5h5V9h-5V4z',
   park: 'M8 1h4v3h3v3h2v5h-3v3h-3v4H9v-4H6v-3H3V7h2V4h3z',
   farm: 'M9 1h2v4h2V3h2v4h-2v2h-2v10H9V9H7V7H5V3h2v2h2z M3 10h2v2h2v2H5v2H3z M15 10h2v6h-2v-2h-2v-2h2z M1 17h18v2H1z',
+  mine: 'M3 18L8 4h4l5 14h-3l-1-4H7l-1 4z M8 11h4l-1-4H9z M14 2h4v2h-2v3h-2z',
   environment: 'M4 5h12v13H4z M2 2h5V1h6v1h5v2H2z M7 7v8h2V7z M11 7v8h2V7z',
   select: 'M3 1v15l4-4 4 7 3-2-4-6h7z',
   bulldoze: 'M3 7h8v6H3z M5 3h6v3H5z M1 14h13v4H1z M15 9h3v7h2v2h-5z',

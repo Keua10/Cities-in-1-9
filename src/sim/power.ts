@@ -10,7 +10,13 @@ import {
   zoneOfCode,
 } from './buildings';
 import { FACILITY_SPECS, touchesRoadTiles } from './facilities';
-import { facilityPowerDemand, POWER_REACH, POWER_SPECS, WIRE_UPKEEP } from './config/power';
+import {
+  FAC_COAL_POWER,
+  facilityPowerDemand,
+  POWER_REACH,
+  POWER_SPECS,
+  WIRE_UPKEEP,
+} from './config/power';
 import { FAC_COMM_TOWER } from './config/special';
 import { rangeOffsets, utilityKey as key } from './utilityRange';
 
@@ -30,6 +36,8 @@ interface Grid {
 const offsets = rangeOffsets(POWER_REACH);
 export class PowerField {
   revision = -1;
+  /** 석탄 화력 발전소 연료(석탄 비축)가 있는가. 바뀌면 world.utilityRevision 을 올려 다시 센다. */
+  coalFuel = true;
   readonly coverage = new Map<string, number>();
   readonly wires = new Map<string, { x: number; y: number; supply: number }>();
   /** Actual relay links, also used by the installation overlay. */
@@ -96,7 +104,10 @@ export class PowerField {
             span,
             wire: false,
             demand: facilityPowerDemand(kind),
-            capacity: touchesRoadTiles(world, x, y, span) ? (POWER_SPECS[kind]?.capacity ?? 0) : 0,
+            capacity:
+              touchesRoadTiles(world, x, y, span) && (kind !== FAC_COAL_POWER || this.coalFuel)
+                ? (POWER_SPECS[kind]?.capacity ?? 0)
+                : 0,
           });
         }
       }

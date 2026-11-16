@@ -198,6 +198,9 @@ export class World {
    */
   landRule: ((cx: number, cy: number, use: 'zone' | 'owned') => string) | null = null;
 
+  /** 광산 자리 규칙(sim/resources.ts mineSiteProblem + 남은 매장량). 없으면 매장지만 본다. */
+  mineRule: ((kind: number, tx: number, ty: number) => string) | null = null;
+
   /** 이 클라이언트가 조종하는 도시의 시작 영토(4×4 청크) 왼쪽 위 좌표. */
   baseCx = 0;
   baseCy = 0;

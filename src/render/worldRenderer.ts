@@ -47,6 +47,7 @@ import { BuildingAlertLayer } from './buildingAlertLayer';
 import { EffectLayer } from './effectLayer';
 import { PollutionLayer } from './pollutionLayer';
 import { UtilityLayer, type UtilityMode } from './utilityLayer';
+import { ResourceLayer } from './resourceLayer';
 import type { MacroSim } from '../sim/macro';
 import type { PowerField } from '../sim/power';
 import type { WaterField } from '../sim/water';
@@ -102,6 +103,8 @@ export class WorldRenderer {
   powerField: PowerField | null = null;
   waterField: WaterField | null = null;
   private waterLayer = new UtilityLayer();
+  /** 자원 매장지 지도. main 이 남은 양 함수를 붙인다. */
+  readonly resourceLayer = new ResourceLayer();
   /** 오염 범위 (수정사항 11). 도구와 무관하게 항상 켜 둔다. */
   private pollutionLayer = new PollutionLayer();
   showPollution = true;
@@ -190,6 +193,7 @@ export class WorldRenderer {
       // 오염은 지형 바로 위, 급수/전력 오버레이 아래에 덧댄다.
       this.pollutionLayer.graphics,
       this.waterLayer.graphics,
+      this.resourceLayer.graphics,
       this.effects.graphics,
       this.alertLayer.graphics,
       this.metroLayer.graphics,
@@ -321,6 +325,7 @@ export class WorldRenderer {
     view.maxY += MAX_HEIGHT * HEIGHT_UNIT;
     const range = visibleChunkRange(view);
     this.waterLayer.update(this.world, this.waterField, this.powerField, this.utilityMode, range);
+    this.resourceLayer.update(this.world, this.utilityMode === 'resources' && !this.metroMode, range);
     this.effects.update(this.world, now);
     this.pollutionLayer.update(
       this.world,

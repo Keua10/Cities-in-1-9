@@ -86,6 +86,8 @@ export const FACILITY_UNLOCK_LEVEL: readonly number[] = [
   5, 7, 9, 6, 8, 1,
   // 식량: 곡물·채소·과수·목장·양계·온실·어업·창고·가공
   1, 1, 2, 2, 3, 4, 3, 1, 5,
+  // 자원: 철광산·탄광·유정 1단계, 2단계, 3단계, 제철소, 정유소, 석탄 화력
+  2, 2, 2, 5, 5, 5, 8, 8, 8, 5, 5, 4,
 ];
 
 export function normalizeProsperity(value: unknown): number {

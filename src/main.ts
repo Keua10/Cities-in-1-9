@@ -25,6 +25,7 @@ import { MetroPanel } from './ui/metroPanel';
 import { AssignmentTable } from './sim/assignment';
 import { CongestionMap } from './sim/congestion';
 import { MacroSim } from './sim/macro';
+import { remainingAt } from './sim/resources';
 import { CATCHUP_TICKS_PER_FRAME, START_MONEY } from './sim/simConstants';
 import { installPedestrianSystemPatch } from './sim/pedestrianSystemPatch';
 import { TrafficSim } from './sim/traffic/trafficSim';
@@ -222,6 +223,12 @@ async function boot(): Promise<void> {
   world.landRule = sim.territory.landRule;
   renderer.territory = sim.territory;
   minimap.territory = sim.territory;
+  // 자원 매장지 지도: 남은 양으로 진하기를 정한다.
+  const remaining = (cx: number, cy: number) => remainingAt(macro, cx, cy);
+  renderer.resourceLayer.remaining = remaining;
+  renderer.resourceLayer.revision = () =>
+    Object.values(macro.mined ?? {}).reduce((a, b) => a + b, 0);
+  minimap.resourceRemaining = remaining;
   const constructionPanel = new ConstructionPanel(sim.construction);
   const natureLayer = new NatureLayer(world, sim);
   renderer.root.addChild(natureLayer.graphics);
@@ -495,6 +502,7 @@ async function boot(): Promise<void> {
     renderer.setPlacement(tools.placementPreview());
     placementBar.update();
     renderer.utilityMode = tools.utilityMode;
+    minimap.showResources = tools.utilityMode === 'resources';
     renderer.metroMode = tools.metroMode && tools.tool !== 'metroStation';
     renderer.metroSelection = tools.metroSelection;
     setPedestrianRenderZoom(camera.zoom);

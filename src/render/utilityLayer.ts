@@ -4,7 +4,7 @@ import { tileToWorldX, tileToWorldY } from '../core/iso';
 import type { WaterField } from '../sim/water';
 import type { PowerField } from '../sim/power';
 import type { World } from '../world/world';
-export type UtilityMode = 'off' | 'water' | 'sewer' | 'power';
+export type UtilityMode = 'off' | 'water' | 'sewer' | 'power' | 'resources';
 const COLORS = {
   water: 0x52cbff,
   sewer: 0xbc9164,
@@ -25,8 +25,8 @@ export class UtilityLayer {
     mode: UtilityMode,
     range: { cx0: number; cy0: number; cx1: number; cy1: number },
   ): void {
-    this.graphics.visible = mode !== 'off';
-    if (mode === 'off' || !water || !power) return;
+    this.graphics.visible = mode !== 'off' && mode !== 'resources';
+    if (mode === 'off' || mode === 'resources' || !water || !power) return;
     const stamp = `${mode}:${world.utilityRevision}:${water.revision}:${power.revision}:${range.cx0},${range.cy0},${range.cx1},${range.cy1}`;
     if (this.stamp === stamp) return;
     this.stamp = stamp;

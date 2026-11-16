@@ -31,6 +31,7 @@ import {
 import { isWater } from '../world/terrain';
 import { formatMoney } from './money';
 import { FOOD_SPECS } from '../sim/config/food';
+import { isMineKind } from '../sim/config/resources';
 import { footprintFertility } from '../sim/food';
 import type { World } from '../world/world';
 import {
@@ -214,6 +215,7 @@ export class Tools {
       (this.tool === 'facility' && POWER_SPECS[this.facilityKind])
     )
       return 'power';
+    if (this.tool === 'facility' && isMineKind(this.facilityKind)) return 'resources';
     if (this.tool === 'sewerPipe') return 'sewer';
     if (this.tool === 'waterPipe' || this.tool === 'pipeErase') return 'water';
     const water = this.tool === 'facility' ? WATER_SPECS[this.facilityKind] : null;
@@ -243,6 +245,8 @@ export class Tools {
           ? '지하철 지도 · 역을 연결한 뒤 노선을 지정합니다.'
           : '지도를 눌러 역을 놓거나 제거합니다';
     if (this.utilityMode !== 'off' && this.shape === 'none') {
+      if (this.utilityMode === 'resources')
+        return '자원 매장지 · 주황=철 · 검정=석탄 · 노랑=석유 · 진할수록 많이 남음 · 테두리가 굵을수록 깊음(높은 단계 광산 필요)';
       return this.utilityMode === 'power'
         ? '노랑=전력 공급 범위 · 주황=용량 부족 · 회색 전선=단절 · 건물 가장자리 3칸 이내 자동 공유. 빈 땅은 전달하지 않습니다.'
         : '파랑=급수 범위 · 갈색=하수 범위 · 빨강=오염 · 주황=용량 부족 · 배관 반경 4칸. 상·하수도관은 빈 칸 1개 이상 띄우세요.';

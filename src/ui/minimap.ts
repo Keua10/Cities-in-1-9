@@ -4,6 +4,8 @@ import { parseChunkKey, tileToWorldX, tileToWorldY, worldToTileF } from '../core
 import { isWelfareKind } from '../sim/buildings';
 import type { ServiceField } from '../sim/services';
 import type { TerritorySystem } from '../sim/territory';
+import { RESOURCE_COLORS } from '../sim/config/resources';
+import { depositAt } from '../world/deposits';
 import { Build } from '../world/build';
 import { isWater } from '../world/terrain';
 import type { World } from '../world/world';
@@ -67,6 +69,9 @@ export class Minimap {
   private overlayKey = '';
   /** 영토 테두리(군사 1단계). */
   territory: TerritorySystem | null = null;
+  /** 자원 매장지 표시(지도 보기 → 자원 매장지). */
+  showResources = false;
+  resourceRemaining: ((cx: number, cy: number) => number) | null = null;
 
   constructor(
     private world: World,
@@ -112,7 +117,7 @@ export class Minimap {
       this.lastBasePaint = -Infinity;
     }
     // 오버레이가 바뀌면(도구를 들거나 종류를 바꾸면) 바로 다시 칠한다.
-    const key = overlay ? String(overlay.kind) : '';
+    const key = (overlay ? String(overlay.kind) : '') + (this.showResources ? 'res' : '');
     if (key !== this.overlayKey) {
       this.overlayKey = key;
       this.lastBasePaint = -Infinity;
@@ -228,7 +233,25 @@ export class Minimap {
     }
 
     if (overlay) this.paintOverlay(ctx, overlay);
+    if (this.showResources) this.paintResources(ctx);
     this.paintTerritory(ctx);
+  }
+
+  /** 탐사한 청크의 매장지. 색 = 자원, 진하기 = 남은 양. */
+  private paintResources(ctx: CanvasRenderingContext2D): void {
+    const S = CHUNK_SIZE;
+    for (const key of this.world.exploredKeys()) {
+      const { cx, cy } = parseChunkKey(key);
+      const d = depositAt(cx, cy);
+      if (!d) continue;
+      const left = this.resourceRemaining ? this.resourceRemaining(cx, cy) : d.reserve;
+      const c = left <= 0 ? 0x808996 : RESOURCE_COLORS[d.resource];
+      const share = Math.max(0, Math.min(1, left / d.reserve));
+      ctx.fillStyle = `rgba(${c >> 16}, ${(c >> 8) & 255}, ${c & 255}, ${0.35 + 0.5 * share})`;
+      const x0 = this.mapX(cx * S);
+      const y0 = this.mapY(cy * S);
+      ctx.fillRect(x0, y0, this.mapX((cx + 1) * S) - x0, this.mapY((cy + 1) * S) - y0);
+    }
   }
 
   /** 영토 경계(청록), 끊긴 청크(빨강), 수도(금색). */

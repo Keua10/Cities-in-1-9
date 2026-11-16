@@ -1,4 +1,6 @@
 import { FoodSystem } from './food';
+import { mineSiteProblem, ResourceSystem } from './resources';
+import { CONSUMER_SPECS, isMineKind, REFINERY_GAS_DISCOUNT } from './config/resources';
 import { NatureSystem } from './nature';
 import { ConstructionSystem } from './construction';
 import { SHOP_VISITORS_PER_JOB, TerritorySystem, type ChunkPeople } from './territory';
@@ -46,7 +48,7 @@ import {
   WATER_GRACE_DAYS,
   WATER_RAMP_DAYS,
 } from './config/water';
-import { FAC_GAS, FAC_SOLAR, FAC_WIND } from './config/power';
+import { FAC_COAL_POWER, FAC_GAS, FAC_SOLAR, FAC_WIND } from './config/power';
 import {
   CITY_LEVELS,
   cityLevelFor,
@@ -174,6 +176,8 @@ export class MacroSim {
   readonly power = new PowerField();
   /** 식량 자급(농업·목축·어업). 비축량만 macro.food 로 저장한다. */
   readonly food: FoodSystem;
+  /** 자원 채굴·가공 (군사 2단계). 비축은 macro.resources, 캔 양은 macro.mined. */
+  readonly resources: ResourceSystem;
   readonly disasters: DisasterSim;
   private assignment: AssignmentTable | null = null;
   private congestion: CongestionMap | null = null;
@@ -216,6 +220,14 @@ export class MacroSim {
     this.disasters = new DisasterSim(macro.disasters, macro.tick);
     this.territory = new TerritorySystem(world, macro, () => this.onMacroChange?.());
     this.food = new FoodSystem(world);
+    this.resources = new ResourceSystem(macro);
+    this.resources.onCoalFuel = (ok) => {
+      this.power.coalFuel = ok;
+      this.world.utilityRevision++;
+    };
+    this.services.kindUpkeepMul = (kind) =>
+      kind === FAC_GAS && this.resources.summary.gasDiscount ? 1 - REFINERY_GAS_DISCOUNT : 1;
+    world.mineRule = (kind, tx, ty) => mineSiteProblem(kind, tx, ty, this.macro);
     this.water.power = this.power;
     this.services.power = this.power;
     this.macro.policies = normalizePolicies(macro.policies);
@@ -270,7 +282,10 @@ export class MacroSim {
       taxes +=
         this.stats.tiers[ZONE_C][t].filled * TAX_PER_JOB[t] * (taxRate(policies, ZONE_C) / 9);
       taxes +=
-        this.stats.tiers[ZONE_I][t].filled * TAX_PER_JOB[t] * (taxRate(policies, ZONE_I) / 9);
+        this.stats.tiers[ZONE_I][t].filled *
+        TAX_PER_JOB[t] *
+        (taxRate(policies, ZONE_I) / 9) *
+        (1 + this.resources.summary.industryBonus);
     }
     taxes *= incomeMul;
     // 식량: 남아서 내다 판 몫은 수입, 모자라 사 온 몫은 지출이다.
@@ -300,8 +315,10 @@ export class MacroSim {
     if (kind === FAC_GROUNDWATER || kind === FAC_RIVER_PUMP)
       return ratio(w.demand, w.waterCapacity);
     if (kind === FAC_OUTFALL || kind === FAC_TREATMENT) return ratio(w.demand, w.sewerCapacity);
-    if (kind === FAC_WIND || kind === FAC_GAS || kind === FAC_SOLAR)
+    if (kind === FAC_WIND || kind === FAC_GAS || kind === FAC_SOLAR || kind === FAC_COAL_POWER)
       return ratio(this.power.summary.demand, this.power.summary.capacity);
+    // 자원 시설: 돌면 전부, 멈추면 대기 유지비만.
+    if (isMineKind(kind) || CONSUMER_SPECS[kind]) return 1;
     return null;
   }
 
@@ -968,6 +985,7 @@ export class MacroSim {
     };
     this.macro.population = Math.round(population);
     this.food.refresh(this.services.facilityList(), population, this.macro.food ?? 0);
+    this.resources.refresh(this.services.facilityList());
 
     if (updateDemand) this.updateDemand(tiers, population, this.stats.occupancy);
   }
@@ -1099,6 +1117,7 @@ export class MacroSim {
     const stock = this.food.advanceStock(this.macro.food ?? 0, deltaMs / DAYTIME_DAY_MS);
     this.macro.food = Math.round(stock * 100) / 100;
     this.food.applyStock(this.macro.food);
+    this.resources.advance(deltaMs / DAYTIME_DAY_MS);
     const { income, upkeep } = this.financeEstimate(incomeMul);
     this.stats.dailyIncome = income;
     this.stats.dailyUpkeep = upkeep;
@@ -1159,6 +1178,7 @@ export class MacroSim {
     this.macro.tickedAt = nowMs;
     delete this.macro.disasters;
     delete this.macro.food;
+    this.resources.reset();
     delete this.macro.prosperity;
     delete this.macro.waterStartTick;
     delete this.macro.powerStartTick;

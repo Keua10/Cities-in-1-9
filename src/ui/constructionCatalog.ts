@@ -7,6 +7,13 @@ import { PIPE_COST, WATER_SPECS } from '../sim/config/water';
 import { POWER_SPECS, WIRE_COST } from '../sim/config/power';
 import { RUNWAY_COST, TAXIWAY_COST } from '../sim/config/transport';
 import { FOOD_SPECS } from '../sim/config/food';
+import {
+  CONSUMER_SPECS,
+  DIFFICULTY_NAMES,
+  FAC_COAL_POWER,
+  MINE_SPECS,
+  RESOURCE_NAMES,
+} from '../sim/config/resources';
 
 export const BUILD_CATEGORIES = [
   { id: 'zones', name: '구역', icon: 'zones', color: '#9bca80', hint: '주거 · 상업 · 공업' },
@@ -29,6 +36,13 @@ export const BUILD_CATEGORIES = [
   { id: 'park', name: '공원', icon: 'park', color: '#a8c87b', hint: '공원 · 체육 · 장식' },
   { id: 'environment', name: '환경', icon: 'environment', color: '#c1afa0', hint: '쓰레기 · 장의' },
   { id: 'farm', name: '농업', icon: 'farm', color: '#d9c46a', hint: '농장 · 목축 · 어업 · 저장' },
+  {
+    id: 'resource',
+    name: '자원',
+    icon: 'mine',
+    color: '#c8956a',
+    hint: '광산 · 탄광 · 유정 · 제철 · 정유',
+  },
 ] as const;
 export type BuildCategory = (typeof BUILD_CATEGORIES)[number]['id'];
 export interface BuildItem {
@@ -131,6 +145,27 @@ for (const spec of FACILITY_SPECS) {
     entry.unlock = 1;
     continue;
   }
+  const mine = MINE_SPECS[k];
+  const consumer = k !== FAC_COAL_POWER ? CONSUMER_SPECS[k] : undefined;
+  if (mine || consumer) {
+    items.push({
+      id: `facility-${k}`,
+      category: 'resource',
+      tool: 'facility',
+      kind: k,
+      name: spec.name,
+      cost: spec.cost,
+      unlock: spec.unlockLevel,
+      icon: 'mine',
+      detail:
+        `${spec.span}×${spec.span} · 유지 ${formatMoney(spec.upkeepPerDay)}/일 · ` +
+        (mine
+          ? `${RESOURCE_NAMES[mine.resource]} ${mine.output}/일 · ${DIFFICULTY_NAMES.slice(0, mine.tier).join('·')} 매장지 · ${RESOURCE_NAMES[mine.resource]} 매장지 위에만`
+          : consumer!.blurb) +
+        ' · 도로 필요',
+    });
+    continue;
+  }
   const food = FOOD_SPECS[k];
   if (food) {
     items.push({
@@ -176,6 +211,7 @@ for (const spec of FACILITY_SPECS) {
       `${spec.span}×${spec.span} · 유지 ${formatMoney(spec.upkeepPerDay)}/일` +
       (capacity ? ` · 용량 ${capacity.toLocaleString('ko-KR')}` : '') +
       (spec.needsRoad ? ' · 도로 필요' : '') +
+      (k === FAC_COAL_POWER ? ` · ${CONSUMER_SPECS[k].blurb}` : '') +
       (k === 17 ? ' · 장식용, 현재 도시 기능 없음' : '') +
       (WATER_SPECS[k]?.needsWater || [19, 21, 22, 23].includes(k) ? ' · 수역 인접' : '') +
       ([18, 24, 25].includes(k) ? ' · 외부 활주로·유도로 연결 필요' : ''),
