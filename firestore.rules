@@ -51,6 +51,25 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // 공용 자원 시장(군사 2단계). 자원별 시장 재고(정수)만 있다. 판 도시의 자원이 쌓이고
+    // 산 도시가 가져간다. 한 번에 한 자원, 5,000 단위까지만 움직일 수 있다.
+    function stockOk(d) {
+      return d.keys().hasOnly(['iron', 'coal', 'oil'])
+             && d.iron is int && d.coal is int && d.oil is int
+             && d.iron >= 0 && d.coal >= 0 && d.oil >= 0
+             && d.iron <= 10000000 && d.coal <= 10000000 && d.oil <= 10000000;
+    }
+    match /market/global {
+      allow read: if signedIn();
+      allow create: if signedIn() && stockOk(request.resource.data);
+      allow update: if signedIn()
+                    && stockOk(request.resource.data)
+                    && math.abs(request.resource.data.iron - resource.data.iron)
+                       + math.abs(request.resource.data.coal - resource.data.coal)
+                       + math.abs(request.resource.data.oil - resource.data.oil) <= 5000;
+      allow delete: if false;
+    }
+
     match /cities/{cityId} {
       allow read: if signedIn();
 

@@ -52,6 +52,8 @@ assert.ok(
 const GRADE = [1, 2, 2, 3, 3, 4, 4, 5, 5];
 const byLevel = new Map<number, number[]>();
 FACILITY_SPECS.forEach((s, k) => {
+  // 자원 시설(36~)은 설계안 Ⅳ의 공사 시간(3분·15분·40분)을 따른다 — resources 점검이 본다.
+  if (k >= 36) return;
   const g = GRADE[s.unlockLevel - 1];
   byLevel.set(g, [...(byLevel.get(g) ?? []), constructionSeconds(k)]);
 });

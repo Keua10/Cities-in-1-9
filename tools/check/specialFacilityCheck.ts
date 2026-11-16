@@ -23,7 +23,7 @@ import { Build } from '../../src/world/build';
 import { Terrain } from '../../src/world/terrain';
 import { World } from '../../src/world/world';
 
-assert.equal(FACILITY_COUNT, 36); // 지하철역(26), 식량 시설(27~35)까지 포함한다
+assert.equal(FACILITY_COUNT, 48); // 지하철역(26), 식량 시설(27~35), 자원 시설(36~47)까지 포함한다
 assert.deepEqual(
   [FAC_COMM_TOWER, FAC_AIRPORT, FAC_HARBOR, FAC_PRISON],
   [17, 18, 19, 20],
@@ -41,7 +41,7 @@ for (let kind = 17; kind < FACILITY_COUNT; kind++) {
 }
 // 도시 레벨 9단계(군사 1단계): 예전 1→1, 2→2~3, 3→4~5, 4→6~7, 5→8~9.
 assert.deepEqual(
-  FACILITY_UNLOCK_LEVEL.slice(17),
+  FACILITY_UNLOCK_LEVEL.slice(17, 36),
   [3, 5, 5, 4, 5, 7, 9, 6, 8, 1, 1, 1, 2, 2, 3, 4, 3, 1, 5],
 ); // 지하철역(26) 뒤는 식량 시설
 const L = (kind: number) => FACILITY_UNLOCK_LEVEL[kind];

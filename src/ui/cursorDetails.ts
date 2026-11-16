@@ -16,10 +16,37 @@ import {
 import { SERVICE_KIND_COUNT } from '../sim/services';
 import { AMENITY_NEED_BY_TIER, FACILITY_NAMES } from '../sim/simConstants';
 import { FOOD_SPECS } from '../sim/config/food';
+import {
+  CONSUMER_SPECS,
+  DIFFICULTY_NAMES,
+  MINE_SPECS,
+  RESOURCE_NAMES,
+} from '../sim/config/resources';
+import { MINE_STATE_TEXT } from '../sim/resources';
 
 export function describeFacility(sim: MacroSim, tx: number, ty: number, kind: number): string {
   const spec = FACILITY_SPECS[kind];
   const upkeep = `하루 ${formatMoney(sim.services.upkeepOfKind(kind))}`;
+
+  const mine = MINE_SPECS[kind];
+  if (mine) {
+    const m = sim.resources.mineAt(tx, ty);
+    const name = RESOURCE_NAMES[mine.resource];
+    if (!m) return `${spec.name} · ${upkeep}`;
+    const d = m.deposit;
+    const where = d
+      ? `${RESOURCE_NAMES[d.resource]} 매장지(${DIFFICULTY_NAMES[d.difficulty]}) 남은 양 ${Math.round(m.remaining).toLocaleString('ko-KR')} / ${d.reserve.toLocaleString('ko-KR')}`
+      : '매장지 없음';
+    return m.state === 'ok'
+      ? `${spec.name} · ${name} ${m.output}/일 · ${where} · ${upkeep}`
+      : `${spec.name} · 멈춤: ${MINE_STATE_TEXT[m.state]} · ${where} · ${upkeep}`;
+  }
+  const consumer = CONSUMER_SPECS[kind];
+  if (consumer) {
+    const c = sim.resources.consumerAt(tx, ty);
+    const state = !c ? '' : c.active ? '가동 중' : `멈춤: ${c.reason}`;
+    return `${spec.name} · ${state} · ${consumer.blurb} · ${upkeep}`;
+  }
 
   const food = FOOD_SPECS[kind];
   if (food) {

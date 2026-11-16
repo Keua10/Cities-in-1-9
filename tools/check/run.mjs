@@ -47,6 +47,7 @@ const checks = {
   pace: 'tools/check/paceCheck.ts',
   economy: 'tools/check/economyCheck.ts',
   territory: 'tools/check/territoryCheck.ts',
+  resources: 'tools/check/resourceCheck.ts',
 };
 mkdirSync('.check', { recursive: true });
 for (const name of process.argv.length > 2 ? process.argv.slice(2) : Object.keys(checks)) {

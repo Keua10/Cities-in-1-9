@@ -197,141 +197,210 @@ function foodArt(a: PixelArt, kind: number, n: number): void {
   }
 }
 
-
 /* ---------------- 자원 시설 (36~47) ---------------- */
 
 const DARK: Material = ['stone', 'stoneDark', 'ink'];
 
-/** 광산 갱구 위의 권양탑(철골 탑 + 바퀴). */
-function headframe(a: PixelArt, u: number, v: number, h: number): void {
+/** 광산 갱구 위의 권양탑(철골 탑 + 바퀴). w = 다리 폭(칸), h = 높이(px). */
+function headframe(a: PixelArt, u: number, v: number, w: number, h: number): void {
+  a.box(u, v, w, w, 4, M.steel);
   for (const [du, dv] of [
     [0, 0],
-    [0.36, 0],
-    [0, 0.36],
-    [0.36, 0.36],
+    [w, 0],
+    [0, w],
+    [w, w],
   ])
-    a.line(a.p(u + du, v + dv, 0), a.p(u + 0.18, v + 0.18, h), 'stoneDark');
-  a.box(u + 0.08, v + 0.08, 0.22, 0.22, 4, M.red, h - 4);
-  const w = a.p(u + 0.18, v + 0.18, h + 3);
-  a.rect(w[0] - 3, w[1] - 3, 6, 6, 'ink');
-  a.dot(w[0], w[1], 'yellow');
+    a.line(a.p(u + du, v + dv, 4), a.p(u + w / 2, v + w / 2, h), 'stoneDark');
+  for (let z = 10; z < h - 6; z += 8)
+    a.line(
+      a.p(u + (w * z) / (2 * h), v + w - (w * z) / (2 * h), z),
+      a.p(u + w - (w * z) / (2 * h), v + w - (w * z) / (2 * h), z),
+      'stone',
+    );
+  a.box(u + w * 0.3, v + w * 0.3, w * 0.4, w * 0.4, 6, M.red, h - 6);
+  const c = a.p(u + w / 2, v + w / 2, h + 4);
+  a.rect(c[0] - 5, c[1] - 5, 10, 10, 'ink');
+  a.rect(c[0] - 3, c[1] - 3, 6, 6, 'stoneDark');
+  a.dot(c[0], c[1], 'yellow');
 }
-function orePile(a: PixelArt, u: number, v: number, w: number, top: PixelColor, side: PixelColor): void {
-  const base = [a.p(u, v + w), a.p(u + w, v + w), a.p(u + w, v)];
-  const peak = a.p(u + w * 0.55, v + w * 0.55, w * 18);
-  a.poly([base[0], peak, base[1]], side, 'ink');
-  a.poly([base[1], peak, base[2]], top, 'ink');
+function orePile(
+  a: PixelArt,
+  u: number,
+  v: number,
+  w: number,
+  top: PixelColor,
+  side: PixelColor,
+): void {
+  const l = a.p(u, v + w);
+  const f = a.p(u + w, v + w);
+  const r = a.p(u + w, v);
+  const peak = a.p(u + w * 0.55, v + w * 0.55, w * 16);
+  a.poly([l, peak, f], side, 'ink');
+  a.poly([f, peak, r], top, 'ink');
 }
-function pumpjack(a: PixelArt, u: number, v: number): void {
-  a.slab(u, v, 0.5, 0.25, 1, 'pavingDark');
-  a.line(a.p(u + 0.25, v + 0.12, 1), a.p(u + 0.25, v + 0.12, 9), 'ink');
-  a.line(a.p(u + 0.02, v + 0.12, 8), a.p(u + 0.48, v + 0.12, 11), 'yellowDark');
-  const head = a.p(u + 0.02, v + 0.12, 8);
-  a.rect(head[0] - 2, head[1] - 1, 3, 5, 'yellow');
-  a.line(a.p(u + 0.04, v + 0.12, 7), a.p(u + 0.04, v + 0.12, 1), 'stoneDark');
+function pumpjack(a: PixelArt, u: number, v: number, s = 1): void {
+  a.slab(u, v, 0.7 * s, 0.35 * s, 1, 'pavingDark', 'ink');
+  // A자 받침대
+  a.line(a.p(u + 0.25 * s, v + 0.05 * s, 1), a.p(u + 0.35 * s, v + 0.17 * s, 16 * s), 'ink');
+  a.line(a.p(u + 0.45 * s, v + 0.3 * s, 1), a.p(u + 0.35 * s, v + 0.17 * s, 16 * s), 'ink');
+  // 빔과 말머리
+  a.line(
+    a.p(u + 0.02, v + 0.17 * s, 13 * s),
+    a.p(u + 0.68 * s, v + 0.17 * s, 19 * s),
+    'yellowDark',
+  );
+  a.line(a.p(u + 0.02, v + 0.18 * s, 12 * s), a.p(u + 0.68 * s, v + 0.18 * s, 18 * s), 'yellow');
+  const head = a.p(u + 0.02, v + 0.17 * s, 12 * s);
+  a.rect(head[0] - 3, head[1] - 2, 4, 8, 'yellow');
+  a.line(a.p(u + 0.04, v + 0.17 * s, 10 * s), a.p(u + 0.04, v + 0.17 * s, 1), 'ink');
+  // 평형추
+  const crank = a.p(u + 0.6 * s, v + 0.17 * s, 8 * s);
+  a.rect(crank[0] - 3, crank[1] - 3, 6, 6, 'redDark');
 }
-function tank(a: PixelArt, u: number, v: number, w: number, h: number, m: Material = M.cream): void {
+function tank(
+  a: PixelArt,
+  u: number,
+  v: number,
+  w: number,
+  h: number,
+  m: Material = M.cream,
+): void {
   a.box(u, v, w, w, h, m);
   a.slab(u + 0.03, v + 0.03, w - 0.06, w - 0.06, h + 1, 'paper', 'stone');
   a.line(a.p(u, v + w, h * 0.5), a.p(u + w, v + w, h * 0.5), 'stoneDark');
+  a.line(a.p(u + w, v, h * 0.5), a.p(u + w, v + w, h * 0.5), 'stoneDark');
 }
 function coolingTower(a: PixelArt, u: number, v: number, w: number, h: number): void {
-  a.box(u, v, w, w, h, M.steel);
-  a.box(u + w * 0.08, v + w * 0.08, w * 0.84, w * 0.84, 3, M.steel, h);
-  a.slab(u + w * 0.12, v + w * 0.12, w * 0.76, w * 0.76, h + 3, 'stoneDark', 'ink');
-  a.line(a.p(u, v + w, h * 0.35), a.p(u + w, v + w, h * 0.35), 'stoneDark');
+  a.box(u, v, w, w, h * 0.6, M.steel);
+  a.box(u + w * 0.08, v + w * 0.08, w * 0.84, w * 0.84, h * 0.4, M.steel, h * 0.6);
+  a.slab(u + w * 0.12, v + w * 0.12, w * 0.76, w * 0.76, h + 1, 'stoneDark', 'ink');
+  a.line(a.p(u, v + w, h * 0.3), a.p(u + w, v + w, h * 0.3), 'stoneDark');
+}
+function conveyor(
+  a: PixelArt,
+  u0: number,
+  v0: number,
+  z0: number,
+  u1: number,
+  v1: number,
+  z1: number,
+): void {
+  a.line(a.p(u0, v0, z0), a.p(u1, v1, z1), 'ink');
+  a.line(a.p(u0, v0, z0 + 2), a.p(u1, v1, z1 + 2), 'yellowDark');
 }
 
 function resourceArt(a: PixelArt, kind: number, n: number): void {
   const tier = kind <= 38 ? 1 : kind <= 41 ? 2 : kind <= 44 ? 3 : 0;
   const res = kind <= 44 ? (kind - 36) % 3 : -1; // 0 철, 1 석탄, 2 석유
   if (tier > 0) {
-    a.slab(0.1, 0.1, n - 0.2, n - 0.2, 0, res === 1 ? 'pavingDark' : 'soil', 'shadow');
+    a.slab(0.12, 0.12, n - 0.24, n - 0.24, 0, res === 1 ? 'pavingDark' : 'soil', 'shadow');
     if (res === 2) {
-      // 유정: 펌프잭 여러 대 + 저장 탱크
-      const jacks = tier === 1 ? 2 : tier === 2 ? 4 : 6;
-      for (let i = 0; i < jacks; i++)
-        pumpjack(a, 0.25 + (i % 3) * 0.9 * (n / 3), 0.3 + Math.floor(i / 3) * 1.1);
-      tank(a, n - 1.15, n - 1.15, 0.8, 12 + tier * 3, M.cream);
-      if (tier >= 2) tank(a, n - 2.1, n - 1.0, 0.65, 10 + tier * 2, M.cream);
+      // 유정: 펌프잭 줄 + 저장 탱크(+ 3단계는 처리 설비)
+      const rows =
+        tier === 1
+          ? [
+              [0.25, 0.3],
+              [1.3, 0.3],
+              [0.25, 1.25],
+            ]
+          : [];
+      if (tier >= 2)
+        for (let y = 0.3; y < n - 2.2; y += 1.2)
+          for (let x = 0.3; x < n - 2.4; x += 1.25) rows.push([x, y]);
+      for (const [x, y] of rows) pumpjack(a, x, y, tier === 1 ? 1 : 1.25);
+      const tw = tier === 1 ? 0.9 : 1.3;
+      tank(a, n - tw - 0.25, n - tw - 0.25, tw, 16 + tier * 4);
+      if (tier >= 2) tank(a, n - tw * 2 - 0.45, n - tw - 0.25, tw, 14 + tier * 4);
       if (tier === 3) {
-        a.box(0.3, n - 1.2, 1.2, 0.8, 10, M.blue);
-        chimney(a, 1.2, n - 1.0, 26);
+        tank(a, n - tw - 0.25, n - tw * 2 - 0.45, tw, 18);
+        office(a, 0.35, n - 1.5, 1.8, 1.1, 14, M.blue);
+        chimney(a, 2.5, n - 1.3, 40);
       }
       return;
     }
     const top: PixelColor = res === 0 ? 'brickLight' : 'stoneDark';
     const side: PixelColor = res === 0 ? 'brickDark' : 'ink';
-    headframe(a, 0.35, 0.35, 18 + tier * 8);
-    a.box(0.95, 0.3, 1.0, 0.7, 8 + tier * 2, res === 0 ? M.brick : M.steel);
-    a.gable(0.93, 0.28, 1.04, 0.74, 8 + tier * 2, M.roof);
-    orePile(a, 0.4, n - 1.35, 0.95, top, side);
+    const hall = res === 0 ? M.brick : M.steel;
+    // 권양탑 + 선광장 + 광석 더미. 단계가 오를수록 탑·더미가 늘고 커진다.
+    const hw = 0.55 + tier * 0.12;
+    const hh = 34 + tier * 12;
+    headframe(a, 0.35, 0.35, hw, hh);
+    const bw = Math.min(n - 1.6, 1.1 + tier * 0.5);
+    a.box(0.45 + hw + 0.2, 0.3, bw, 0.9, 12 + tier * 3, hall);
+    a.gable(0.43 + hw + 0.2, 0.28, bw + 0.04, 0.94, 12 + tier * 3, M.roof);
+    a.windows(0.45 + hw + 0.2, 0.3, bw, 0.9, 12 + tier * 3);
+    const pile = 0.95 + tier * 0.25;
+    orePile(a, 0.3, n - pile - 0.3, pile, top, side);
+    conveyor(a, 0.3 + pile * 0.55, n - pile * 0.45 - 0.3, pile * 14, 0.35 + hw / 2, 0.35 + hw, 20);
     if (tier >= 2) {
-      orePile(a, n - 1.5, n - 1.4, 1.1, top, side);
-      headframe(a, n - 1.2, 0.35, 22 + tier * 6);
+      headframe(a, n - hw - 0.4, 0.4, hw, hh - 6);
+      orePile(a, n - pile - 0.35, n - pile - 0.35, pile, top, side);
+      a.box(n - 2.2, n - 2.6, 1.0, 0.7, 10, M.steel);
     }
     if (tier === 3) {
-      a.box(n - 2.6, n - 2.4, 0.9, 0.5, 12, M.steel);
-      chimney(a, n - 2.2, 1.4, 30);
-      // 컨베이어
-      a.line(a.p(1.4, n - 1.0, 4), a.p(n - 1.6, n - 1.6, 10), 'yellowDark');
+      orePile(a, n / 2 - pile / 2, n - pile - 0.3, pile * 0.9, top, side);
+      a.box(2.4, 2.2, 1.6, 1.2, 16, hall);
+      a.gable(2.38, 2.18, 1.64, 1.24, 16, M.roof);
+      chimney(a, 4.3, 2.4, 44);
+      conveyor(a, 3.2, 2.8, 16, n - 0.9, n - 0.9, 18);
     }
     return;
   }
+  a.slab(0.12, 0.12, n - 0.24, n - 0.24, 0, kind === 46 ? 'paving' : 'pavingDark', 'shadow');
   if (kind === 45) {
-    // 제철소: 고로(높은 원통) + 열풍로 + 굴뚝 + 철광석 더미
-    a.slab(0.1, 0.1, n - 0.2, n - 0.2, 0, 'pavingDark', 'shadow');
-    a.box(1.6, 1.3, 1.0, 1.0, 34, M.brick);
-    a.box(1.75, 1.45, 0.7, 0.7, 6, DARK, 34);
-    for (const u of [0.4, 0.9]) {
-      a.box(u, 0.4, 0.4, 0.4, 26, M.steel);
-      a.slab(u + 0.04, 0.44, 0.32, 0.32, 27, 'stone', 'stoneDark');
+    // 제철소: 고로(높은 탑) + 열풍로 3기 + 굴뚝 2개 + 압연 공장 + 철광석 더미
+    a.box(1.7, 1.2, 1.1, 1.1, 46, M.brick);
+    a.box(1.85, 1.35, 0.8, 0.8, 8, DARK, 46);
+    a.box(1.95, 1.45, 0.6, 0.6, 6, M.steel, 54);
+    for (const u of [0.3, 0.75, 1.2]) {
+      a.box(u, 0.35, 0.38, 0.38, 34, M.steel);
+      a.slab(u + 0.04, 0.39, 0.3, 0.3, 35, 'stone', 'stoneDark');
     }
-    chimney(a, 3.5, 0.5, 44);
-    chimney(a, 3.9, 0.9, 38);
-    longShed(a, 0.3, 3.2, 2.6, 1.2, M.steel);
-    orePile(a, 3.3, 3.2, 1.2, 'brickLight', 'brickDark');
-    a.line(a.p(2.6, 1.8, 30), a.p(3.5, 0.6, 40), 'stoneDark');
+    chimney(a, 3.6, 0.4, 58);
+    chimney(a, 4.1, 0.85, 50);
+    longShed(a, 0.3, 3.1, 2.8, 1.5, M.steel);
+    orePile(a, 3.3, 3.1, 1.4, 'brickLight', 'brickDark');
+    conveyor(a, 3.9, 3.6, 16, 2.4, 1.6, 44);
     return;
   }
   if (kind === 46) {
-    // 정유소: 증류탑, 둥근 탱크 여러 개, 배관
-    a.slab(0.1, 0.1, n - 0.2, n - 0.2, 0, 'paving', 'shadow');
+    // 정유소: 증류탑 3기 + 굴뚝 + 둥근 탱크 6기 + 배관
     for (const [u, v, h] of [
-      [0.5, 0.4, 40],
-      [1.1, 0.5, 30],
-      [0.6, 1.2, 24],
+      [0.4, 0.35, 56],
+      [1.05, 0.45, 44],
+      [0.55, 1.15, 34],
     ] as const) {
-      a.box(u, v, 0.35, 0.35, h, M.steel);
-      for (let z = 6; z < h; z += 7) a.line(a.p(u, v + 0.35, z), a.p(u + 0.35, v + 0.35, z), 'stoneDark');
+      a.box(u, v, 0.45, 0.45, h, M.steel);
+      for (let z = 6; z < h; z += 7)
+        a.line(a.p(u, v + 0.45, z), a.p(u + 0.45, v + 0.45, z), 'stoneDark');
+      a.slab(u + 0.04, v + 0.04, 0.37, 0.37, h + 1, 'stone', 'stoneDark');
     }
-    chimney(a, 1.8, 0.4, 36);
+    chimney(a, 1.85, 0.35, 48);
     for (const [u, v] of [
-      [2.6, 0.4],
-      [3.6, 0.4],
-      [2.6, 1.6],
-      [3.6, 1.6],
-      [2.6, 2.8],
-      [3.6, 2.8],
+      [2.55, 0.35],
+      [3.65, 0.35],
+      [2.55, 1.5],
+      [3.65, 1.5],
+      [2.55, 2.65],
+      [3.65, 2.65],
     ] as const)
-      tank(a, u, v, 0.85, 12, M.cream);
-    a.line(a.p(0.9, 1.6, 6), a.p(2.6, 1.9, 6), 'yellowDark');
-    a.line(a.p(0.9, 1.7, 9), a.p(2.6, 3.1, 6), 'redDark');
-    longShed(a, 0.3, 3.4, 1.8, 1.0, M.cream);
+      tank(a, u, v, 0.95, 16);
+    a.line(a.p(1.0, 1.6, 6), a.p(2.55, 1.95, 6), 'yellowDark');
+    a.line(a.p(1.0, 1.7, 10), a.p(2.55, 3.1, 8), 'redDark');
+    a.line(a.p(1.5, 0.9, 20), a.p(2.55, 0.8, 12), 'stoneDark');
+    longShed(a, 0.3, 3.3, 1.9, 1.3, M.cream);
     return;
   }
   if (kind === 47) {
-    // 석탄 화력: 냉각탑 2기 + 굴뚝 + 발전동 + 석탄 더미
-    a.slab(0.1, 0.1, n - 0.2, n - 0.2, 0, 'pavingDark', 'shadow');
-    coolingTower(a, 0.3, 0.3, 1.3, 30);
-    coolingTower(a, 1.9, 0.3, 1.3, 26);
-    a.box(0.4, 2.0, 1.8, 1.0, 16, M.cream);
-    a.windows(0.4, 2.0, 1.8, 1.0, 16);
-    chimney(a, 3.1, 1.6, 48);
-    orePile(a, 2.6, 2.7, 1.1, 'stoneDark', 'ink');
+    // 석탄 화력: 냉각탑 2기 + 높은 굴뚝 + 발전동 + 석탄 더미
+    coolingTower(a, 0.3, 0.3, 1.5, 44);
+    coolingTower(a, 2.05, 0.3, 1.5, 40);
+    office(a, 0.4, 2.2, 2.2, 1.3, 20, M.cream);
+    chimney(a, 3.9, 1.0, 64);
+    orePile(a, 2.9, 2.9, 1.6, 'stoneDark', 'ink');
+    conveyor(a, 3.5, 3.4, 18, 2.6, 2.7, 16);
   }
 }
-
 /** All civic facilities share the residential pixel grid and prop dimensions. */
 export function facilityArt(kind: number): PixelArt {
   const n = FACILITY_SPAN[kind],

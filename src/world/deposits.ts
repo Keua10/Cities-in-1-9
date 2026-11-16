@@ -36,7 +36,7 @@ const CHANCE: Record<ResourceId, number> = { iron: 0.34, coal: 0.36, oil: 0.55 }
 const GEO_SEED: Record<ResourceId, number> = { iron: 911, coal: 1777, oil: 2903 };
 
 function hash(x: number, y: number, s: number): number {
-  let h = (SEED ^ s) ^ Math.imul(x | 0, 0x27d4eb2d) ^ Math.imul(y | 0, 0x165667b1);
+  let h = SEED ^ s ^ Math.imul(x | 0, 0x27d4eb2d) ^ Math.imul(y | 0, 0x165667b1);
   h = Math.imul(h ^ (h >>> 15), 0x85ebca6b);
   h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
   return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
@@ -74,7 +74,10 @@ function chunkTerrain(cx: number, cy: number): { height: number; water: number; 
 }
 
 /** 지형이 그 자원에 얼마나 어울리는가 0~1. */
-function suitability(r: ResourceId, t: { height: number; water: number; mountain: number }): number {
+function suitability(
+  r: ResourceId,
+  t: { height: number; water: number; mountain: number },
+): number {
   if (t.water >= 3) return 0;
   if (r === 'iron') {
     // 산과 고지대 둘레. 산 한가운데(전부 산)는 캐기 어려우니 조금 깎는다.

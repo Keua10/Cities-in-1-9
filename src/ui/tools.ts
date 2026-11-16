@@ -31,7 +31,7 @@ import {
 import { isWater } from '../world/terrain';
 import { formatMoney } from './money';
 import { FOOD_SPECS } from '../sim/config/food';
-import { isMineKind } from '../sim/config/resources';
+import { DIFFICULTY_NAMES, isMineKind, MINE_SPECS, RESOURCE_NAMES } from '../sim/config/resources';
 import { footprintFertility } from '../sim/food';
 import type { World } from '../world/world';
 import {
@@ -468,6 +468,15 @@ export class Tools {
    * 같은 땅이라도 하천 가까이에 두면 훨씬 많이 거둔다는 걸 놓기 전에 안다.
    * 발자국 전체(최대 25칸)를 읽으므로 자리가 바뀔 때만 다시 계산한다.
    */
+  /** 광산을 고를 때: 커서 청크의 매장지와 남은 양. */
+  private minePreview(): string {
+    const mine = MINE_SPECS[this.facilityKind];
+    if (!mine || !this.pos1) return '';
+    const { deposit, remaining } = this.sim.resources.depositInfo(this.pos1.tx, this.pos1.ty);
+    if (!deposit) return '';
+    return ` · ${RESOURCE_NAMES[deposit.resource]} 매장지(${DIFFICULTY_NAMES[deposit.difficulty]}) 남은 양 ${Math.round(remaining).toLocaleString('ko-KR')} · ${mine.output}/일`;
+  }
+
   private foodPreview(): string {
     const food = FOOD_SPECS[this.facilityKind];
     if (!food || !this.pos1 || food.output <= 0) return '';
@@ -534,7 +543,8 @@ export class Tools {
       const boosted = this.sim.startBoostLeftMs > 0;
       detail += ` · 공사 ${formatDuration(boosted ? seconds / START_BOOST_BUILD : seconds)}${boosted ? ' (버닝)' : ''}`;
     }
-    if (this.tool === 'facility' && plan.buildCount > 0) detail += this.foodPreview();
+    if (this.tool === 'facility' && plan.buildCount > 0)
+      detail += this.foodPreview() + this.minePreview();
     if (plan.warning) detail += ` · ⚠ ${plan.warning}`;
     if (plan.truncated && plan.shape === 'line')
       detail += ` · 한 번에 최대 ${MAX_LINE_TILES}칸, 나머지는 이어서 놓으세요`;

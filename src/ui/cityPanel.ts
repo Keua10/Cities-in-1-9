@@ -3,6 +3,13 @@ import { LEVEL_COUNT, TIER_NAMES, ZONE_C, ZONE_I, ZONE_NAMES, ZONE_R } from '../
 import { formatMoney } from './money';
 import type { MacroSim } from '../sim/macro';
 import { BUILDING_UNLOCK_LEVEL, CITY_LEVELS, prosperityLevelFor } from '../sim/progression';
+import type { LocalMarket } from '../sim/market';
+import {
+  RESOURCE_NAMES,
+  RESOURCE_STORAGE,
+  RESOURCES,
+  type ResourceId,
+} from '../sim/config/resources';
 import {
   CAPITAL_CITY_LEVEL,
   CAPITAL_SPANS,
@@ -35,6 +42,12 @@ export class CityPanel {
   /** "수도 옮기기" 를 누르면 불린다. main 이 다음 지도 탭을 새 수도 자리로 받는다. */
   onCapitalMove: (() => void) | null = null;
   private terrLineEl: HTMLElement;
+  /** 공용 자원 시장. main 이 붙인다. */
+  market: LocalMarket | null = null;
+  private resSummaryEl: HTMLElement;
+  private resMessageEl: HTMLElement;
+  private resRows = new Map<ResourceId, HTMLElement>();
+  private trading = false;
   private terrWarnEl: HTMLElement;
   private expandButton: HTMLButtonElement;
   private moveButton: HTMLButtonElement;
@@ -88,6 +101,14 @@ export class CityPanel {
     this.incidentButton = must(el, '.cp-incident-focus') as HTMLButtonElement;
     this.incidentButton.addEventListener('click', () => this.onIncidentFocus?.());
 
+    this.resSummaryEl = must(el, '.cp-res-summary');
+    this.resMessageEl = must(el, '.cp-res-message');
+    for (const row of el.querySelectorAll<HTMLElement>('.cp-res-row')) {
+      const r = row.dataset.res as ResourceId;
+      this.resRows.set(r, row);
+      for (const b of row.querySelectorAll<HTMLButtonElement>('button[data-qty]'))
+        b.addEventListener('click', () => void this.trade(r, Number(b.dataset.qty)));
+    }
     this.terrLineEl = must(el, '.cp-terr-line');
     this.terrWarnEl = must(el, '.cp-terr-warn');
     this.expandButton = must(el, '.cp-capital-expand') as HTMLButtonElement;
@@ -200,6 +221,7 @@ export class CityPanel {
     );
     setText(this.unlockEl, next ? `다음: ${next.unlock}` : '현재 모든 건물·시설 잠금해제');
     this.updateTerritory(sim);
+    this.updateResources(sim);
 
     const occupancy = Math.max(0, Math.min(1, sim.stats.occupancy));
     const vacancy = 1 - occupancy;
@@ -329,6 +351,78 @@ export class CityPanel {
         (grant > 0 ? `\n정부 지원금 ${formatMoney(grant)} 포함 · 도시가 커지면 줄어듭니다` : '') +
         foodFinanceLine(this.sim.food.summary),
     );
+  }
+
+  private updateResources(sim: MacroSim): void {
+    const res = sim.resources.summary;
+    const n = (v: number) => Math.round(v).toLocaleString('ko-KR');
+    const parts: string[] = [];
+    parts.push(
+      res.mines === 0
+        ? '광산이 없습니다 · 지도 보기 → 자원 매장지에서 매장지를 찾아 자원 메뉴로 지으세요'
+        : `광산 ${res.activeMines}/${res.mines}곳 가동`,
+    );
+    if (res.steelMills) parts.push(`제철소 ${res.steelActive}/${res.steelMills}`);
+    if (res.refineries) parts.push(`정유소 ${res.refineryActive}/${res.refineries}`);
+    if (res.coalPlants) parts.push(`석탄 화력 ${res.coalActive}/${res.coalPlants}`);
+    let text = parts.join(' · ');
+    if (res.industryBonus > 0)
+      text += `\n공업 생산력 +${Math.round(res.industryBonus * 100)}% (공업 세수에 반영)`;
+    if (res.gasDiscount) text += ' · 가스 발전 연료비 할인';
+    if (this.market)
+      text += this.market.online
+        ? '\n공용 시장: 모든 도시가 같은 재고로 사고팝니다. 많이 팔리면 싸지고, 모자라면 비싸집니다.'
+        : '\n둘러보기 모드: 이 기기 안의 가상 시장입니다.';
+    setText(this.resSummaryEl, text);
+    const stock = sim.resources.stockNow;
+    for (const r of RESOURCES) {
+      const row = this.resRows.get(r)!;
+      const flow = res.production[r] - res.consumption[r];
+      const price = this.market ? this.market.price(r) : 0;
+      setText(
+        row.querySelector<HTMLElement>('.cp-res-line')!,
+        `${RESOURCE_NAMES[r]} ${n(stock[r])} / ${n(RESOURCE_STORAGE)}` +
+          ` · 하루 ${flow >= 0 ? '+' : '−'}${n(Math.abs(flow))}` +
+          (res.consumption[r] > 0
+            ? ` (채굴 ${n(res.production[r])}, 사용 ${n(res.consumption[r])})`
+            : '') +
+          (this.market
+            ? ` · 시세 ${price.toFixed(1)}만 원 · 시장 재고 ${n(this.market.stock[r])}`
+            : ''),
+      );
+      for (const b of row.querySelectorAll<HTMLButtonElement>('button[data-qty]')) {
+        const q = Number(b.dataset.qty);
+        b.disabled =
+          this.trading || !this.market || (q < 0 ? stock[r] < 1 : stock[r] >= RESOURCE_STORAGE);
+      }
+    }
+  }
+
+  private async trade(r: ResourceId, qty: number): Promise<void> {
+    const sim = this.sim;
+    const market = this.market;
+    if (!sim || !market || this.trading) return;
+    this.trading = true;
+    this.lastPaint = 0;
+    const have = sim.resources.stockNow[r];
+    const result = await market.trade(r, qty, sim.money, have, RESOURCE_STORAGE - have);
+    this.trading = false;
+    if (!result.ok) {
+      setText(this.resMessageEl, result.message);
+      this.lastPaint = 0;
+      return;
+    }
+    sim.resources.addStock(r, result.qty);
+    sim.adjustMoney(-result.cost);
+    const name = RESOURCE_NAMES[r];
+    setText(
+      this.resMessageEl,
+      result.qty > 0
+        ? `${name} ${result.qty.toLocaleString('ko-KR')} 샀습니다 · −${formatMoney(result.cost)}`
+        : `${name} ${(-result.qty).toLocaleString('ko-KR')} 팔았습니다 · +${formatMoney(-result.cost)}`,
+    );
+    audio.play('grow');
+    this.lastPaint = 0;
   }
 
   private updateTerritory(sim: MacroSim): void {
@@ -508,6 +602,24 @@ function template(): string {
     <div class="cp-power cp-water"></div>
     <div class="cp-section-title">식량</div>
     <div class="cp-food cp-water"></div>
+    <div class="cp-section-title">자원 · 시장</div>
+    <div class="cp-resources">
+      <div class="cp-res-summary cp-water"></div>
+      ${['iron', 'coal', 'oil']
+        .map(
+          (r) => `<div class="cp-res-row" data-res="${r}">
+        <div class="cp-res-line"></div>
+        <div class="cp-res-buttons">
+          <button type="button" data-qty="100">100 사기</button>
+          <button type="button" data-qty="1000">1,000 사기</button>
+          <button type="button" data-qty="-100">100 팔기</button>
+          <button type="button" data-qty="-1000">1,000 팔기</button>
+        </div>
+      </div>`,
+        )
+        .join('')}
+      <div class="cp-res-message" role="status"></div>
+    </div>
     <div class="cp-section-title">위생·장의</div>
     <div class="cp-sanitation cp-water"></div>
     <div class="cp-safety">

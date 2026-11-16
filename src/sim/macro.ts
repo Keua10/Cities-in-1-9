@@ -1194,6 +1194,13 @@ export class MacroSim {
     this.onMacroChange?.();
   }
 
+  /** 시장 거래처럼 정해진 돈을 더하거나 뺀다(음수 = 지출). */
+  adjustMoney(delta: number): void {
+    if (!Number.isFinite(delta)) return;
+    this.macro.money = Math.round((this.macro.money + delta) * 100) / 100;
+    this.onMacroChange?.();
+  }
+
   /** 학생이 도로·지구를 놓을 때 부른다. 돈이 모자라면 false. */
   spend(amount: number): boolean {
     if (this.macro.money < amount) return false;

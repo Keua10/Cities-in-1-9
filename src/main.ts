@@ -26,6 +26,7 @@ import { AssignmentTable } from './sim/assignment';
 import { CongestionMap } from './sim/congestion';
 import { MacroSim } from './sim/macro';
 import { remainingAt } from './sim/resources';
+import { Market } from './net/market';
 import { CATCHUP_TICKS_PER_FRAME, START_MONEY } from './sim/simConstants';
 import { installPedestrianSystemPatch } from './sim/pedestrianSystemPatch';
 import { TrafficSim } from './sim/traffic/trafficSim';
@@ -271,6 +272,10 @@ async function boot(): Promise<void> {
 
   const cityPanel = new CityPanel();
   cityPanel.world = world;
+  // 공용 자원 시장: 로그인한 학생은 모든 도시가 함께 쓰는 재고, 둘러보기는 가상 시장.
+  const market = new Market();
+  market.connect(Boolean(session && city));
+  cityPanel.market = market;
   /** 수도 이전: 패널에서 버튼을 누르면 다음 탭 한 번이 새 수도 자리가 된다. */
   let pickCapital = false;
   cityPanel.onCapitalMove = () => {

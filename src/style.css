@@ -1125,6 +1125,34 @@ body.clean-view #minimap-shell {
   line-height: 1.6;
   color: #aed9c4;
 }
+.cp-resources {
+  padding-bottom: 8px;
+}
+.cp-res-row {
+  margin: 6px 0;
+}
+.cp-res-line {
+  font-size: 12px;
+  color: #d9e6df;
+}
+.cp-res-buttons {
+  display: flex;
+  gap: 4px;
+  margin-top: 3px;
+  flex-wrap: wrap;
+}
+.cp-res-buttons button {
+  font-size: 11px;
+  padding: 3px 6px;
+}
+.cp-res-buttons button:disabled {
+  opacity: 0.4;
+}
+.cp-res-message {
+  font-size: 11px;
+  color: #ffd38a;
+  min-height: 1em;
+}
 .cp-territory {
   padding: 8px 0 10px;
   font-size: 12px;

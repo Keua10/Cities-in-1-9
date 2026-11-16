@@ -156,7 +156,8 @@ export function tradeTotal(r: ResourceId, stock: number, qty: number): number {
   const after = stock - qty;
   const steps = 8;
   let sum = 0;
-  for (let i = 0; i < steps; i++) sum += marketPrice(r, stock + ((after - stock) * (i + 0.5)) / steps);
+  for (let i = 0; i < steps; i++)
+    sum += marketPrice(r, stock + ((after - stock) * (i + 0.5)) / steps);
   const avg = sum / steps;
   return qty > 0 ? avg * qty * MARKET_BUY_MARKUP : avg * -qty * MARKET_SELL_MARKDOWN;
 }
