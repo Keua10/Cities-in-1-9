@@ -45,6 +45,7 @@ const checks = {
   continent: 'tools/check/continentCheck.ts',
   food: 'tools/check/foodCheck.ts',
   pace: 'tools/check/paceCheck.ts',
+  economy: 'tools/check/economyCheck.ts',
 };
 mkdirSync('.check', { recursive: true });
 for (const name of process.argv.length > 2 ? process.argv.slice(2) : Object.keys(checks)) {

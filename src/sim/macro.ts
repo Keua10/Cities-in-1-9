@@ -37,7 +37,15 @@ import { utilityPenalty } from './config/infrastructure';
 import { essentialCeiling, essentialGate } from './config/essentials';
 import { normalizePolicies, taxRate, taxSatisfactionPenalty, type CityPolicies } from './policies';
 import { FAC_INCINERATOR, FAC_CREMATORIUM } from './config/sanitation';
-import { WATER_GRACE_DAYS, WATER_RAMP_DAYS } from './config/water';
+import {
+  FAC_GROUNDWATER,
+  FAC_OUTFALL,
+  FAC_RIVER_PUMP,
+  FAC_TREATMENT,
+  WATER_GRACE_DAYS,
+  WATER_RAMP_DAYS,
+} from './config/water';
+import { FAC_GAS, FAC_SOLAR, FAC_WIND } from './config/power';
 import {
   CITY_LEVELS,
   cityLevelFor,
@@ -79,6 +87,8 @@ import {
   OFFLINE_SPEED,
   START_BOOST_INCOME,
   START_BOOST_MS,
+  GRANT_BASE,
+  GRANT_UPKEEP_SHARE,
   PROSPERITY_FULL,
   RESIDENTS_PER_JOB,
   ROAD_DIST_UNREACHABLE,
@@ -114,6 +124,17 @@ export { graceFactor } from './satisfaction';
  * Date.now() 도 틱 안에서 쓰지 않는다. 난수가 필요하면 좌표와 틱 번호로 만든다
  * (buildings.ts 의 simRandom).
  */
+
+export interface FinanceEstimate {
+  /** 하루 세입(세금 + 식량 수출 + 정부 지원금). */
+  income: number;
+  /** 하루 지출(도로·시설 운영비·배관·전선·식량 수입). */
+  upkeep: number;
+  /** 정부 지원금(income 에 포함). */
+  grant?: number;
+  /** 세금만. */
+  taxes?: number;
+}
 
 export class MacroSim {
   readonly metro: MetroNetwork;
@@ -232,28 +253,52 @@ export class MacroSim {
     );
   }
 
-  financeEstimate(): { income: number; upkeep: number } {
-    let income = 0;
+  /**
+   * 하루 예상 재정. income 에는 정부 지원금이 들어 있다(grant 로 따로도 준다).
+   * incomeMul: 스타트 버닝 같은 세수 배수. 세금에만 곱한다.
+   */
+  financeEstimate(incomeMul = 1): FinanceEstimate {
+    let taxes = 0;
     const policies = this.policies;
     for (let t = 0; t < LEVEL_COUNT; t++) {
-      income +=
+      taxes +=
         this.stats.tiers[ZONE_R][t].filled * TAX_PER_RESIDENT[t] * (taxRate(policies, ZONE_R) / 9);
-      income +=
+      taxes +=
         this.stats.tiers[ZONE_C][t].filled * TAX_PER_JOB[t] * (taxRate(policies, ZONE_C) / 9);
-      income +=
+      taxes +=
         this.stats.tiers[ZONE_I][t].filled * TAX_PER_JOB[t] * (taxRate(policies, ZONE_I) / 9);
     }
+    taxes *= incomeMul;
     // 식량: 남아서 내다 판 몫은 수입, 모자라 사 온 몫은 지출이다.
     const food = this.food.summary;
-    return {
-      income: income + food.exportIncome,
-      upkeep:
-        this.stats.roads * UPKEEP_ROAD_PER_DAY +
-        this.services.dailyUpkeep() +
-        this.water.upkeep +
-        this.power.upkeep +
-        food.importCost,
-    };
+    const upkeep =
+      this.stats.roads * UPKEEP_ROAD_PER_DAY +
+      this.services.operatingUpkeep((kind) => this.utilityUse(kind)) +
+      this.water.upkeep +
+      this.power.upkeep +
+      food.importCost;
+    const earned = taxes + food.exportIncome;
+    // 중앙정부 지원금: 모자란 만큼 메워 준다. 단, 한도가 있어 터무니없이 과하게 지으면 적자.
+    const grant = this.grantsEnabled
+      ? Math.max(0, Math.min(upkeep - earned, upkeep * GRANT_UPKEEP_SHARE + GRANT_BASE))
+      : 0;
+    return { income: earned + grant, upkeep, grant, taxes };
+  }
+
+  /** 전쟁 같은 특수 상황에서 끈다(전쟁 단계에서 연결). */
+  grantsEnabled = true;
+
+  /** 상하수도·발전 시설의 연결망 사용률 0~1. 다른 시설은 null. */
+  private utilityUse(kind: number): number | null {
+    const ratio = (demand: number, capacity: number) =>
+      capacity > 0 ? Math.min(1, demand / capacity) : 0;
+    const w = this.water.summary;
+    if (kind === FAC_GROUNDWATER || kind === FAC_RIVER_PUMP)
+      return ratio(w.demand, w.waterCapacity);
+    if (kind === FAC_OUTFALL || kind === FAC_TREATMENT) return ratio(w.demand, w.sewerCapacity);
+    if (kind === FAC_WIND || kind === FAC_GAS || kind === FAC_SOLAR)
+      return ratio(this.power.summary.demand, this.power.summary.capacity);
+    return null;
   }
 
   /** grace 의 완만한 이동 평균. 인구 <-> 감점 되먹임의 진동을 막는다(수정사항 7). */
@@ -1040,12 +1085,12 @@ export class MacroSim {
     const stock = this.food.advanceStock(this.macro.food ?? 0, deltaMs / DAYTIME_DAY_MS);
     this.macro.food = Math.round(stock * 100) / 100;
     this.food.applyStock(this.macro.food);
-    const { income, upkeep } = this.financeEstimate();
+    const { income, upkeep } = this.financeEstimate(incomeMul);
     this.stats.dailyIncome = income;
     this.stats.dailyUpkeep = upkeep;
-    this.stats.facilityUpkeep = this.services.dailyUpkeep();
+    this.stats.facilityUpkeep = this.services.operatingUpkeep((kind) => this.utilityUse(kind));
     // One displayed life day earns exactly one quoted daily net amount.
-    this.financeRemainder += ((income * incomeMul - upkeep) * deltaMs) / DAYTIME_DAY_MS;
+    this.financeRemainder += ((income - upkeep) * deltaMs) / DAYTIME_DAY_MS;
     const won = Math.trunc(
       this.financeRemainder * 10_000 + Math.sign(this.financeRemainder) * 1e-7,
     );
@@ -1060,7 +1105,7 @@ export class MacroSim {
     const { income, upkeep } = this.financeEstimate();
     // 3.3단계: 시설 유지비가 붙는다. **도로가 끊겨 죽은 시설도 유지비를 낸다.**
     // 실제로 그렇고, 학생에게 도로 철거의 대가를 알려주는 신호이기도 하다.
-    const facilityUpkeep = this.services.dailyUpkeep();
+    const facilityUpkeep = this.services.operatingUpkeep((kind) => this.utilityUse(kind));
     this.stats.dailyIncome = income;
     this.stats.dailyUpkeep = upkeep;
     this.stats.facilityUpkeep = facilityUpkeep;

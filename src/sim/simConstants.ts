@@ -4,3 +4,4 @@ export * from './config/facilities';
 export * from './config/macro';
 export * from './config/traffic';
 export * from './config/pace';
+export * from './config/economy';

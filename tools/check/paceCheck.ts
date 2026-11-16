@@ -62,7 +62,7 @@ const makeSim = () => {
   return { macro, sim: new MacroSim(new World(), macro) };
 };
 const { macro, sim } = makeSim();
-sim.financeEstimate = () => ({ income: 100, upkeep: 40 });
+sim.financeEstimate = (mul = 1) => ({ income: 100 * mul, upkeep: 40 });
 assert.equal(sim.incomeMultiplier, 1);
 assert.ok(sim.grantStartBoost());
 assert.ok(!sim.grantStartBoost(), '버닝은 도시마다 한 번만');

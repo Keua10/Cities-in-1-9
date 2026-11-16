@@ -11,7 +11,12 @@ import {
 } from './buildings';
 import { FACILITY_SPECS, touchesRoadTiles } from './facilities';
 import { edgeNeighbors } from './roadGraph';
-import { AMENITY_SCORE_SCALE, LOAD_SMOOTH, SERVICE_FIELD_MAX_DIST } from './simConstants';
+import {
+  AMENITY_SCORE_SCALE,
+  IDLE_UPKEEP_SHARE,
+  LOAD_SMOOTH,
+  SERVICE_FIELD_MAX_DIST,
+} from './simConstants';
 import {
   FAC_INCINERATOR,
   FAC_CREMATORIUM,
@@ -126,6 +131,32 @@ export class ServiceField {
   dailyUpkeep(): number {
     let sum = 0;
     for (const f of this.facilities) sum += this.upkeepOfKind(f.kind);
+    return sum;
+  }
+
+  /**
+   * 실제로 내는 하루 운영비. 일이 없으면 적게 든다(config/economy.ts).
+   *  - 담당 정원이 있는 서비스 시설: 부하 / 정원
+   *  - 상하수도·발전 시설: utilityUse(kind) 가 돌려주는 연결망 사용률
+   *  - 그 밖(공원·농장·공항·항구 등): 항상 100%
+   * 도로가 끊긴 시설은 이용률과 상관없이 100%를 낸다(도로를 이어 주라는 신호).
+   */
+  operatingUpkeep(utilityUse: (kind: number) => number | null = () => null): number {
+    let sum = 0;
+    for (const f of this.facilities) {
+      const full = this.upkeepOfKind(f.kind);
+      if (!full) continue;
+      const spec = FACILITY_SPECS[f.kind];
+      let use: number | null = utilityUse(f.kind);
+      if (use === null && !spec.welfare && spec.capacity > 0)
+        use = this.load[f.index] / Math.max(1e-9, this.capacityOfKind(f.kind));
+      if (use === null || (spec.needsRoad && !f.hasRoad)) {
+        sum += full;
+        continue;
+      }
+      const share = IDLE_UPKEEP_SHARE + (1 - IDLE_UPKEEP_SHARE) * Math.max(0, Math.min(1, use));
+      sum += full * share;
+    }
     return sum;
   }
 

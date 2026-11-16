@@ -283,10 +283,11 @@ export class CityPanel {
       if (document.activeElement !== input) input.value = String(policies[key]);
       setText(must(this.root, `[data-policy-value="${key}"]`), `${policies[key]}%`);
     }
-    const { income, upkeep } = this.sim.financeEstimate();
+    const { income, upkeep, grant = 0 } = this.sim.financeEstimate(this.sim.incomeMultiplier);
     setText(
       must(this.root, '.cp-finance'),
       `하루 예상 세입 ${formatMoney(income)} · 지출 ${formatMoney(upkeep)}\n수지 ${formatMoney(income - upkeep)} (현재 입주 기준)` +
+        (grant > 0 ? `\n정부 지원금 ${formatMoney(grant)} 포함 · 도시가 커지면 줄어듭니다` : '') +
         foodFinanceLine(this.sim.food.summary),
     );
   }

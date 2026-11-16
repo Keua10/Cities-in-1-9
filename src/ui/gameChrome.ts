@@ -96,8 +96,8 @@ export function bindGameChrome(camera: Camera, tools: Tools, center: () => void)
       setText('strip-level', `Lv.${sim.cityLevel}`);
       setText('strip-money', formatMoney(sim.money, true));
       document.getElementById('strip-money')!.title = formatMoney(sim.money);
-      const finance = sim.financeEstimate();
-      const net = finance.income * sim.incomeMultiplier - finance.upkeep;
+      const finance = sim.financeEstimate(sim.incomeMultiplier);
+      const net = finance.income - finance.upkeep;
       setText('strip-income', `${formatMoney(net, true, true)} /일`);
       document.getElementById('strip-income')!.title =
         `${formatMoney(net, false, true)} /일 · 생활 하루(실제 5분)에 걸쳐 수입과 유지비가 일정하게 반영됩니다`;

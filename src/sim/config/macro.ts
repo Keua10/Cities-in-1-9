@@ -8,6 +8,7 @@
  */
 
 import { OFFLINE_GAME_DAYS_PER_REAL_DAY, OFFLINE_MAX_REAL_MS } from './pace';
+import { TAX_MULTIPLIER } from './economy';
 
 /* ---------------- 시간 ---------------- */
 
@@ -124,8 +125,8 @@ export const UPKEEP_ROAD_PER_DAY = 0.6;
  * 세금. 건물 한 채가 하루에 내는 돈 = 입주 인원 x 아래 값.
  * 등급이 높을수록 1인당 세수가 크다.
  */
-export const TAX_PER_RESIDENT: readonly number[] = [0.9, 1.8, 3.6];
-export const TAX_PER_JOB: readonly number[] = [1.1, 2.2, 4.4];
+export const TAX_PER_RESIDENT: readonly number[] = [0.9, 1.8, 3.6].map((v) => v * TAX_MULTIPLIER);
+export const TAX_PER_JOB: readonly number[] = [1.1, 2.2, 4.4].map((v) => v * TAX_MULTIPLIER);
 
 /* ---------------- 수요 ---------------- */
 
