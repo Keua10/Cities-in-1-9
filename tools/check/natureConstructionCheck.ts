@@ -88,8 +88,22 @@ legacy.state.construction = [
   { tx: 50, ty: 50, kind: 0, span: 2, cost: 0, started: 0, finishes: 20_000 },
 ];
 const lj = legacy.sim.construction.jobs[0];
-assert.equal(lj.workMs, 20_000);
-assert.equal(lj.doneMs, 5_000);
+// 진행 비율(25%)은 그대로, 길이는 지금 공사 기간 표를 따른다.
+assert.equal(lj.workMs, constructionSeconds(0) * 1000);
+assert.equal(lj.doneMs, constructionSeconds(0) * 1000 * 0.25);
+// 표가 바뀌기 전에 착공한 공사도 새 기간을 따른다(언제 착공했든 같은 속도).
+legacy.state.construction.push({
+  tx: 60,
+  ty: 60,
+  kind: 2,
+  span: 3,
+  cost: 0,
+  workMs: 6_000_000,
+  doneMs: 3_000_000,
+});
+const old = legacy.sim.construction.jobs[1];
+assert.equal(old.workMs, constructionSeconds(2) * 1000);
+assert.equal(old.doneMs, constructionSeconds(2) * 500);
 assert.equal(lj.started, undefined);
 
 const station = fixture();
@@ -106,6 +120,28 @@ station.sim.construction.start(30, 30, 0, 99);
 assert(station.sim.construction.cancel(31, 31));
 assert.equal(station.world.getBuild(30, 30), Build.None);
 assert.equal(station.world.getBuild(31, 31), Build.None);
+
+// 철거 도구는 공사 중인 칸을 지우지 않는다. 공사 창의 "공사 취소" 로만 취소한다.
+{
+  const f = fixture();
+  const t = new Tools(f.world, { invalidateTile() {}, forceRedraw() {} } as any, f.sim);
+  t.setTool('facility');
+  t.facilityKind = 2;
+  t.tapTile(70, 70);
+  t.confirmPlacement();
+  assert.equal(f.sim.construction.jobs.length, 1);
+  t.setTool('bulldoze');
+  t.tapTile(69, 69);
+  t.tapTile(73, 73);
+  t.confirmPlacement();
+  assert.equal(f.sim.construction.jobs.length, 1, 'bulldoze never cancels construction');
+  assert.equal(f.world.getBuild(71, 71), Build.Civic);
+  assert(t.cancelConstruction(71, 71));
+  assert.equal(f.sim.construction.jobs.length, 0);
+  for (let y = 70; y < 73; y++)
+    for (let x = 70; x < 73; x++)
+      assert.equal(f.world.getBuild(x, y), Build.None, 'cancel frees the plot');
+}
 
 function weatherFixture() {
   const f = fixture();

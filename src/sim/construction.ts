@@ -57,6 +57,10 @@ export class ConstructionSystem {
     for (const j of jobs) migrateJob(j, this.macro.lifeElapsedMs ?? 0);
     return jobs;
   }
+  /** 스타트 버닝이 켜져 있는지(공사가 10배로 진행 중). */
+  get boosted(): boolean {
+    return (this.macro.startBoostMs ?? 0) > 0;
+  }
   /** 공사 진행률 0~1. */
   progress(job: ConstructionJob): number {
     migrateJob(job, this.macro.lifeElapsedMs ?? 0);
@@ -102,13 +106,13 @@ export class ConstructionSystem {
     if (this.macro.constructionAt === undefined) this.macro.constructionAt = Date.now();
     return `${spec.name} 착공 · 약 ${formatDuration(this.remainingMs(job) / 1000)} 뒤 완공`;
   }
-  cancel(tx: number, ty: number): boolean {
+  cancel(tx: number, ty: number): ConstructionJob | null {
     const job = this.at(tx, ty);
-    if (!job) return false;
+    if (!job) return null;
     this.reserve(job, Build.None);
     this.macro.construction = this.jobs.filter((j) => j !== job);
     this.changed();
-    return true;
+    return job;
   }
   /**
    * 실제 시각 now 까지 공사를 진행시킨다.
@@ -142,13 +146,26 @@ export class ConstructionSystem {
   }
 }
 
-/** 예전 저장(생활 시계 started/finishes)을 실제 시간 공사량으로 옮긴다. */
+/**
+ * 공사를 지금 공사 기간 표에 맞춘다. 진행 비율은 그대로 둔다.
+ *  - 예전 저장(생활 시계 started/finishes)은 실제 시간 공사량으로 옮긴다.
+ *  - 공사 기간 표가 바뀌면(밸런스 조정) 짓고 있던 공사도 새 기간을 따른다.
+ *    그러지 않으면 같은 시설이 언제 착공했느냐에 따라 속도가 달라진다.
+ */
 function migrateJob(job: ConstructionJob, lifeElapsed: number): void {
-  if (job.workMs !== undefined && job.doneMs !== undefined) return;
-  const started = job.started ?? lifeElapsed;
-  const finishes = job.finishes ?? started + constructionSeconds(job.kind) * 1000;
-  job.workMs = Math.max(1, finishes - started);
-  job.doneMs = Math.max(0, Math.min(job.workMs, lifeElapsed - started));
-  delete job.started;
-  delete job.finishes;
+  const target = constructionSeconds(job.kind) * 1000;
+  if (job.workMs === undefined || job.doneMs === undefined) {
+    const started = job.started ?? lifeElapsed;
+    const finishes = job.finishes ?? started + target;
+    const length = Math.max(1, finishes - started);
+    job.workMs = length;
+    job.doneMs = Math.max(0, Math.min(length, lifeElapsed - started));
+    delete job.started;
+    delete job.finishes;
+  }
+  if (job.workMs !== target) {
+    const fraction = Math.min(1, job.doneMs / Math.max(1, job.workMs));
+    job.workMs = target;
+    job.doneMs = fraction * target;
+  }
 }

@@ -688,6 +688,8 @@ export class Tools {
         return buildable(this.terrainUnitCost());
       }
       case 'bulldoze':
+        if (this.sim.construction?.at(tx, ty))
+          return blocked('공사 중입니다 · 선택 도구로 눌러 공사를 취소하세요');
         return this.world.getBuild(tx, ty) === Build.None ? SKIP : buildable(0);
       case 'wire':
         return this.world.getWire(tx, ty) ? SKIP : buildable(WIRE_COST);
@@ -803,10 +805,8 @@ export class Tools {
     }
 
     if (this.tool === 'bulldoze') {
-      if (this.sim.construction?.cancel(tx, ty)) {
-        this.renderer.forceRedraw();
-        return true;
-      }
+      // 공사 중인 칸은 철거로 지우지 않는다. 공사 창의 "공사 취소" 로만 취소한다.
+      if (this.sim.construction?.at(tx, ty)) return false;
       if (this.world.getBuild(tx, ty) === Build.None) return false;
       const facility = this.world.buildingCovering(tx, ty);
       this.world.setBuild(tx, ty, Build.None);
@@ -859,6 +859,16 @@ export class Tools {
     const message = this.sim.construction.start(tx, ty, this.facilityKind, this.cityLevel);
     this.noteResult(message, warning);
     this.refreshArea(tx, ty, FACILITY_SPECS[this.facilityKind].span);
+  }
+
+  /** 공사 창의 "공사 취소". 예약해 둔 땅을 비우고 다시 그린다. 공사비는 돌려주지 않는다. */
+  cancelConstruction(tx: number, ty: number): boolean {
+    const job = this.sim.construction.cancel(tx, ty);
+    if (!job) return false;
+    this.refreshArea(job.tx, job.ty, job.span);
+    this.renderer.forceRedraw();
+    this.feedback(job.tx, job.ty, 'demolish');
+    return true;
   }
 
   private refreshArea(tx: number, ty: number, span: number): void {

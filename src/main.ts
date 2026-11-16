@@ -410,6 +410,7 @@ async function boot(): Promise<void> {
   });
   bindToolButtons(tools);
   const chrome = bindGameChrome(camera, tools, centerCamera);
+  constructionPanel.onCancel = (tx, ty) => tools.cancelConstruction(tx, ty);
   if (boostGranted)
     tools.announce('🔥 스타트 버닝 시작! 10분(플레이 시간) 동안 건설 속도 ×10 · 수입 ×10');
 
