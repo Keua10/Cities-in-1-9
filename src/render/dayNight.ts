@@ -12,7 +12,8 @@ export function daylightAt(life: DaytimeSnapshot): number {
 export function lightingColor(life: DaytimeSnapshot, cloud = 0): number {
   const light = daylightAt(life);
   const dusk = 4 * light * (1 - light);
-  const shade = 1 - cloud * 0.08;
+  // 흐리거나 비·눈이 오면 조금 더 어둡게(맑음 0.15 → 0.98, 큰비 0.95 → 0.87).
+  const shade = 1 - cloud * 0.14;
   const r = Math.round((145 + 110 * light + 12 * dusk) * shade);
   const g = Math.round((163 + 92 * light - 12 * dusk) * shade);
   const b = Math.round((207 + 48 * light - 30 * dusk) * shade);

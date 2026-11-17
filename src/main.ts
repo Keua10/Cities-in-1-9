@@ -2,6 +2,7 @@ import { PassSession } from './net/passes';
 import { airspace, passValid, territorialSea, trespassing } from './sim/military/waters';
 import { ConstructionPanel } from './ui/constructionPanel';
 import { NatureLayer } from './render/natureLayer';
+import { CityFx } from './render/fx/cityFx';
 import { AlertPanel } from './ui/alertPanel';
 import { lightingColor } from './render/dayNight';
 import { audio } from './audio/audio';
@@ -256,6 +257,8 @@ async function boot(): Promise<void> {
   const constructionPanel = new ConstructionPanel(sim.construction);
   const natureLayer = new NatureLayer(world, sim);
   renderer.root.addChild(natureLayer.graphics);
+  // 비·눈, 굴뚝·화재 연기, 밤 가로등, 공습 경보(render/fx).
+  const cityFx = new CityFx(app, renderer.root, renderer.effects.graphics, world, sim);
   const weatherStatus = document.createElement('div');
   weatherStatus.className = 'weather-status';
   document.body.append(weatherStatus);
@@ -491,6 +494,9 @@ async function boot(): Promise<void> {
   }, 1000);
   sim.army.uid = myUid;
   sim.army.onEvent = (e) => {
+    // 공습 경보: 내 땅이 맞으면(폭격이면 그 위로 폭격기 그림자), 적 공군이 레이더에 잡히면.
+    if (e.type === 'struck' && !e.intercepted) cityFx.raid(e.kind === 'bomb' ? e.key : null);
+    else if (e.type === 'airRaid') cityFx.raid(null);
     if (e.type === 'trained')
       tools.announce('부대 훈련 완료 · 대륙 지도 → 군대에서 출동시킬 수 있습니다');
     else if (e.type === 'occupied') tools.announce(`청크 ${e.key} 점령`);
@@ -798,6 +804,7 @@ async function boot(): Promise<void> {
     renderer.update(camera, now);
     renderer.setWorldTint(lightingColor(traffic.daytimeState, sim.nature.weather.cloud));
     natureLayer.draw(camera);
+    cityFx.update(camera, now, traffic.daytimeState);
     constructionPanel.update();
     const weather = sim.nature.weather;
     weatherStatus.textContent =
