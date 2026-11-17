@@ -220,6 +220,7 @@ async function loadOverrides(uid: string): Promise<Map<string, ChunkOverride>> {
       build: string;
       roadLinks: string;
       pipes: string;
+      pipeLinks: string;
       wires: string;
       bld: string;
       bornLo: string;
@@ -230,6 +231,7 @@ async function loadOverrides(uid: string): Promise<Map<string, ChunkOverride>> {
     const build = decodeOverride(data.build ?? null, CHUNK_TILES);
     const roadLinks = decodeOverride(data.roadLinks ?? null, CHUNK_TILES);
     const pipes = decodeOverride(data.pipes ?? null, CHUNK_TILES);
+    const pipeLinks = decodeOverride(data.pipeLinks ?? null, CHUNK_TILES);
     const wires = decodeOverride(data.wires ?? null, CHUNK_TILES);
     const bld = decodeOverride(data.bld ?? null, CHUNK_TILES);
     const bornLo = decodeOverride(data.bornLo ?? null, CHUNK_TILES);
@@ -241,6 +243,7 @@ async function loadOverrides(uid: string): Promise<Map<string, ChunkOverride>> {
       build,
       roadLinks,
       pipes,
+      pipeLinks,
       wires,
       bld,
       bornLo,
@@ -324,6 +327,7 @@ export async function saveCity(
       const build = encodeOverride(chunk.build);
       const roadLinks = encodeOverride(chunk.roadLinks);
       const pipes = encodeOverride(chunk.pipes);
+      const pipeLinks = encodeOverride(chunk.pipeLinks ?? null);
       const wires = encodeOverride(chunk.wires);
       const bld = encodeOverride(chunk.bld);
       // 건물이 하나도 없으면 born 배열도 통째로 비어 있다. 그때는 저장하지 않고,
@@ -341,6 +345,7 @@ export async function saveCity(
         build,
         roadLinks,
         pipes,
+        pipeLinks,
         wires,
         bld,
         bornLo,

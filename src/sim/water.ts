@@ -58,6 +58,9 @@ export interface WaterStatus {
   supply: number;
   drainage: number;
   contamination: number;
+  /** 상수관·하수관 반경 안인가(용량이 0이어도 — 범위 표시용). */
+  inWater?: boolean;
+  inSewer?: boolean;
 }
 const EMPTY: WaterStatus = { supply: 0, drainage: 0, contamination: 0 };
 
@@ -102,8 +105,8 @@ export class WaterField {
         this.nodes.set(key(x, y), { x, y, mask, water: -1, sewer: -1 });
         pipeCount += mask === 3 ? 2 : 1;
       }
-    this.water = this.flood(PIPE_WATER, 'water');
-    this.sewer = this.flood(PIPE_SEWER, 'sewer');
+    this.water = this.flood(world, PIPE_WATER, 'water');
+    this.sewer = this.flood(world, PIPE_SEWER, 'sewer');
     for (const p of world.developedParcels().sort((a, b) => a.cy - b.cy || a.cx - b.cx)) {
       if (!p.bld) continue;
       for (let i = 0; i < p.bld.length; i++) {
@@ -169,18 +172,7 @@ export class WaterField {
       }
       demand += c.demand;
     }
-    // 같은 지하 레벨: 겹치거나 4방향으로 맞닿은 상·하수도는 즉시 혼합된다.
-    for (const node of this.nodes.values()) {
-      if (node.water < 0) continue;
-      if (
-        node.mask & PIPE_SEWER ||
-        DIRS.some(
-          ([dx, dy]) => (this.nodes.get(key(node.x + dx, node.y + dy))?.mask ?? 0) & PIPE_SEWER,
-        )
-      ) {
-        this.water[node.water].pollution = 1;
-      }
-    }
+    // 상·하수도는 깊이가 달라 옆에 닿거나 겹쳐도 섞이지 않는다(피드백 2차). 오염은 하천 방류로만.
     for (const pump of this.plants) {
       if (!pump.active || pump.kind !== FAC_RIVER_PUMP) continue;
       let pollution = 0;
@@ -249,6 +241,8 @@ export class WaterField {
         supply: w ? Math.min(1, w.capacity / Math.max(1, w.load)) : 0,
         drainage: s ? Math.min(1, s.capacity / Math.max(1, s.load)) : 0,
         contamination: w?.pollution ?? 0,
+        inWater: !!w,
+        inSewer: !!s,
       });
     }
     // A building is connected when any footprint tile is in range. Show its actual allocated network.
@@ -260,7 +254,8 @@ export class WaterField {
     this.revision = world.utilityRevision;
   }
 
-  private flood(mask: number, type: 'water' | 'sewer'): Network[] {
+  /** 이어진 배관끼리(도로처럼 직접 이은 곳만, 옆에 닿기만 한 것은 따로) 연결망을 나눈다. */
+  private flood(world: World, mask: 1 | 2, type: 'water' | 'sewer'): Network[] {
     const groups: Network[] = [];
     for (const node of this.nodes.values()) {
       if (!(node.mask & mask) || node[type] >= 0) continue;
@@ -273,6 +268,7 @@ export class WaterField {
         for (const [dx, dy] of DIRS) {
           const next = this.nodes.get(key(current.x + dx, current.y + dy));
           if (!next || !(next.mask & mask) || next[type] >= 0) continue;
+          if (!world.pipesConnected(current.x, current.y, next.x, next.y, mask)) continue;
           next[type] = id;
           queue.push(next);
         }
@@ -301,7 +297,17 @@ export class WaterField {
       supply: w ? Math.min(1, w.capacity / Math.max(1, w.load)) : 0,
       drainage: s ? Math.min(1, s.capacity / Math.max(1, s.load)) : 0,
       contamination: w?.pollution ?? 0,
+      inWater: !!w,
+      inSewer: !!s,
     };
+  }
+
+  /** 이 연결망에 일하는 정수장·처리장이 하나도 없는가(배관만 깔려 있음). */
+  networkDry(tx: number, ty: number, type: 'water' | 'sewer'): boolean {
+    const node = this.nodes.get(key(tx, ty));
+    const id = node?.[type] ?? -1;
+    const g = (type === 'water' ? this.water : this.sewer)[id];
+    return !!g && g.capacity <= 0;
   }
 
   /**

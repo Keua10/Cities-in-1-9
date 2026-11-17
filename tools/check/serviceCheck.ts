@@ -195,14 +195,12 @@ function addUtilities(world: World, ox: number, oy: number, size: number): void 
   }
 
   // 상수: y = -1 간선 + x ≡ 0 (mod 6) 지선
-  for (let x = -1; x <= size + 18; x++) world.setPipe(ox + x, oy - 1, 1);
-  for (let x = 0; x <= size; x += 6)
-    for (let y = -1; y <= size - 1; y++) world.setPipe(ox + x, oy + y, 1);
+  world.pipeLine(ox - 1, oy - 1, ox + size + 18, oy - 1, 1);
+  for (let x = 0; x <= size; x += 6) world.pipeLine(ox + x, oy - 1, ox + x, oy + size - 1, 1);
 
   // 하수: y = size + 1 간선 + x ≡ 3 (mod 6) 지선
-  for (let x = -1; x <= size; x++) world.setPipe(ox + x, oy + size + 1, 2);
-  for (let x = 3; x <= size; x += 6)
-    for (let y = 1; y <= size + 1; y++) world.setPipe(ox + x, oy + y, 2);
+  world.pipeLine(ox - 1, oy + size + 1, ox + size, oy + size + 1, 2);
+  for (let x = 3; x <= size; x += 6) world.pipeLine(ox + x, oy + 1, ox + x, oy + size + 1, 2);
 
   // 시설은 전부 y = -3 줄(도로 y = -1 에 접함, 하천 y = -4 에 접함).
   const place = (rx: number, kind: number) => {

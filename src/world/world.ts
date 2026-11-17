@@ -24,6 +24,8 @@ export interface ChunkOverride {
   wires?: Uint8Array | null;
   /** 255=없음, 1=상수도, 2=하수도, 3=동일 칸 교차 연결. */
   pipes?: Uint8Array | null;
+  /** 배관 연결 방향(Parcel.pipeLinks). */
+  pipeLinks?: Uint8Array | null;
   roadLinks?: Uint8Array | null;
   tiles: Uint8Array | null;
   heights: Uint8Array | null;
@@ -50,6 +52,11 @@ export interface ChunkOverride {
 export interface Parcel {
   wires: Uint8Array | null;
   pipes: Uint8Array | null;
+  /**
+   * 배관 연결(피드백 2차, 도로처럼): 낮은 4비트 = 상수도 방향, 높은 4비트 = 하수도 방향
+   * (DIRS 순서). 255(옛 저장·미설정) = 모든 방향 → 옛 배관끼리는 예전처럼 이어진다.
+   */
+  pipeLinks: Uint8Array | null;
   /** 0~15: 명시적 연결. 255/없음: 이전 저장본과 생성 도시의 인접 연결. */
   roadLinks: Uint8Array | null;
   cx: number;
@@ -233,6 +240,7 @@ export class World {
       p = {
         wires: null,
         pipes: null,
+        pipeLinks: null,
         roadLinks: null,
         cx,
         cy,
@@ -290,6 +298,55 @@ export class World {
     return value === 1 || value === 2 || value === 3 ? value : 0;
   }
 
+  /** 배관 연결 비트(낮은 4 = 상수도, 높은 4 = 하수도). 255 = 옛 배관(모든 방향). */
+  private pipeBits(tx: number, ty: number): number {
+    const p = this.peekParcel(chunkIndexOf(tx), chunkIndexOf(ty));
+    return p?.pipeLinks?.[localIndexOf(ty) * CHUNK_SIZE + localIndexOf(tx)] ?? 255;
+  }
+
+  private writePipeBits(tx: number, ty: number, bits: number): void {
+    const p = this.getParcel(chunkIndexOf(tx), chunkIndexOf(ty));
+    p.pipeLinks ??= new Uint8Array(CHUNK_TILES).fill(OVERRIDE_NONE);
+    p.pipeLinks[localIndexOf(ty) * CHUNK_SIZE + localIndexOf(tx)] = bits;
+  }
+
+  /** 같은 종류 배관 두 칸이 서로 이어져 있는가(둘 다 서로를 향한 연결이 있어야 한다). */
+  pipesConnected(ax: number, ay: number, bx: number, by: number, type: 1 | 2): boolean {
+    const d = DIRS.findIndex(([dx, dy]) => bx - ax === dx && by - ay === dy);
+    if (d < 0 || !(this.getPipe(ax, ay) & type) || !(this.getPipe(bx, by) & type)) return false;
+    const shift = type === 1 ? 0 : 4;
+    return (
+      !!((this.pipeBits(ax, ay) >> shift) & (1 << d)) &&
+      !!((this.pipeBits(bx, by) >> shift) & (1 << ((d + 2) & 3)))
+    );
+  }
+
+  /** 드래그로 놓은 연속 두 칸(같은 종류)을 양방향으로 잇는다. */
+  connectPipes(ax: number, ay: number, bx: number, by: number, type: 1 | 2): boolean {
+    const d = DIRS.findIndex(([dx, dy]) => bx - ax === dx && by - ay === dy);
+    if (d < 0 || !(this.getPipe(ax, ay) & type) || !(this.getPipe(bx, by) & type)) return false;
+    if (this.pipesConnected(ax, ay, bx, by, type)) return false;
+    const shift = type === 1 ? 0 : 4;
+    this.writePipeBits(ax, ay, this.pipeBits(ax, ay) | ((1 << d) << shift));
+    this.writePipeBits(bx, by, this.pipeBits(bx, by) | ((1 << ((d + 2) & 3)) << shift));
+    this.markDirty(this.getParcel(chunkIndexOf(ax), chunkIndexOf(ay)).key, true);
+    this.markDirty(this.getParcel(chunkIndexOf(bx), chunkIndexOf(by)).key, true);
+    return true;
+  }
+
+  /** 일직선 배관을 깔고 이웃 칸끼리 잇는다(생성기·점검용, 플레이어는 tools.ts 로). */
+  pipeLine(x0: number, y0: number, x1: number, y1: number, type: 1 | 2): void {
+    const dx = Math.sign(x1 - x0);
+    const dy = Math.sign(y1 - y0);
+    const n = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0));
+    for (let i = 0; i <= n; i++) {
+      const tx = x0 + dx * i;
+      const ty = y0 + dy * i;
+      this.setPipe(tx, ty, this.getPipe(tx, ty) | type);
+      if (i > 0) this.connectPipes(tx - dx, ty - dy, tx, ty, type);
+    }
+  }
+
   setPipe(tx: number, ty: number, mask: number): boolean {
     if (
       !Number.isInteger(mask) ||
@@ -298,11 +355,27 @@ export class World {
       !this.isExplored(chunkIndexOf(tx), chunkIndexOf(ty))
     )
       return false;
-    if (this.getPipe(tx, ty) === mask) return false;
+    const before = this.getPipe(tx, ty);
+    if (before === mask) return false;
     const p = this.getParcel(chunkIndexOf(tx), chunkIndexOf(ty));
+    // 새로 놓는 종류는 연결 없이 시작한다(옆에 닿기만 해서는 이어지지 않는다).
+    // 없어진 종류의 연결은 지운다. 옛 배관(255)은 남은 종류만 그대로 모든 방향.
+    {
+      let bits = this.pipeBits(tx, ty);
+      if (bits === 255) bits = (before & 1 ? 0x0f : 0) | (before & 2 ? 0xf0 : 0);
+      if (!(mask & 1)) bits &= 0xf0;
+      if (!(mask & 2)) bits &= 0x0f;
+      if (mask & 1 && !(before & 1)) bits &= 0xf0;
+      if (mask & 2 && !(before & 2)) bits &= 0x0f;
+      if (mask !== 0 || p.pipeLinks) this.writePipeBits(tx, ty, mask === 0 ? OVERRIDE_NONE : bits);
+    }
     p.pipes ??= new Uint8Array(CHUNK_TILES).fill(OVERRIDE_NONE);
     p.pipes[localIndexOf(ty) * CHUNK_SIZE + localIndexOf(tx)] = mask || OVERRIDE_NONE;
-    if (mask === 0 && p.pipes.every((value) => value === OVERRIDE_NONE)) p.pipes = null;
+    if (mask === 0 && p.pipes.every((value) => value === OVERRIDE_NONE)) {
+      p.pipes = null;
+      p.pipeLinks = null;
+      p.pipeLinks = null;
+    }
     this.markDirty(p.key, true);
     return true;
   }
@@ -887,6 +960,7 @@ export class World {
       p.build = ov.build;
       p.roadLinks = ov.roadLinks ?? null;
       p.pipes = ov.pipes ?? null;
+      p.pipeLinks = ov.pipeLinks ?? null;
       p.wires = ov.wires ?? null;
       p.bld = ov.bld;
       // bld 는 있는데 born 이 없으면(전부 255 라 압축이 null 을 돌려준 경우)
@@ -979,6 +1053,7 @@ export class World {
         build: p.build ? new Uint8Array(p.build) : null,
         roadLinks: p.roadLinks ? new Uint8Array(p.roadLinks) : null,
         pipes: p.pipes?.slice() ?? null,
+        pipeLinks: p.pipeLinks?.slice() ?? null,
         wires: p.wires?.slice() ?? null,
         bld: p.bld ? new Uint8Array(p.bld) : null,
         bornLo: p.bornLo ? new Uint8Array(p.bornLo) : null,
@@ -1008,6 +1083,7 @@ export class World {
 export interface ChunkSnapshot {
   wires?: Uint8Array | null;
   pipes?: Uint8Array | null;
+  pipeLinks?: Uint8Array | null;
   roadLinks?: Uint8Array | null;
   cx: number;
   cy: number;

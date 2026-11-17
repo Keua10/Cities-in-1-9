@@ -247,9 +247,7 @@ export class Tools {
     if (this.utilityMode !== 'off' && this.shape === 'none') {
       if (this.utilityMode === 'resources')
         return '자원 매장지 · 주황=철 · 흰색=석탄 · 노랑=석유 · 진할수록 많이 남음 · 테두리가 굵을수록 깊음(높은 단계 광산 필요) · 검정=다 캠';
-      return this.utilityMode === 'power'
-        ? '노랑=전력 공급 범위 · 주황=용량 부족 · 회색 전선=단절 · 건물 가장자리 3칸 이내 자동 공유. 빈 땅은 전달하지 않습니다.'
-        : '파랑=급수 범위 · 갈색=하수 범위 · 빨강=오염 · 주황=용량 부족 · 배관 반경 4칸. 상·하수도관은 빈 칸 1개 이상 띄우세요.';
+      return this.utilityMode === 'power' ? '' : '';
     }
     if (this.shape === 'line') return '시작점을 누르세요 · 두 점을 이어 일직선으로 놓습니다';
     if (this.shape === 'area') return '한쪽 모서리를 누르세요 · 두 점이 사각형 범위가 됩니다';
@@ -409,6 +407,21 @@ export class Tools {
         if (!this.world.roadsConnected(a.tx, a.ty, b.tx, b.ty)) links++;
       }
     }
+    if (this.tool === 'waterPipe' || this.tool === 'sewerPipe') {
+      const type = this.tool === 'waterPipe' ? PIPE_WATER : PIPE_SEWER;
+      for (let i = 1; i < tiles.length; i++) {
+        const a = tiles[i - 1];
+        const b = tiles[i];
+        if (a.state === 'blocked' || b.state === 'blocked') continue;
+        // 이미 있는 배관 두 칸을 지나가면 둘을 잇는다(돈 없이).
+        if (
+          a.state === 'skip' &&
+          b.state === 'skip' &&
+          !this.world.pipesConnected(a.tx, a.ty, b.tx, b.ty, type)
+        )
+          links++;
+      }
+    }
 
     this.planCache = {
       shape,
@@ -445,19 +458,8 @@ export class Tools {
       );
       return r.ok && r.warning ? r.warning : '';
     }
-    if (this.tool !== 'waterPipe' && this.tool !== 'sewerPipe') return '';
-    const other = this.tool === 'waterPipe' ? PIPE_SEWER : PIPE_WATER;
-    let mixed = 0;
-    for (const t of tiles) {
-      if (t.state !== 'build') continue;
-      const touches =
-        (this.world.getPipe(t.tx, t.ty) & other) !== 0 ||
-        DIRS.some(([dx, dy]) => (this.world.getPipe(t.tx + dx, t.ty + dy) & other) !== 0);
-      if (touches) mixed++;
-    }
-    if (!mixed) return '';
-    const otherName = other === PIPE_SEWER ? '하수도관' : '상수도관';
-    return `${otherName}과 맞닿는 칸 ${mixed}개 · 물이 오염됩니다`;
+    void tiles;
+    return '';
   }
 
   private foodPreviewKey = '';
@@ -595,6 +597,20 @@ export class Tools {
         this.refresh(prev.tx, prev.ty);
         this.refresh(t.tx, t.ty);
       }
+      // 배관도 도로처럼: 이번에 그은 줄의 이웃 칸끼리만 잇는다(이미 있던 배관을 지나가면 거기서 이어진다).
+      if (
+        (this.tool === 'waterPipe' || this.tool === 'sewerPipe') &&
+        prev &&
+        t.state !== 'blocked' &&
+        this.world.connectPipes(
+          prev.tx,
+          prev.ty,
+          t.tx,
+          t.ty,
+          this.tool === 'waterPipe' ? PIPE_WATER : PIPE_SEWER,
+        )
+      )
+        linked++;
       prev = t.state === 'blocked' ? null : t;
     }
     this.invalidatePlan();

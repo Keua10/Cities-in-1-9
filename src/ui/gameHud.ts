@@ -64,6 +64,15 @@ function buildingCard(
   const amenity = buildingAmenity(sim, here.tx, here.ty, here.span, here.level);
   const problems = environmentProblems(envParts);
   if (sim.water.contaminationAt(here.tx, here.ty) > 0) problems.unshift('수질 오염');
+  // 물이 안 오는 이유를 하나로: 관이 안 닿음 / 닿았지만 그 관에 정수장(처리장)이 없음.
+  if (water.supply <= 0)
+    problems.unshift(
+      water.inWater ? '상수관에 정수장이 이어지지 않음' : '상수관이 안 닿음(반경 4칸)',
+    );
+  if (water.drainage <= 0)
+    problems.unshift(
+      water.inSewer ? '하수관에 처리 시설이 이어지지 않음' : '하수관이 안 닿음(반경 4칸)',
+    );
   if (amenity.problem) problems.push(amenity.problem);
   const empty = occupancy === null || occupancy <= 0;
   return {

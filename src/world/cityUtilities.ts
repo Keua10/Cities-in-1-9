@@ -248,17 +248,25 @@ function layPipes(world: World, ox: number, oy: number, f: Footprint): void {
   const bands = Math.max(1, Math.min(Math.ceil(height / PIPE_ROW_STEP), Math.floor(height / 4)));
   const step = height / bands;
 
+  // 배관은 도로처럼 직접 이은 칸끼리만 연결된다(피드백 2차). 놓으면서 앞 칸과 잇는다.
+  const lay = (x: number, y: number, type: 1 | 2, px?: number, py?: number) => {
+    world.setPipe(ox + x, oy + y, world.getPipe(ox + x, oy + y) | type);
+    if (px !== undefined && py !== undefined)
+      world.connectPipes(ox + px, oy + py, ox + x, oy + y, type);
+  };
   for (let y = top; y <= bottom; y++) {
-    world.setPipe(ox + trunkW, oy + y, PIPE_WATER);
-    world.setPipe(ox + trunkS, oy + y, PIPE_SEWER);
+    lay(trunkW, y, PIPE_WATER, y > top ? trunkW : undefined, y > top ? y - 1 : undefined);
+    lay(trunkS, y, PIPE_SEWER, y > top ? trunkS : undefined, y > top ? y - 1 : undefined);
   }
   for (let k = 0; k <= bands; k++) {
     const y = Math.round(top + k * step);
-    for (let x = trunkW; x <= trunkS - 2; x++) world.setPipe(ox + x, oy + y, PIPE_WATER);
+    for (let x = trunkW; x <= trunkS - 2; x++)
+      lay(x, y, PIPE_WATER, x > trunkW ? x - 1 : undefined, x > trunkW ? y : undefined);
   }
   for (let k = 0; k < bands; k++) {
     const y = Math.round(top + (k + 0.5) * step);
-    for (let x = trunkW + 2; x <= trunkS; x++) world.setPipe(ox + x, oy + y, PIPE_SEWER);
+    for (let x = trunkW + 2; x <= trunkS; x++)
+      lay(x, y, PIPE_SEWER, x > trunkW + 2 ? x - 1 : undefined, x > trunkW + 2 ? y : undefined);
   }
 }
 

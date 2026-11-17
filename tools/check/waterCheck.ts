@@ -26,6 +26,17 @@ for (let dy = -3; dy < 22; dy++)
     world.setHeight(x + dx, y + dy, 0);
   }
 const pipe = (px: number, py: number, mask: number) => world.setPipe(x + px, y + py, mask);
+/** 도로처럼 그은 배관: 놓고 앞 칸과 잇는다(피드백 2차 — 옆에 닿기만 하면 안 이어진다). */
+const run = (w: World, pts: Array<[number, number]>, type: 1 | 2) => {
+  pts.forEach(([px, py], i) => {
+    w.setPipe(px, py, w.getPipe(px, py) | type);
+    if (i > 0) w.connectPipes(pts[i - 1][0], pts[i - 1][1], px, py, type);
+  });
+};
+const hline = (x0: number, x1: number, yy: number) =>
+  Array.from({ length: x1 - x0 + 1 }, (_, i) => [x + x0 + i, y + yy] as [number, number]);
+const vline = (xx: number, y0: number, y1: number) =>
+  Array.from({ length: y1 - y0 + 1 }, (_, i) => [x + xx, y + y0 + i] as [number, number]);
 world.setBuild(x, y - 1, Build.Road, false);
 assert.ok(canPlaceFacility(world, x, y, FAC_GROUNDWATER, 1).ok);
 assert.ok(!canPlaceFacility(world, x, y, FAC_RIVER_PUMP, 1).ok);
@@ -37,29 +48,78 @@ assert.ok(canPlaceFacility(world, x + 6, y + 6, FAC_OUTFALL, 1).ok);
 world.placeFacility(x + 6, y + 6, FAC_OUTFALL, 0);
 world.setBuild(x + 6, y + 3, Build.ZoneR, false);
 world.placeBuilding(x + 6, y + 3, ZONE_R, 1, 0);
-for (let dx = 0; dx <= 6; dx++) pipe(dx, 2, 1);
-for (let dy = 4; dy <= 6; dy++) pipe(6, dy, 2);
+run(world, hline(0, 6, 2), 1);
+run(world, vline(6, 4, 6), 2);
 const field = new WaterField();
 field.ensure(world);
-assert.deepEqual(field.statusAt(x + 6, y + 3), { supply: 1, drainage: 1, contamination: 0 });
+assert.deepEqual(field.statusAt(x + 6, y + 3), {
+  supply: 1,
+  drainage: 1,
+  contamination: 0,
+  inWater: true,
+  inSewer: true,
+});
 assert.equal(field.summary.waterCapacity, WATER_SPECS[FAC_GROUNDWATER].capacity);
 assert.equal(field.summary.sewerCapacity, WATER_SPECS[FAC_OUTFALL].capacity);
 assert.ok(!isWelfareKind(FAC_TREATMENT));
 
-pipe(4, 3, 2); // adjacent, different pipe
+// 상·하수도는 옆에 닿거나 한 칸에서 엇갈려도 섞이지 않는다(깊이가 다르다).
+pipe(4, 3, 2);
 field.ensure(world);
-assert.equal(field.contaminationAt(x + 6, y + 3), 1);
+assert.equal(field.contaminationAt(x + 6, y + 3), 0, '옆에 닿은 하수관: 오염 없음');
 pipe(4, 3, 0);
-pipe(4, 2, 3); // same-cell crossing
+pipe(4, 2, 3);
 field.ensure(world);
-assert.equal(field.contaminationAt(x + 6, y + 3), 1);
+assert.equal(field.contaminationAt(x + 6, y + 3), 0, '한 칸 교차: 오염 없음');
 pipe(4, 2, 1);
-field.ensure(world);
-assert.equal(field.contaminationAt(x + 6, y + 3), 0);
+// 같은 종류도 옆에 닿기만 해서는 이어지지 않는다(도로처럼).
+const sideWorld = new World(0);
+run(
+  sideWorld,
+  [
+    [x, y + 30],
+    [x + 1, y + 30],
+  ],
+  1,
+);
+run(
+  sideWorld,
+  [
+    [x, y + 31],
+    [x + 1, y + 31],
+  ],
+  1,
+);
+const sideField = new WaterField();
+sideField.ensure(sideWorld);
+assert.notEqual(
+  sideField.nodes.get(`${x},${y + 30}`)?.water,
+  sideField.nodes.get(`${x},${y + 31}`)?.water,
+  '나란히 닿은 상수관은 따로',
+);
+// 가로질러 놓으면 지나간 칸에서 이어진다.
+run(
+  sideWorld,
+  [
+    [x + 1, y + 29],
+    [x + 1, y + 30],
+    [x + 1, y + 31],
+    [x + 1, y + 32],
+  ],
+  1,
+);
+sideField.ensure(sideWorld);
+assert.equal(
+  sideField.nodes.get(`${x},${y + 30}`)?.water,
+  sideField.nodes.get(`${x},${y + 31}`)?.water,
+  '가로지른 관으로 이어짐',
+);
 for (let dx = 1; dx <= 5; dx++) pipe(dx, 2, 0);
 field.ensure(world);
 assert.equal(field.statusAt(x + 6, y + 3).supply, 0);
-for (let dx = 1; dx <= 5; dx++) pipe(dx, 2, 1);
+// 범위 표시: 끊긴 관 근처도 반경 안(회색)으로 알려 준다.
+assert.equal(field.coverage.get(`${x + 6},${y + 4}`)?.inWater, true);
+run(world, hline(0, 6, 2), 1);
 world.setBuild(x, y - 1, Build.None);
 field.ensure(world);
 assert.equal(field.statusAt(x + 6, y + 3).supply, 0, 'roadless pump stops');
@@ -73,8 +133,7 @@ assert.match(field.facilityStatus(x, y), /^가동 ·/);
 world.setBuild(x + 10, y + 5, Build.Road, false);
 world.setTile(x + 10, y + 8, Terrain.WaterShallow);
 world.placeFacility(x + 10, y + 6, FAC_RIVER_PUMP, 0);
-for (let dy = 2; dy <= 6; dy++) pipe(10, dy, 1);
-for (let dx = 6; dx <= 10; dx++) pipe(dx, 2, 1);
+run(world, [...hline(6, 10, 2), ...vline(10, 3, 6)], 1);
 field.ensure(world);
 const untreated = field.contaminationAt(x + 6, y + 3);
 assert.ok(untreated > 0);
@@ -90,14 +149,21 @@ assert.equal(field.summary.sewerCapacity, WATER_SPECS[FAC_TREATMENT].capacity);
 
 // Two chunks containing only pipes must survive codec, snapshots, unload and reload.
 const bx = (world.baseCx + 1) * CHUNK_SIZE;
-world.setPipe(bx - 1, y + 18, 1);
-world.setPipe(bx, y + 18, 1);
+run(
+  world,
+  [
+    [bx - 1, y + 18],
+    [bx, y + 18],
+  ],
+  1,
+);
 const snapshots = world.takeDirty().chunks;
 const saved = new Map<string, ChunkOverride>();
 for (const s of snapshots)
   saved.set(`${s.cx},${s.cy}`, {
     ...s,
     pipes: decodeOverride(encodeOverride(s.pipes), CHUNK_TILES),
+    pipeLinks: decodeOverride(encodeOverride(s.pipeLinks ?? null), CHUNK_TILES),
   });
 const clone = new World(0);
 clone.setPersistedOverrides(saved);
@@ -141,7 +207,7 @@ assert.equal(dirty.counts[2], 1);
 const loadedWorld = new World(0);
 loadedWorld.setBuild(x, y - 1, Build.Road, false);
 loadedWorld.placeFacility(x, y, FAC_GROUNDWATER, 0);
-for (let dx = 0; dx < 39; dx++) loadedWorld.setPipe(x + dx, y + 2, 1);
+run(loadedWorld, hline(0, 38, 2), 1);
 for (let i = 0; i < 8; i++) {
   loadedWorld.setBuild(x + i * 4, y + 3, Build.ZoneR, false);
   loadedWorld.placeBuilding(x + i * 4, y + 3, ZONE_R, 3, 0);

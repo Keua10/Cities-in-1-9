@@ -51,13 +51,17 @@ export class UtilityLayer {
       const status = typeof value === 'number' ? null : value;
       const supply =
         typeof value === 'number' ? value : mode === 'sewer' ? value.drainage : value.supply;
-      if (supply <= 0) continue;
+      // 배관 반경 안이면 늘 칠한다. 정수장·처리장이 없어 물이 안 가는 연결망은 회색.
+      const inRange = status ? (mode === 'sewer' ? status.inSewer : status.inWater) : supply > 0;
+      if (!inRange && supply <= 0) continue;
       const color =
-        mode === 'water' && status && status.contamination > 0
-          ? COLORS.polluted
-          : supply < 0.999
-            ? COLORS.shortage
-            : COLORS[mode];
+        supply <= 0
+          ? COLORS.dead
+          : mode === 'water' && status && status.contamination > 0
+            ? COLORS.polluted
+            : supply < 0.999
+              ? COLORS.shortage
+              : COLORS[mode];
       const points = fills.get(color) ?? [];
       points.push(point(x, y));
       fills.set(color, points);
@@ -105,20 +109,24 @@ export class UtilityLayer {
     } else {
       for (const n of water.nodes.values()) {
         const selected = !!(n.mask & (mode === 'water' ? 1 : 2));
+        if (!selected) continue;
+        const type = mode === 'water' ? 1 : 2;
         const color =
-          water.pipePollution(n.x, n.y) > 0 && n.mask & 1
+          water.pipePollution(n.x, n.y) > 0 && type === 1
             ? COLORS.polluted
-            : selected
-              ? COLORS[mode]
-              : COLORS.dead;
+            : water.networkDry(n.x, n.y, mode === 'water' ? 'water' : 'sewer')
+              ? COLORS.dead
+              : COLORS[mode];
+        // 실제로 이어진 칸끼리만 선을 긋는다(옆에 닿기만 한 배관은 끊겨 보인다).
         for (const [dx, dy] of [
           [1, 0],
           [0, 1],
         ])
-          if (water.nodes.has(`${n.x + dx},${n.y + dy}`)) line(n.x, n.y, n.x + dx, n.y + dy, color);
+          if (world.pipesConnected(n.x, n.y, n.x + dx, n.y + dy, type))
+            line(n.x, n.y, n.x + dx, n.y + dy, color);
         if (visible(n.x, n.y)) {
           const [x, y] = point(n.x, n.y);
-          g.circle(x, y, n.mask === 3 ? 5 : 3).fill(color);
+          g.circle(x, y, 3).fill(color);
         }
       }
     }
