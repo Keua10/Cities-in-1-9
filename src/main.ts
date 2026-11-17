@@ -12,6 +12,7 @@ import { Application } from 'pixi.js';
 import { Camera } from './core/camera';
 import { BASE_CHUNK_SPAN, CHUNK_SIZE, DEFAULT_ZOOM, TILE_HH, TILE_HW } from './core/constants';
 import { attachInput } from './core/input';
+import { Tutorial } from './ui/tutorial';
 import { chunkIndexOf, parseChunkKey, tileToWorldX, tileToWorldY, worldToTile } from './core/iso';
 import { pickTile } from './core/pick';
 import { claimOrigin, ClaimError, loadCity, loadClaimedOrigins } from './net/citySave';
@@ -811,6 +812,12 @@ async function boot(): Promise<void> {
   constructionPanel.onCancel = (tx, ty) => tools.cancelConstruction(tx, ty);
   if (boostGranted)
     tools.announce('🔥 스타트 버닝 시작! 40분(플레이 시간) 동안 건설 속도 ×10 · 수입 ×10');
+  // 튜토리얼(피드백 2차): 처음엔 할지 고르고, 새 종류의 건물이 열리면 짧게 안내한다.
+  if (city) {
+    const tutorial = new Tutorial(sim, tools, (text) => tools.announce(text));
+    tutorial.start();
+    window.setInterval(() => tutorial.tick(), 2_000);
+  }
   sim.territory.onChange = (gained, lost) => {
     if (lost.length)
       tools.announce(

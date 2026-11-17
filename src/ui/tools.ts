@@ -243,6 +243,8 @@ export class Tools {
 
   activeMessage(now: number): string {
     if (this.message && now - this.messageAt <= MESSAGE_MS) return this.message;
+    if (this.multiCount)
+      return `오른쪽 ✓ 를 누르면 표시한 ${this.multiCount}곳을 한 번에 짓습니다 · ✕ 로 취소`;
     if (this.pos1) {
       return this.pos2
         ? '오른쪽 ✓ 를 눌러 건설, ✕ 로 취소 · 지도를 다시 눌러 끝점을 옮길 수 있습니다'

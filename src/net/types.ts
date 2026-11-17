@@ -17,6 +17,14 @@ export interface TransportState {
   harbors?: Record<string, HarborAllocation>;
 }
 
+export interface TutorialState {
+  step: number;
+  paid: number[];
+  seen: string[];
+  /** 해금 안내를 끔. */
+  muted?: boolean;
+}
+
 /**
  * 매크로 상태. 파생값은 저장하지 않고, 사용자가 직접 정한 희소 설정만 선택 필드로 저장한다.
  */
@@ -30,6 +38,8 @@ export interface MacroState {
   startBoostMs?: number;
   /** 스타트 버닝을 이미 받았는지. 도시마다 한 번만 준다. */
   startBoostGiven?: boolean;
+  /** 튜토리얼 진행(피드백 2차). step: 기본 튜토리얼 단계(끝났으면 -1), paid: 돈을 준 단계, seen: 본 해금 안내. */
+  tutorial?: TutorialState;
   metro?: MetroState;
   /** Explicit road signal controls: true installs, false suppresses automatic placement. */
   signalOverrides?: Record<string, boolean>;
