@@ -33,7 +33,7 @@ import { World } from '../../src/world/world';
 
 // 1. 레벨
 assert.equal(CITY_LEVELS.length, 9);
-assert.equal(FACILITY_UNLOCK_LEVEL.length, 51);
+assert.equal(FACILITY_UNLOCK_LEVEL.length, 59);
 assert.equal(cityLevelFor(0, 16), 1);
 assert.equal(cityLevelFor(100, 16), 1, '영토 20청크 전에는 2레벨이 안 된다');
 assert.equal(cityLevelFor(100, 20), 2);

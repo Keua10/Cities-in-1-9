@@ -43,8 +43,12 @@ for (const n of ['병원', '학교', '과수원', '목장'])
 for (const n of ['하수처리장', '가스 발전소', '소형 공항', '식품 가공 공장'])
   assert.ok(sec(n) >= 600 && sec(n) <= 1200, `${n} 은 고급 시설(10~20분)`);
 assert.equal(sec('대형 공항'), 2 * 3600);
+// 군사 시설 기준점(확정): 기본 군사 공항 40분, 중간 2시간, 미사일 등 최종 기술 3시간 이상.
+assert.equal(sec('군사 공항(기본)'), 40 * 60);
+assert.equal(sec('군사 공항(중간)'), 2 * 3600);
+assert.ok(sec('미사일 기지') >= 3 * 3600 && sec('미사일 방어') >= 3 * 3600);
 assert.ok(
-  Math.max(...CONSTRUCTION_SECONDS) < 3 * 3600,
+  Math.max(...CONSTRUCTION_SECONDS.slice(0, 48)) < 3 * 3600,
   '민간 시설은 최종 군사 시설(3시간)보다 짧다',
 );
 // 레벨이 높을수록 공사가 길다(같은 레벨 안에서 순서는 자유). 공사 등급은 예전 5단계

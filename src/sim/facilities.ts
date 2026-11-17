@@ -1,4 +1,5 @@
-import { FAC_OCC_TOWER } from './config/military';
+import { FAC_MISSILE_BASE, FAC_NAVAL_BASE, FAC_OCC_TOWER } from './config/military';
+import { chunkTerrain } from './military/terrain';
 import { chunkIndexOf } from '../core/iso';
 import { Build, type PlaceResult } from '../world/build';
 import { isWater } from '../world/terrain';
@@ -17,7 +18,7 @@ import { mineSiteProblem } from './resources';
  * 발전·상하수도·위생·농장·교통 시설은 탐사한 땅이면 어디든 지을 수 있다(보호는 안 됨).
  */
 export const OWNED_ONLY_FACILITIES: ReadonlySet<number> = new Set([
-  0, 1, 2, 3, 4, 5, 6, 20, 48, 49,
+  0, 1, 2, 3, 4, 5, 6, 20, 48, 49, 51, 52, 53, 54, 55, 56, 57, 58,
 ]);
 import {
   FACILITY_CAPACITY,
@@ -115,6 +116,11 @@ export function canPlaceFacility(
         const land = world.landRule?.(chunkIndexOf(x), chunkIndexOf(y), 'tower');
         if (land) return { ok: false, reason: land };
       }
+      if (
+        kind === FAC_MISSILE_BASE &&
+        world.landRule?.(chunkIndexOf(x), chunkIndexOf(y), 'capital')
+      )
+        return { ok: false, reason: '미사일 기지는 수도 밖에 지어야 합니다' };
       if (OWNED_ONLY_FACILITIES.has(kind) && world.landRule) {
         const land = world.landRule(chunkIndexOf(x), chunkIndexOf(y), 'owned');
         if (land) return { ok: false, reason: land };
@@ -129,6 +135,16 @@ export function canPlaceFacility(
         return { ok: false, reason: '먼저 철거해야 합니다' };
       }
     }
+  }
+
+  if (kind === FAC_NAVAL_BASE) {
+    const cx = chunkIndexOf(tx + (span >> 1));
+    const cy = chunkIndexOf(ty + (span >> 1));
+    let coast = false;
+    for (let dy = -1; dy <= 1 && !coast; dy++)
+      for (let dx = -1; dx <= 1 && !coast; dx++)
+        if (chunkTerrain(cx + dx, cy + dy).kind === 'sea') coast = true;
+    if (!coast) return { ok: false, reason: '해군 기지는 바다에 붙은 곳에 지어야 합니다' };
   }
 
   /*

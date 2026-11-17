@@ -7,7 +7,13 @@ import { PIPE_COST, WATER_SPECS } from '../sim/config/water';
 import { POWER_SPECS, WIRE_COST } from '../sim/config/power';
 import { RUNWAY_COST, TAXIWAY_COST } from '../sim/config/transport';
 import { FOOD_SPECS } from '../sim/config/food';
-import { FAC_BARRACKS, FAC_OCC_TOWER, FAC_TRENCH, TRENCH_DEFENSE } from '../sim/config/military';
+import {
+  FAC_BARRACKS,
+  FAC_OCC_TOWER,
+  FAC_TRENCH,
+  MILITARY_FACILITIES,
+  TRENCH_DEFENSE,
+} from '../sim/config/military';
 import {
   CONSUMER_SPECS,
   DIFFICULTY_NAMES,
@@ -15,6 +21,18 @@ import {
   MINE_SPECS,
   RESOURCE_NAMES,
 } from '../sim/config/resources';
+
+/** 군사 6단계 시설 설명(건설 메뉴). */
+const MILITARY_DETAIL: Record<number, string> = {
+  51: '포탄·장비 생산 · 모든 부대 생산 시간 −30%',
+  52: '기갑 생산 · 평지 돌파, 시가전·산에 약함',
+  53: '시야 6청크 · 적 공군이 다가오면 공습 경보',
+  54: '전투기 생산 · 제공권, 폭격기에 강함',
+  55: '군함 생산 · 바다에 붙은 곳 · 있으면 땅 부대가 배로 바다를 건넘',
+  56: '폭격기 생산 · 적 시설 파괴',
+  57: '미사일 생산·발사(사거리 60청크) · 수도 밖에만',
+  58: '8청크 안으로 날아오는 미사일 60% 요격',
+};
 
 export const BUILD_CATEGORIES = [
   { id: 'zones', name: '구역', icon: 'zones', color: '#9bca80', hint: '주거 · 상업 · 공업' },
@@ -153,7 +171,7 @@ for (const spec of FACILITY_SPECS) {
     entry.unlock = 1;
     continue;
   }
-  if (k === FAC_BARRACKS || k === FAC_TRENCH || k === FAC_OCC_TOWER) {
+  if ((MILITARY_FACILITIES as readonly number[]).includes(k) || k === FAC_OCC_TOWER) {
     items.push({
       id: `facility-${k}`,
       category: 'military',
@@ -169,7 +187,9 @@ for (const spec of FACILITY_SPECS) {
           ? '보병·공병·포병을 뽑고 훈련 · 대륙 지도 → 군대에서 징병 · 도로 필요 · 내 영토에만'
           : k === FAC_OCC_TOWER
             ? '내 영토와 맞닿은 빈 청크에 세우면 완공 1시간 뒤 그 청크가 내 땅 · 사람이 살지 않아도 됨'
-            : `그 청크 방어 +${Math.round(TRENCH_DEFENSE * 100)}% · 내 영토에만`),
+            : k === FAC_TRENCH
+              ? `그 청크 방어 +${Math.round(TRENCH_DEFENSE * 100)}% · 내 영토에만`
+              : (MILITARY_DETAIL[k] ?? '') + ' · 도로 필요 · 내 영토에만'),
     });
     continue;
   }

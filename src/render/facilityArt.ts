@@ -458,6 +458,119 @@ function militaryArt(a: PixelArt, kind: number, n: number): void {
       a.box(u, v, 0.22, 0.16, 3, M.yellow);
     return;
   }
+  if (kind === 51) {
+    // 군수 공장: 톱니 지붕 공장, 탄약 상자 더미, 굴뚝
+    a.slab(0.1, 0.1, n - 0.2, n - 0.2, 0, 'paving', 'pavingDark');
+    longShed(a, 0.25, 0.3, 2.0, 1.4, M.steel);
+    for (let t = 0.35; t < 2.2; t += 0.4)
+      a.line(a.p(t, 0.3, 16), a.p(t + 0.2, 0.3, 21), 'roofDark');
+    chimney(a, 2.35, 0.4, 30);
+    for (const [u, v] of [
+      [0.4, 2.1],
+      [0.8, 2.1],
+      [1.2, 2.1],
+      [0.6, 2.45],
+      [1.0, 2.45],
+    ] as const)
+      a.box(u, v, 0.32, 0.26, 5, M.wood);
+    a.vehicle(2.0, 2.4, M.teal);
+    return;
+  }
+  if (kind === 52) {
+    // 전차 공장: 큰 조립동 두 동, 시험 주행로, 줄지어 선 전차
+    a.slab(0.1, 0.1, n - 0.2, n - 0.2, 0, 'paving', 'pavingDark');
+    longShed(a, 0.3, 0.3, 2.6, 1.6, M.steel);
+    longShed(a, 3.1, 0.3, 1.6, 1.6, M.teal);
+    a.slab(0.4, 2.4, 4.2, 0.6, 0, 'soil', 'shadow');
+    for (let u = 0.6; u < 4.4; u += 0.9) {
+      a.box(u, 3.4, 0.55, 0.38, 5, M.teal);
+      a.box(u + 0.15, 3.48, 0.25, 0.22, 3, M.teal, 5);
+      a.line(a.p(u + 0.27, 3.59, 7), a.p(u + 0.27, 3.2, 7), 'ink');
+    }
+    office(a, 3.6, 3.8, 1.0, 0.8, 14, M.cream);
+    return;
+  }
+  if (kind === 53) {
+    // 레이더: 콘크리트 받침 위 회전 안테나, 작은 관제실
+    a.slab(0.1, 0.1, n - 0.2, n - 0.2, 0, 'paving', 'pavingDark');
+    a.box(0.7, 0.7, 0.6, 0.6, 10, M.cream);
+    a.box(0.95, 0.95, 0.1, 0.1, 12, M.steel, 10);
+    const c = a.p(1.0, 1.0, 26);
+    a.rect(c[0] - 14, c[1] - 3, 28, 6, 'stone');
+    a.rect(c[0] - 14, c[1] - 3, 28, 1, 'paper');
+    a.rect(c[0] - 1, c[1] - 6, 2, 6, 'ink');
+    a.box(1.35, 0.2, 0.45, 0.4, 8, M.teal);
+    return;
+  }
+  if (kind === 54 || kind === 56) {
+    // 군사 공항: 활주로, 격납고, 관제탑, 서 있는 비행기
+    const big = kind === 56;
+    a.slab(0.1, 0.1, n - 0.2, n - 0.2, 0, 'grassDark', 'shadow');
+    a.slab(0.4, 4.6, n - 0.8, 1.1, 0, 'stoneDark', 'ink');
+    for (let u = 0.8; u < n - 0.8; u += 0.7) a.line(a.p(u, 5.15), a.p(u + 0.35, 5.15), 'white');
+    a.slab(0.6, 3.6, 3.5, 0.8, 0, 'paving', 'pavingDark');
+    for (let i = 0; i < (big ? 3 : 2); i++) {
+      const u = 0.5 + i * 1.9;
+      a.box(u, 0.5, 1.6, 1.4, big ? 18 : 14, M.steel);
+      a.slab(u + 0.05, 0.55, 1.5, 1.3, big ? 19 : 15, 'stone', 'stoneDark');
+      a.rect(...a.p(u + 0.4, 1.9, 2), 18, 10, 'ink');
+    }
+    a.box(5.6, 2.2, 0.5, 0.5, 30, M.cream);
+    a.box(5.5, 2.1, 0.7, 0.7, 6, M.glass, 30);
+    for (const u of big ? [1.0, 2.4, 3.6] : [1.2, 2.8]) {
+      const p0 = a.p(u, 3.95, 3);
+      a.rect(p0[0] - 10, p0[1] - 1, 20, 3, big ? 'stoneDark' : 'stone');
+      a.rect(p0[0] - 2, p0[1] - 6, 4, 12, big ? 'stoneDark' : 'stone');
+    }
+    return;
+  }
+  if (kind === 55) {
+    // 해군 기지: 물가 부두, 정박한 군함, 창고·크레인
+    a.slab(0.1, 0.1, n - 0.2, n - 0.2, 0, 'paving', 'pavingDark');
+    a.slab(0.1, 4.4, n - 0.2, n - 4.5, 0, 'water', 'waterLight');
+    a.slab(0.6, 3.6, 0.5, 2.8, 1, 'stone', 'stoneDark');
+    a.slab(3.4, 3.6, 0.5, 2.8, 1, 'stone', 'stoneDark');
+    for (const u of [1.4, 4.2]) {
+      a.box(u, 4.7, 1.6, 0.6, 5, M.steel);
+      a.box(u + 0.5, 4.8, 0.6, 0.4, 7, M.steel, 5);
+      a.line(a.p(u + 0.8, 5.0, 12), a.p(u + 0.8, 5.0, 20), 'ink');
+    }
+    longShed(a, 0.4, 0.4, 2.6, 1.4, M.teal);
+    office(a, 3.6, 0.5, 1.4, 1.0, 18, M.cream);
+    crane(a, 2.9, 3.0);
+    return;
+  }
+  if (kind === 57) {
+    // 미사일 기지: 담장 안 원형 격납고(사일로) 넷, 발사대, 지휘소
+    a.slab(0.1, 0.1, n - 0.2, n - 0.2, 0, 'grassDark', 'shadow');
+    fence(a, n);
+    for (const [u, v] of [
+      [0.8, 0.8],
+      [3.0, 0.8],
+      [0.8, 3.0],
+      [3.0, 3.0],
+    ] as const) {
+      a.slab(u, v, 1.2, 1.2, 0, 'stoneDark', 'ink');
+      a.slab(u + 0.2, v + 0.2, 0.8, 0.8, 1, 'stone', 'ink');
+      a.line(a.p(u + 0.2, v + 0.6, 1), a.p(u + 1.0, v + 0.6, 1), 'ink');
+    }
+    a.box(5.2, 1.0, 0.3, 0.3, 4, M.steel);
+    a.box(5.28, 1.08, 0.14, 0.14, 34, M.cream, 4);
+    a.box(5.28, 1.08, 0.14, 0.14, 5, M.red, 38);
+    office(a, 4.8, 4.6, 1.4, 1.0, 10, M.steel);
+    return;
+  }
+  if (kind === 58) {
+    // 미사일 방어: 경사진 발사관 묶음 둘, 레이더 판
+    a.slab(0.1, 0.1, n - 0.2, n - 0.2, 0, 'paving', 'pavingDark');
+    for (const u of [0.25, 1.05]) {
+      a.box(u, 0.9, 0.7, 0.5, 4, M.teal);
+      for (let t = 0; t < 3; t++) a.box(u + 0.08 + t * 0.2, 0.95, 0.14, 0.38, 9, M.steel, 4 + t);
+    }
+    a.box(0.6, 0.15, 0.8, 0.12, 18, M.steel);
+    a.slab(0.62, 0.16, 0.76, 0.1, 18, 'stone', 'stoneDark');
+    return;
+  }
   // 참호·벙커: 모래주머니 고리 + 낮은 콘크리트 벙커
   a.slab(0.08, 0.08, 0.84, 0.84, 0, 'soil', 'shadow');
   for (const [u, v] of [
