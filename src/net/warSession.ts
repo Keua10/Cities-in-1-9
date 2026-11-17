@@ -37,6 +37,7 @@ import {
   type WarKind,
 } from '../sim/military/warRules';
 import { sharedNow } from '../sim/sharedClock';
+import { UNIT_SPECS } from '../sim/config/military';
 import type { AllianceSession } from './alliances';
 import { getFirebase } from './firebase';
 import type { PublicCity } from './publicCities';
@@ -247,6 +248,7 @@ export class WarSession {
         occupied,
         capitalProtected: w.kind === 'small',
         paused: stale,
+        enemyStrikes: (enemy.strikes ?? []).filter((x) => x.at >= w.startsAt),
         onEvents: (events) => {
           for (const e of events) if (e.type === 'occupied') this.claims[e.key] = sharedNow();
         },
@@ -286,12 +288,14 @@ export class WarSession {
     const army = this.sim.army;
     const side = army.mySide();
     const fighting = army.units
-      .filter((u) => u.state === 'fighting')
+      .filter((u) => u.state === 'fighting' && UNIT_SPECS[u.type].men > 0)
       .reduce((s, u) => s + u.men, 0);
     if (isBigBattle(fighting, Math.max(army.soldiers, this.menAtStart))) this.bigBattleAt = now;
     const docData: SideDoc = {
       at: now,
-      units: army.units.filter((u) => u.state !== 'training').map(compact),
+      units: army.units
+        .filter((u) => u.state !== 'training' && UNIT_SPECS[u.type].domain !== 'strike')
+        .map(compact),
       owned: [...side.owned],
       capital: [...side.capital],
       trenches: [...side.trenches],
@@ -300,6 +304,7 @@ export class WarSession {
       lossValue: Math.round((army.army.lossValue ?? 0) - this.lossAtStart),
       bigBattleAt: this.bigBattleAt,
       men: Math.round(this.menAtStart),
+      strikes: (army.army.strikes ?? []).filter((x) => x.at >= w.startsAt),
     };
     try {
       await setDoc(doc(fb.db, 'wars', w.id, 'sides', this.uid), docData);

@@ -12,6 +12,14 @@ import {
   UNIT_SPECS,
   UNSUPPLIED_MORALE_DECAY,
   UNSUPPLIED_ORG_DECAY,
+  AIR_RANGE_CHUNKS,
+  BOMB_INTERVAL_MS,
+  DESTROYED_SHARE,
+  EMBARKED_MOVE,
+  FIGHTER_VS_SURFACE,
+  SHORE_BOMBARD,
+  unitStrength,
+  type UnitDomain,
   type UnitType,
 } from '../config/military';
 import { attackFactor, chunkTerrain, defenseFactor, moveFactor } from './terrain';
@@ -53,6 +61,8 @@ export interface Unit {
   engagedAt?: number;
   /** 이 청크에 처음 들어온(또는 멈춘) 시각. */
   arrivedAt?: number;
+  /** 폭격기: 마지막으로 폭탄을 떨어뜨린 시각. */
+  bombAt?: number;
   /** 이 부대를 뽑은 청크별 인원(죽거나 해산하면 돌려준다). */
   source: Record<string, number>;
 }
@@ -64,6 +74,10 @@ export interface ArmyState {
   drafted: Record<string, number>;
   /** 지금까지 잃은 병력의 가치(생산비 기준, 누적). 전쟁 점수 계산에 쓴다. */
   lossValue?: number;
+  /** 내보낸 폭격·미사일(최근 15분). 전쟁 상대가 받아서 처리한다. */
+  strikes?: Strike[];
+  /** 받은 타격 중 처리를 마친 id → 시각. */
+  struckBy?: Record<string, number>;
 }
 
 export function emptyArmy(): ArmyState {
@@ -86,6 +100,8 @@ export function normalizeArmy(raw: unknown): ArmyState {
     nextId: Math.max(1, Number(a.nextId) || 1),
     drafted: a.drafted && typeof a.drafted === 'object' ? { ...a.drafted } : {},
     lossValue: Number(a.lossValue) || 0,
+    ...(Array.isArray(a.strikes) ? { strikes: a.strikes } : {}),
+    ...(a.struckBy && typeof a.struckBy === 'object' ? { struckBy: { ...a.struckBy } } : {}),
   };
 }
 
@@ -114,6 +130,8 @@ export interface Side {
   trenches: Set<string>;
   /** 건물이 빽빽한 청크(시가전). */
   urban: Set<string>;
+  /** 해군 기지가 있어 땅 부대가 배로 바다를 건널 수 있다. */
+  canSail?: boolean;
 }
 
 export interface Battlefield {
@@ -134,7 +152,16 @@ export type BattleEvent =
   | { type: 'retreat'; unit: string }
   | { type: 'destroyed'; unit: string; why: 'encircled' | 'casualties' }
   | { type: 'engaged'; key: string }
-  | { type: 'trained'; unit: string };
+  | { type: 'trained'; unit: string }
+  | { type: 'strike'; key: string; kind: 'bomb' | 'missile' }
+  | {
+      type: 'struck';
+      key: string;
+      kind: 'bomb' | 'missile';
+      intercepted: boolean;
+      destroyed: string[];
+    }
+  | { type: 'airRaid'; key: string };
 
 /** 전쟁 중 이 청크의 실제 주인 uid(없으면 ''). */
 export function ownerOf(bf: Battlefield, key: string): string {
@@ -178,6 +205,34 @@ function matchup(attacker: UnitType, targets: Unit[]): number {
 /* ---------------- 길 찾기 ---------------- */
 
 /**
+ * 이 청크를 지나가는 이동 배율(0 = 못 감). 공군은 어디든 1, 군함은 바다·큰 강만,
+ * 땅 부대는 지형대로 — 해군 기지가 있으면 배를 타고 바다를 건넌다(느림).
+ * retreat = 후퇴(바다 건너 후퇴는 하지 않는다).
+ */
+export function passFactor(
+  bf: Battlefield,
+  type: UnitType,
+  key: string,
+  cx: number,
+  cy: number,
+  retreat = false,
+): number {
+  const spec = UNIT_SPECS[type];
+  const t = chunkTerrain(cx, cy);
+  switch (spec.domain) {
+    case 'air':
+      return 1;
+    case 'sea':
+      return t.kind === 'sea' ? 1 : t.kind === 'bigRiver' ? 0.6 : 0;
+    case 'strike':
+      return 0;
+  }
+  const f = moveFactor(t, type, isUrban(bf, key), spec.mountains);
+  if (f <= 0 && t.kind === 'sea' && bf.me.canSail && !retreat) return EMBARKED_MOVE;
+  return f;
+}
+
+/**
  * 청크 길(A*). 산·큰 강은 비싸게(돌아가게), 바다는 못 지나간다. 남의 영토는 전쟁 상대만.
  * 길이 없으면 빈 배열.
  */
@@ -194,9 +249,12 @@ export function findPath(
   if (goal === start) return [];
   const pass = (key: string, cx: number, cy: number): number => {
     if (bf.foreign(key) && !(bf.enemy && bf.enemy.owned.has(key))) return 0;
-    return moveFactor(chunkTerrain(cx, cy), type, isUrban(bf, key), spec.mountains);
+    return passFactor(bf, type, key, cx, cy);
   };
+  if (spec.domain === 'strike') return [];
   if (pass(goal, to.cx, to.cy) <= 0) return [];
+  // 공군은 내 땅에서 12청크 안까지만.
+  if (spec.domain === 'air' && !nearMine(bf, to.cx, to.cy, AIR_RANGE_CHUNKS)) return [];
   const g = new Map<string, number>([[start, 0]]);
   const prev = new Map<string, string>();
   const open: Array<{ key: string; cx: number; cy: number; f: number }> = [
@@ -241,6 +299,47 @@ export function findPath(
 
 /* ---------------- 한 걸음 ---------------- */
 
+/** 부대가 땅·하늘·바다 어디에 있는가(땅 부대가 배를 타고 바다 위면 'sea'). */
+export function unitDomainAt(u: Unit): UnitDomain {
+  const d = UNIT_SPECS[u.type].domain;
+  if (d === 'ground' && chunkTerrain(u.cx, u.cy).kind === 'sea') return 'sea';
+  return d;
+}
+
+/** 같은 청크에 있으면 서로 길을 막고 붙잡는가(땅끼리·바다 위 군함끼리). */
+function blocks(me: Unit, foe: Unit): boolean {
+  const a = UNIT_SPECS[me.type].domain;
+  const b = UNIT_SPECS[foe.type].domain;
+  if (a === 'ground' && b === 'ground') return unitDomainAt(me) === 'ground';
+  return a === 'sea' && b === 'sea';
+}
+
+/**
+ * 공격 배율: attacker 가 dist(0 = 같은 청크, 1 = 이웃) 떨어진 targetDomain 부대를 칠 수 있으면
+ * 배율, 못 치면 0.
+ */
+export function hitFactor(attacker: Unit, targetDomain: UnitDomain, dist: 0 | 1): number {
+  const type = attacker.type;
+  const dom = UNIT_SPECS[type].domain;
+  if (dom === 'strike' || targetDomain === 'strike') return 0;
+  if (dom === 'ground') {
+    if (unitDomainAt(attacker) === 'sea') return 0; // 배에 탄 땅 부대는 싸우지 못한다
+    if (type === 'aa')
+      return targetDomain === 'air' ? 1 : dist === 0 && targetDomain === 'ground' ? 1 : 0;
+    if (type === 'artillery')
+      return dist === 0 ? (targetDomain === 'ground' ? 1 : 0) : targetDomain === 'air' ? 0 : 1;
+    return dist === 0 && targetDomain === 'ground' ? 1 : 0;
+  }
+  if (dom === 'air') {
+    if (dist !== 0) return 0;
+    if (type === 'fighter') return targetDomain === 'air' ? 1 : FIGHTER_VS_SURFACE;
+    return targetDomain === 'air' ? 0 : 1; // 폭격기
+  }
+  // 군함
+  if (dist === 0) return targetDomain === 'sea' ? 1 : 0;
+  return targetDomain === 'ground' ? SHORE_BOMBARD : 0;
+}
+
 /**
  * 내 부대를 dtMs 만큼 움직이고, 적에게 받는 피해를 계산한다. bf.enemy.units 는 읽기만 한다.
  * bf.occupied 는 내가 점령한 청크만 고친다(상대 점령은 상대가 보낸다).
@@ -253,12 +352,13 @@ export function stepArmy(army: ArmyState, bf: Battlefield, dtMs: number): Battle
   const enemyAt = new Map<string, Unit[]>();
   if (enemy)
     for (const e of enemy.units) {
-      if (e.state === 'training' || e.men <= 0) continue;
+      if (e.state === 'training' || e.men <= 0 || UNIT_SPECS[e.type].domain === 'strike') continue;
       const k = chunkKey(e.cx, e.cy);
       const list = enemyAt.get(k);
       if (list) list.push(e);
       else enemyAt.set(k, [e]);
     }
+  const blockersAt = (u: Unit, key: string) => (enemyAt.get(key) ?? []).filter((e) => blocks(u, e));
 
   // 1) 훈련·이동
   for (const u of army.units) {
@@ -270,9 +370,10 @@ export function stepArmy(army: ArmyState, bf: Battlefield, dtMs: number): Battle
       }
       continue;
     }
+    if (UNIT_SPECS[u.type].domain === 'strike') continue;
     const here = chunkKey(u.cx, u.cy);
-    const foes = enemyAt.get(here);
-    if (foes?.length && u.state !== 'retreating') {
+    const foes = blockersAt(u, here);
+    if (foes.length && u.state !== 'retreating') {
       if (u.state !== 'fighting') {
         u.state = 'fighting';
         u.engagedAt = bf.now;
@@ -287,12 +388,7 @@ export function stepArmy(army: ArmyState, bf: Battlefield, dtMs: number): Battle
     }
     const next = parseChunkKey(u.path[0]);
     const spec = UNIT_SPECS[u.type];
-    const f = moveFactor(
-      chunkTerrain(next.cx, next.cy),
-      u.type,
-      isUrban(bf, u.path[0]),
-      spec.mountains,
-    );
+    const f = passFactor(bf, u.type, u.path[0], next.cx, next.cy);
     if (f <= 0) {
       u.path = [];
       u.state = 'idle';
@@ -307,77 +403,95 @@ export function stepArmy(army: ArmyState, bf: Battlefield, dtMs: number): Battle
       u.arrivedAt = bf.now;
       delete u.occupyKey;
       delete u.occupyAt;
-      if (!u.path.length && u.state !== 'retreating') u.state = 'idle';
-      if (u.state === 'retreating' && !u.path.length) u.state = 'idle';
+      if (!u.path.length) u.state = 'idle';
     }
   }
 
-  // 2) 전투: 내 부대가 받는 피해
+  // 2) 전투: 내 부대가 받는 피해(같은 청크·같은 영역끼리 묶어서 나눠 받는다)
   if (enemy) {
     const sec = Math.floor(bf.now / 1000);
-    const mineAt = new Map<string, Unit[]>();
-    for (const u of army.units)
-      if (u.state !== 'training') {
-        const k = chunkKey(u.cx, u.cy);
-        const list = mineAt.get(k);
-        if (list) list.push(u);
-        else mineAt.set(k, [u]);
-      }
-    for (const [key, mine] of mineAt) {
+    const groups = new Map<string, Unit[]>();
+    for (const u of army.units) {
+      if (u.state === 'training' || UNIT_SPECS[u.type].domain === 'strike') continue;
+      const g = `${u.cx},${u.cy}|${unitDomainAt(u)}`;
+      const list = groups.get(g);
+      if (list) list.push(u);
+      else groups.set(g, [u]);
+    }
+    for (const [g, mine] of groups) {
+      const [key, dom] = g.split('|') as [string, UnitDomain];
       const { cx, cy } = parseChunkKey(key);
-      const foes = enemyAt.get(key) ?? [];
-      // 포병은 이웃 청크에서도 지원 사격한다.
-      const support: Unit[] = [];
+      const attackers: Array<{ e: Unit; f: number; near: boolean }> = [];
+      for (const e of enemyAt.get(key) ?? []) {
+        const f = hitFactor(e, dom, 0);
+        if (f > 0) attackers.push({ e, f, near: false });
+      }
+      const engaged = mine.some((u) => u.state === 'fighting') || attackers.length > 0;
       for (let dy = -1; dy <= 1; dy++)
         for (let dx = -1; dx <= 1; dx++) {
           if (!dx && !dy) continue;
-          for (const e of enemyAt.get(chunkKey(cx + dx, cy + dy)) ?? [])
-            if (e.type === 'artillery') support.push(e);
+          for (const e of enemyAt.get(chunkKey(cx + dx, cy + dy)) ?? []) {
+            // 포병 지원은 교전 중인 청크에만, 대공·함포는 늘.
+            if (e.type === 'artillery' && dom === 'ground' && !engaged) continue;
+            const f = hitFactor(e, dom, 1);
+            if (f > 0) attackers.push({ e, f, near: true });
+          }
         }
-      if (!foes.length && !(support.length && mine.some((u) => u.state === 'fighting'))) continue;
+      if (!attackers.length) continue;
       const t = chunkTerrain(cx, cy);
       const urban = isUrban(bf, key);
       const defenderIsEnemy = ownerOf(bf, key) === enemy.uid;
       let incoming = 0;
-      for (const e of [...foes, ...support]) {
+      for (const { e, f, near } of attackers) {
         const es = UNIT_SPECS[e.type];
-        // 이웃 청크에서 쏘는 포병만 "높은 곳에서 아래로" 보너스를 따진다.
-        const from = e.cx === cx && e.cy === cy ? null : chunkTerrain(e.cx, e.cy);
+        const surface = es.domain === 'ground';
+        // 이웃 청크에서 쏘는 땅 부대만 "높은 곳에서 아래로" 보너스를 따진다.
+        const from = near && surface ? chunkTerrain(e.cx, e.cy) : null;
         let a =
           es.attack *
-          (e.men / Math.max(1, es.men || 1)) *
+          f *
+          (e.men / unitStrength(e.type)) *
           Math.max(0.3, e.morale) *
-          attackFactor(t, e.type, urban, from) *
+          (surface ? attackFactor(t, e.type, urban, from) : 1) *
           matchup(e.type, mine) *
           jitter(sec, e.id);
         // 매복: 골짜기에서 먼저 자리 잡고 있던 적이 처음 30초 +50%.
-        const engaged = mine[0].engagedAt ?? bf.now;
+        const eng = mine[0].engagedAt ?? bf.now;
         if (
+          dom === 'ground' &&
+          surface &&
           t.valley &&
           defenderIsEnemy &&
-          (e.arrivedAt ?? 0) + 60_000 <= engaged &&
-          bf.now - engaged < AMBUSH_SECONDS * 1000
+          (e.arrivedAt ?? 0) + 60_000 <= eng &&
+          bf.now - eng < AMBUSH_SECONDS * 1000
         )
           a *= 1 + AMBUSH_BONUS;
         incoming += a;
       }
-      const totalMen = mine.reduce((s, u) => s + Math.max(1, u.men), 0);
+      const total = mine.reduce((s, u) => s + Math.max(1, u.men / unitStrength(u.type)), 0);
+      const blocking = (enemyAt.get(key) ?? []).filter((e) => blocks(mine[0], e)).length > 0;
       for (const u of mine) {
         const us = UNIT_SPECS[u.type];
-        const share = Math.max(1, u.men) / totalMen;
+        const share = Math.max(1, u.men / unitStrength(u.type)) / total;
         const def =
           (us.defense / 10) *
-          defenseFactor(
-            t,
-            u.type,
-            urban,
-            bf.me.trenches.has(key) && ownerOf(bf, key) === bf.me.uid,
-          );
+          (dom === 'ground'
+            ? defenseFactor(
+                t,
+                u.type,
+                urban,
+                bf.me.trenches.has(key) && ownerOf(bf, key) === bf.me.uid,
+              )
+            : 1);
         const d = (incoming * share * dt) / Math.max(0.2, def);
         u.org = Math.max(0, u.org - d * ORG_LOSS_PER_DAMAGE);
-        const lost = Math.min(u.men, d * MEN_LOSS_PER_DAMAGE);
+        // 기계 부대는 전력 100 기준이라 사람 부대(500명)와 같은 비율로 깎는다.
+        const lost = Math.min(
+          u.men,
+          d * MEN_LOSS_PER_DAMAGE * (us.men ? 1 : unitStrength(u.type) / 500),
+        );
         if (lost > 0) loseMen(army, u, lost);
-        if (u.state !== 'fighting' && u.state !== 'retreating' && foes.length) {
+        if (u.state !== 'fighting' && u.state !== 'retreating' && blocking) {
           u.state = 'fighting';
           u.engagedAt = bf.now;
         }
@@ -387,8 +501,8 @@ export function stepArmy(army: ArmyState, bf: Battlefield, dtMs: number): Battle
 
   // 3) 조직력 0 → 후퇴(갈 곳 없으면 포위 전멸), 병력 바닥 → 전멸
   for (const u of [...army.units]) {
-    if (u.state === 'training') continue;
-    if (u.men < 30) {
+    if (u.state === 'training' || UNIT_SPECS[u.type].domain === 'strike') continue;
+    if (u.men < unitStrength(u.type) * DESTROYED_SHARE) {
       removeUnit(army, u.id, false);
       events.push({ type: 'destroyed', unit: u.id, why: 'casualties' });
       continue;
@@ -407,26 +521,46 @@ export function stepArmy(army: ArmyState, bf: Battlefield, dtMs: number): Battle
     }
   }
 
-  // 4) 보급·회복·점령
+  // 4) 보급·회복·점령·폭격
   for (const u of army.units) {
     if (u.state === 'training') continue;
+    const dom = UNIT_SPECS[u.type].domain;
+    if (dom === 'strike') continue;
     const key = chunkKey(u.cx, u.cy);
     const owner = ownerOf(bf, key);
     const supplied = isSupplied(u, bf);
-    if (owner === bf.me.uid && u.state !== 'fighting') {
+    const resting = dom === 'sea' ? supplied && !blockersAt(u, key).length : owner === bf.me.uid;
+    if (resting && u.state !== 'fighting') {
       u.org = Math.min(ORG_MAX, u.org + ORG_REGEN_PER_SEC * dt);
       u.morale = Math.min(1, u.morale + 0.01 * dt);
     } else if (!supplied) {
       u.org = Math.max(0, u.org - UNSUPPLIED_ORG_DECAY * dt);
       u.morale = Math.max(0.3, u.morale - UNSUPPLIED_MORALE_DECAY * dt);
     }
-    // 점령: 적 땅(또는 적이 점령한 내 땅), 적 부대 없음, 멈춰 있음, 60초.
+    // 폭격: 적 땅 위의 폭격기는 1분마다 시설에 폭탄을 떨어뜨린다(맞은 쪽 기기가 처리).
+    if (u.type === 'bomber' && enemy && owner === enemy.uid) {
+      if (u.bombAt === undefined) u.bombAt = bf.now;
+      else if (bf.now - u.bombAt >= BOMB_INTERVAL_MS) {
+        u.bombAt = bf.now;
+        addStrike(army, {
+          id: `${bf.me.uid.slice(0, 6)}-${u.id}-${bf.now}`,
+          kind: 'bomb',
+          key,
+          at: bf.now,
+          power: UNIT_SPECS.bomber.attack * (u.men / unitStrength('bomber')),
+        });
+        events.push({ type: 'strike', key, kind: 'bomb' });
+      }
+    } else delete u.bombAt;
+    // 점령: 땅 부대만. 적 땅(또는 적이 점령한 내 땅), 적 땅 부대 없음, 멈춰 있음, 60초.
     if (
       enemy &&
+      dom === 'ground' &&
+      unitDomainAt(u) === 'ground' &&
       owner === enemy.uid &&
       (u.state === 'idle' || u.state === 'moving') &&
       !u.path.length &&
-      !enemyAt.get(key)?.length &&
+      !(enemyAt.get(key) ?? []).some((e) => UNIT_SPECS[e.type].domain === 'ground') &&
       !(bf.capitalProtected && enemy.capital.has(key))
     ) {
       if (u.occupyKey !== key) {
@@ -447,25 +581,85 @@ export function stepArmy(army: ArmyState, bf: Battlefield, dtMs: number): Battle
   return events;
 }
 
-/** 내 땅(또는 내가 점령한 땅)에서 3청크 안이면 보급된다. */
+/* ---------------- 폭격·미사일 ---------------- */
+
+/** 내보낸 타격(폭탄·미사일). 맞은 쪽 기기가 요격·피해를 계산한다. */
+export interface Strike {
+  id: string;
+  kind: 'bomb' | 'missile';
+  key: string;
+  at: number;
+  /** 공격력(전력 비율 반영). */
+  power: number;
+}
+
+/** 15분 지난 타격은 지운다(상대가 이미 받아 갔다). */
+export const STRIKE_KEEP_MS = 15 * 60_000;
+
+export function addStrike(army: ArmyState, s: Strike): void {
+  const list = (army.strikes ?? []).filter((x) => s.at - x.at < STRIKE_KEEP_MS);
+  list.push(s);
+  army.strikes = list;
+}
+
+/** 0~1 결정론 난수(타격 id). 두 기기가 같은 값을 얻는다. */
+export function strikeRoll(id: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < id.length; i++) h = Math.imul(h ^ id.charCodeAt(i), 0x01000193);
+  h = Math.imul(h ^ (h >>> 15), 0x85ebca6b);
+  return ((h ^ (h >>> 13)) >>> 0) / 4294967296;
+}
+
+/** 이 부대가 보급을 받는가: 땅은 내 땅 3청크, 공군은 12청크, 군함은 6청크 안. */
 function isSupplied(u: Unit, bf: Battlefield): boolean {
-  for (let dy = -3; dy <= 3; dy++)
-    for (let dx = -3; dx <= 3; dx++)
-      if (ownerOf(bf, chunkKey(u.cx + dx, u.cy + dy)) === bf.me.uid) return true;
+  const dom = UNIT_SPECS[u.type].domain;
+  const r = dom === 'air' ? AIR_RANGE_CHUNKS : dom === 'sea' ? 6 : 3;
+  return nearMine(bf, u.cx, u.cy, r);
+}
+
+/** (cx,cy) 에서 r 청크 안에 내 땅(점령지 포함)이 있는가. */
+export function nearMine(bf: Battlefield, cx: number, cy: number, r: number): boolean {
+  if (r <= 3) {
+    for (let dy = -r; dy <= r; dy++)
+      for (let dx = -r; dx <= r; dx++)
+        if (ownerOf(bf, chunkKey(cx + dx, cy + dy)) === bf.me.uid) return true;
+    return false;
+  }
+  for (const k of bf.me.owned) {
+    const p = parseChunkKey(k);
+    if (Math.max(Math.abs(p.cx - cx), Math.abs(p.cy - cy)) <= r && ownerOf(bf, k) === bf.me.uid)
+      return true;
+  }
+  for (const [k, who] of bf.occupied) {
+    if (who !== bf.me.uid) continue;
+    const p = parseChunkKey(k);
+    if (Math.max(Math.abs(p.cx - cx), Math.abs(p.cy - cy)) <= r) return true;
+  }
   return false;
 }
 
-/** 가장 가까운 안전한 내 땅으로 가는 길. 둘레가 다 막혀 있으면 null(포위). */
+/** 가장 가까운 안전한 곳으로 가는 길. 둘레가 다 막혀 있으면 null(포위). */
 function retreatPath(u: Unit, bf: Battlefield, enemyAt: Map<string, Unit[]>): string[] | null {
-  const spec = UNIT_SPECS[u.type];
+  const dom = UNIT_SPECS[u.type].domain;
   const start = chunkKey(u.cx, u.cy);
+  const maxLen = dom === 'air' ? 20 : dom === 'sea' ? 12 : 8;
+  const safe = (nk: string, nx: number, ny: number): boolean => {
+    if (dom === 'sea') {
+      for (let dy = -1; dy <= 1; dy++)
+        for (let dx = -1; dx <= 1; dx++)
+          if (ownerOf(bf, chunkKey(nx + dx, ny + dy)) === bf.me.uid) return true;
+      return false;
+    }
+    return ownerOf(bf, nk) === bf.me.uid;
+  };
   const queue: Array<{ cx: number; cy: number; path: string[] }> = [
     { cx: u.cx, cy: u.cy, path: [] },
   ];
   const seen = new Set([start]);
-  while (queue.length) {
-    const cur = queue.shift()!;
-    if (cur.path.length > 8) break;
+  let head = 0;
+  while (head < queue.length) {
+    const cur = queue[head++];
+    if (cur.path.length > maxLen) break;
     for (let dy = -1; dy <= 1; dy++)
       for (let dx = -1; dx <= 1; dx++) {
         if (!dx && !dy) continue;
@@ -474,13 +668,12 @@ function retreatPath(u: Unit, bf: Battlefield, enemyAt: Map<string, Unit[]>): st
         const nk = chunkKey(nx, ny);
         if (seen.has(nk)) continue;
         seen.add(nk);
-        if (enemyAt.get(nk)?.length) continue;
-        const f = moveFactor(chunkTerrain(nx, ny), u.type, isUrban(bf, nk), spec.mountains);
-        if (f <= 0) continue;
+        if ((enemyAt.get(nk) ?? []).some((e) => blocks(u, e))) continue;
+        if (passFactor(bf, u.type, nk, nx, ny, true) <= 0) continue;
         const owner = ownerOf(bf, nk);
-        if (bf.enemy && owner === bf.enemy.uid) continue;
+        if (dom === 'ground' && bf.enemy && owner === bf.enemy.uid) continue;
         const path = [...cur.path, nk];
-        if (owner === bf.me.uid) return path;
+        if (safe(nk, nx, ny)) return path;
         queue.push({ cx: nx, cy: ny, path });
       }
   }
@@ -490,7 +683,7 @@ function retreatPath(u: Unit, bf: Battlefield, enemyAt: Map<string, Unit[]>): st
 /* ---------------- 인원 ---------------- */
 
 /** 전사자: 뽑은 청크들에서 비율대로 뺀다(그만큼 그 청크 인구가 다시 찬다). */
-function loseMen(army: ArmyState, u: Unit, lost: number): void {
+export function loseMen(army: ArmyState, u: Unit, lost: number): void {
   const total = Object.values(u.source).reduce((a, b) => a + b, 0) || 1;
   for (const [key, n] of Object.entries(u.source)) {
     const take = (lost * n) / total;
@@ -500,7 +693,7 @@ function loseMen(army: ArmyState, u: Unit, lost: number): void {
   }
   u.men = Math.max(0, u.men - lost);
   const spec = UNIT_SPECS[u.type];
-  army.lossValue = (army.lossValue ?? 0) + (spec.cost * lost) / (spec.men || 1);
+  army.lossValue = (army.lossValue ?? 0) + (spec.cost * lost) / unitStrength(u.type);
 }
 
 /** 부대를 없앤다. 해산(disband)이면 남은 인원이 인구로 돌아간다(drafted 에서 빠짐). */
@@ -510,7 +703,7 @@ export function removeUnit(army: ArmyState, id: string, disband: boolean): void 
   // 전멸이든 해산이든 drafted 에서 빠진다. 전멸은 남은 인원까지 잃은 것이다.
   if (!disband) {
     const spec = UNIT_SPECS[u.type];
-    army.lossValue = (army.lossValue ?? 0) + (spec.cost * u.men) / (spec.men || 1);
+    army.lossValue = (army.lossValue ?? 0) + (spec.cost * u.men) / unitStrength(u.type);
   }
   for (const [key, n] of Object.entries(u.source)) {
     army.drafted[key] = Math.max(0, (army.drafted[key] ?? 0) - n);
@@ -570,9 +763,11 @@ export function newUnit(
   at: { cx: number; cy: number },
   source: Record<string, number>,
   now: number,
+  /** 생산 시간 배율(군수 공장이 있으면 0.7). */
+  buildFactor = 1,
 ): Unit {
   const spec = UNIT_SPECS[type];
-  const men = spec.men || 1;
+  const men = unitStrength(type);
   const u: Unit = {
     id: `u${army.nextId++}`,
     type,
@@ -586,7 +781,7 @@ export function newUnit(
     progress: 0,
     path: [],
     state: 'training',
-    readyAt: now + spec.buildSec * 1000,
+    readyAt: now + spec.buildSec * 1000 * buildFactor,
     source,
   };
   army.units.push(u);

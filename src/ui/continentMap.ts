@@ -10,6 +10,7 @@ import type { WarSession } from '../net/warSession';
 import type { AllianceSession } from '../net/alliances';
 import { ALLIANCE_DEPOSITS, BETRAYAL_LOCK_MS } from '../sim/config/war';
 import { formatMoney } from './money';
+import { FACILITY_SPECS } from '../sim/facilities';
 import './continentMap.css';
 
 /**
@@ -31,6 +32,8 @@ export interface ContinentMapSource {
   online: boolean;
   /** 내 군대. */
   army: ArmySystem;
+  /** 내 도시 레벨(모집 버튼을 다음 레벨 것까지만 보인다). */
+  cityLevel?: () => number;
   /** 화면 위 알림(짧은 문장). */
   announce: (text: string) => void;
   /** 전쟁 연결(로그인했을 때만). */
@@ -185,7 +188,7 @@ export class ContinentMap {
       );
     for (const b of this.root.querySelectorAll<HTMLButtonElement>('.cm-tabs button'))
       b.addEventListener('click', () => this.setTab(b.dataset.tab as 'cities' | 'army'));
-    for (const type of ['infantry', 'engineer', 'artillery'] as UnitType[]) {
+    for (const type of Object.keys(UNIT_SPECS) as UnitType[]) {
       const spec = UNIT_SPECS[type];
       const b = document.createElement('button');
       b.type = 'button';
@@ -195,7 +198,7 @@ export class ContinentMap {
         const why = this.source.army.recruit(type);
         this.armyMsgEl.textContent = why
           ? why
-          : `${spec.name} 모집 · 훈련 ${Math.round(spec.buildSec / 60)}분 뒤 출동 (병영)`;
+          : `${spec.name} 모집 · ${Math.round(spec.buildSec / 60)}분 뒤 출동 (${FACILITY_SPECS[spec.facility].name})`;
         this.renderArmy(true);
       });
       this.recruitEl.append(b);
@@ -396,15 +399,20 @@ export class ContinentMap {
     this.armyInfoEl.textContent =
       `병영 ${army.barracks().length}곳 · 부대 ${units.length}개 · 병력 ${Math.round(men).toLocaleString('ko-KR')}명 · 더 뽑을 수 있는 인원 ${army.draftRoom().toLocaleString('ko-KR')}명` +
       ` · 유지비 ${formatMoney(army.upkeepMoney)}/일` +
-      '\n부대를 누르고 지도에서 갈 곳을 누르세요. 적 부대가 없는 적 청크에 1분 머물면 점령합니다.';
+      '\n부대를 누르고 지도에서 갈 곳을 누르세요. 적 땅 부대가 없는 적 청크에 1분 머물면 점령합니다(땅 부대만).' +
+      (army.missiles().length
+        ? `\n미사일 ${army.missiles().length}발 · 미사일을 누르고 적 땅을 누르면 발사(60청크)`
+        : '');
     for (const b of this.recruitEl.querySelectorAll<HTMLButtonElement>('button[data-unit]')) {
       const type = b.dataset.unit as UnitType;
       const spec = UNIT_SPECS[type];
       const why = army.recruitBlock(type);
       b.disabled = !!why;
       b.title = why;
+      // 도시 레벨이 한참 모자란 병종은 숨겨서 목록을 짧게 둔다(다음 레벨 것까지만 보인다).
+      b.hidden = this.source.cityLevel !== undefined && this.source.cityLevel() + 1 < spec.unlock;
       b.querySelector('small')!.textContent =
-        `${formatMoney(spec.cost)} · 철 ${spec.iron}${spec.coal ? ` · 석탄 ${spec.coal}` : ''} · ${spec.men}명 · ${Math.round(spec.buildSec / 60)}분` +
+        `${formatMoney(spec.cost)} · 철 ${spec.iron}${spec.coal ? ` · 석탄 ${spec.coal}` : ''}${spec.oil ? ` · 석유 ${spec.oil}` : ''} · ${spec.men ? `${spec.men}명` : '기계'} · ${Math.round(spec.buildSec / 60)}분` +
         (why ? ` — ${why}` : '');
     }
     if (!force && army.revision === this.lastArmyRevision) {
@@ -718,7 +726,8 @@ export class ContinentMap {
     };
     for (const u of army.units) drawUnit(u, true);
     if (war) {
-      // 적 부대는 내 부대·영토에서 시야(2청크) 안에 있을 때만 보인다.
+      // 적 부대는 내 부대·영토에서 시야(2청크), 레이더(6청크) 안에 있을 때만 보인다.
+      const radar = army.visionSources();
       const seeing = (e: Unit) => {
         for (const u of army.units)
           if (
@@ -729,6 +738,8 @@ export class ContinentMap {
         for (let dy = -VISION_CHUNKS; dy <= VISION_CHUNKS; dy++)
           for (let dx = -VISION_CHUNKS; dx <= VISION_CHUNKS; dx++)
             if (this.source.army.mySide().owned.has(`${e.cx + dx},${e.cy + dy}`)) return true;
+        for (const r of radar)
+          if (Math.max(Math.abs(r.cx - e.cx), Math.abs(r.cy - e.cy)) <= r.r) return true;
         return false;
       };
       for (const e of war.enemy.units) if (e.state !== 'training' && seeing(e)) drawUnit(e, false);
@@ -768,8 +779,11 @@ export class ContinentMap {
     const s = this.scale * PX_PER_CHUNK;
     const cx = Math.floor(CONTINENT_X0 + (px - this.ox) / s);
     const cy = Math.floor(CONTINENT_Y0 + (py - this.oy) / s);
+    const missile =
+      this.source.army.units.find((u) => u.id === this.selectedUnit)?.type === 'missile';
     const why = this.source.army.order(this.selectedUnit, cx, cy);
-    this.armyMsgEl.textContent = why || '이동 명령을 내렸습니다';
+    if (missile && !why) this.selectedUnit = null;
+    this.armyMsgEl.textContent = why || (missile ? '미사일 발사!' : '이동 명령을 내렸습니다');
     if (why) this.source.announce(why);
     this.renderArmy(true);
     this.draw();

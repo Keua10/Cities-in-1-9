@@ -52,6 +52,7 @@ const checks = {
   military: 'tools/check/militaryCheck.ts',
   war: 'tools/check/warCheck.ts',
   warSession: 'tools/check/warSessionCheck.ts',
+  military6: 'tools/check/military6Check.ts',
 };
 mkdirSync('.check', { recursive: true });
 for (const name of process.argv.length > 2 ? process.argv.slice(2) : Object.keys(checks)) {

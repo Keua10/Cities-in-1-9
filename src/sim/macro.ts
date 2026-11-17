@@ -240,6 +240,8 @@ export class MacroSim {
       () => this.cityLevel,
       () => this.onMacroChange?.(),
     );
+    // 폭격·미사일에 맞은 시설을 헌다.
+    this.army.destroyFacility = (f) => world.removeFacilityAt(f.tx, f.ty);
     this.water.power = this.power;
     this.services.power = this.power;
     this.macro.policies = normalizePolicies(macro.policies);
@@ -1163,6 +1165,9 @@ export class MacroSim {
     this.macro.food = Math.round(stock * 100) / 100;
     this.food.applyStock(this.macro.food);
     this.resources.advance(deltaMs / DAYTIME_DAY_MS);
+    // 기계 부대 연료(석유). 모자라면 비축이 0 에서 멈춘다(설계안: 유지비에 석유).
+    const fuel = this.army.fuelPerDay * (deltaMs / DAYTIME_DAY_MS);
+    if (fuel > 0) this.resources.addStock('oil', -Math.min(fuel, this.resources.stockNow.oil));
     const { income, upkeep } = this.financeEstimate(incomeMul);
     this.stats.dailyIncome = income;
     this.stats.dailyUpkeep = upkeep;

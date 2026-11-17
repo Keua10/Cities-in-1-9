@@ -331,6 +331,7 @@ async function boot(): Promise<void> {
     load: loadPublicCities,
     mine: () => ({ ...myProfile(), uid: myUid, online: true, lastSeen: Date.now() }),
     army: sim.army,
+    cityLevel: () => sim.cityLevel,
     announce: (text) => tools.announce(text),
     war: warSession,
     alliances,
@@ -372,6 +373,17 @@ async function boot(): Promise<void> {
         e.why === 'encircled' ? '부대가 포위되어 전멸했습니다' : '부대가 전멸했습니다',
       );
     else if (e.type === 'retreat') tools.announce('부대가 조직력을 잃고 후퇴합니다');
+    else if (e.type === 'strike')
+      tools.announce(e.kind === 'missile' ? `미사일 발사 · 청크 ${e.key}` : `폭격 · 청크 ${e.key}`);
+    else if (e.type === 'struck')
+      tools.announce(
+        e.intercepted
+          ? `🛡 적 미사일을 요격했습니다 (청크 ${e.key})`
+          : `💥 적 ${e.kind === 'missile' ? '미사일' : '폭격'} · 청크 ${e.key}` +
+              (e.destroyed.length ? ` · 부서짐: ${e.destroyed.join(', ')}` : ''),
+      );
+    else if (e.type === 'airRaid')
+      tools.announce(`🚨 공습 경보 · 적 공군이 레이더에 잡혔습니다 (청크 ${e.key})`);
   };
   document
     .getElementById('btn-continent')

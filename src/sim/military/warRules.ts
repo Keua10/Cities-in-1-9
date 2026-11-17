@@ -15,7 +15,7 @@ import {
   WAR_RANGE_CHUNKS,
   WIN_RATIO,
 } from '../config/war';
-import { UNIT_SPECS, type UnitType } from '../config/military';
+import { unitStrength, UNIT_SPECS, type UnitType } from '../config/military';
 
 /**
  * 전쟁 규칙 계산 (군사 4·5단계). 네트워크와 무관한 순수 함수.
@@ -66,6 +66,8 @@ export interface SideDoc {
   bigBattleAt: number;
   /** 전쟁 시작 때 내 병력(큰 전투 기준). */
   men: number;
+  /** 내가 보낸 폭격·미사일(최근 15분). 상대 기기가 요격·피해를 계산한다. */
+  strikes?: import('./army').Strike[];
 }
 
 export interface CompactUnit {
@@ -172,8 +174,7 @@ export function surpriseBlock(x: SurpriseInput): string {
 
 /** 부대 하나의 가치(생산비). */
 export function unitValue(type: UnitType, men: number): number {
-  const s = UNIT_SPECS[type];
-  return (s.cost * men) / (s.men || 1);
+  return (UNIT_SPECS[type].cost * men) / unitStrength(type);
 }
 
 /** 점령 주장 두 개를 합쳐 청크 → 점령한 uid. 원래 주인이 되찾으면 빠진다. */
