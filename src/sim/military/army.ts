@@ -77,6 +77,8 @@ export interface Unit {
   airlift?: { from: string; to: string; departAt: number; arriveAt: number };
   /** 폭격기: 마지막으로 폭탄을 떨어뜨린 시각. */
   bombAt?: number;
+  /** 공병: 다리를 놓기 시작한 시각(하천 청크에 멈춘 때). */
+  bridgeAt?: number;
   /** 이 부대를 뽑은 청크별 인원(죽거나 해산하면 돌려준다). */
   source: Record<string, number>;
 }
@@ -92,6 +94,8 @@ export interface ArmyState {
   strikes?: Strike[];
   /** 받은 타격 중 처리를 마친 id → 시각. */
   struckBy?: Record<string, number>;
+  /** 공병이 놓은 다리(청크). */
+  bridges?: string[];
 }
 
 export function emptyArmy(): ArmyState {
@@ -117,6 +121,9 @@ export function normalizeArmy(raw: unknown): ArmyState {
     nextId: Math.max(1, Number(a.nextId) || 1),
     drafted: a.drafted && typeof a.drafted === 'object' ? { ...a.drafted } : {},
     lossValue: Number(a.lossValue) || 0,
+    ...(Array.isArray(a.bridges)
+      ? { bridges: a.bridges.filter((k) => typeof k === 'string').slice(0, 500) }
+      : {}),
     ...(Array.isArray(a.strikes) ? { strikes: a.strikes } : {}),
     ...(a.struckBy && typeof a.struckBy === 'object' ? { struckBy: { ...a.struckBy } } : {}),
   };
@@ -160,6 +167,8 @@ export interface Side {
   hospitals?: Set<string>;
   /** 경찰서가 있는 청크: 시가전 방어 +10%. */
   police?: Set<string>;
+  /** 공병이 놓은 다리(하천·큰 강 청크): 내 부대는 평지처럼 건넌다. */
+  bridges?: Set<string>;
 }
 
 export interface Battlefield {
@@ -180,6 +189,7 @@ export type BattleEvent =
   | { type: 'retreat'; unit: string }
   | { type: 'destroyed'; unit: string; why: 'encircled' | 'casualties' }
   | { type: 'engaged'; key: string }
+  | { type: 'bridge'; key: string }
   | { type: 'trained'; unit: string }
   | { type: 'strike'; key: string; kind: 'bomb' | 'missile'; from?: string }
   | {
@@ -256,7 +266,13 @@ export function passFactor(
     case 'strike':
       return 0;
   }
-  const f = moveFactor(t, type, isUrban(bf, key), spec.mountains);
+  const bridged = (t.kind === 'river' || t.kind === 'bigRiver') && !!bf.me.bridges?.has(key);
+  const f = moveFactor(
+    bridged ? { ...t, kind: 'plain' } : t,
+    type,
+    isUrban(bf, key),
+    spec.mountains,
+  );
   if (f <= 0 && t.kind === 'sea' && bf.me.canSail && !retreat) return EMBARKED_MOVE;
   return f;
 }

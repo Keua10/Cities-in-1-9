@@ -478,6 +478,7 @@ async function boot(): Promise<void> {
     if (e.type === 'trained')
       tools.announce('부대 훈련 완료 · 대륙 지도 → 군대에서 출동시킬 수 있습니다');
     else if (e.type === 'occupied') tools.announce(`청크 ${e.key} 점령`);
+    else if (e.type === 'bridge') tools.announce(`공병이 다리를 놓았습니다 · 청크 ${e.key}`);
     else if (e.type === 'destroyed')
       tools.announce(
         e.why === 'encircled' ? '부대가 포위되어 전멸했습니다' : '부대가 전멸했습니다',

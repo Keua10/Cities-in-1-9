@@ -420,3 +420,9 @@ export const AMMO_PER_MIN: Record<UnitType, number> = {
 };
 /** 탄약이 떨어지면 공격 배율. */
 export const AMMO_OUT_ATTACK = 0.5;
+
+/* ---------------- 공병 다리 (피드백 1차) ---------------- */
+
+/** 공병이 하천·큰 강 청크에서 이만큼 멈춰 있으면 다리를 놓는다(나무를 쓴다). */
+export const BRIDGE_BUILD_MS = 60_000;
+export const BRIDGE_WOOD = 50;

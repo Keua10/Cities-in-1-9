@@ -18,6 +18,8 @@ import {
   FAC_NAVAL_BASE,
   FAC_RADAR,
   AMMO_PER_MIN,
+  BRIDGE_BUILD_MS,
+  BRIDGE_WOOD,
   expMul,
   FAC_SCOUT_TOWER,
   FAC_TRENCH,
@@ -365,7 +367,32 @@ export class ArmySystem {
       canSail,
       hospitals,
       police,
+      bridges: new Set(this.army.bridges ?? []),
     };
+  }
+
+  /** 공병이 하천·큰 강 청크에 1분 멈춰 있으면 나무 50으로 다리를 놓는다. */
+  private buildBridges(now: number): void {
+    for (const u of this.army.units) {
+      if (u.type !== 'engineer' || u.state !== 'idle' || u.airlift) {
+        delete u.bridgeAt;
+        continue;
+      }
+      const key = chunkKey(u.cx, u.cy);
+      const k = chunkTerrain(u.cx, u.cy).kind;
+      if ((k !== 'river' && k !== 'bigRiver') || this.army.bridges?.includes(key)) {
+        delete u.bridgeAt;
+        continue;
+      }
+      u.bridgeAt ??= now;
+      if (now - u.bridgeAt < BRIDGE_BUILD_MS) continue;
+      if ((this.resources.stockNow.wood ?? 0) < BRIDGE_WOOD) continue;
+      this.resources.addStock('wood', -BRIDGE_WOOD);
+      (this.army.bridges ??= []).push(key);
+      delete u.bridgeAt;
+      this.onEvent?.({ type: 'bridge', key });
+      this.bump();
+    }
   }
 
   battlefield(now: number): Battlefield {
@@ -403,6 +430,7 @@ export class ArmySystem {
       events.push(...stepArmy(this.army, this.battlefield(now - span + t + step), step));
     }
     this.useAmmo(span);
+    this.buildBridges(now);
     events.push(...struck, ...this.radar(now));
     if (events.length) this.emit(events);
     return events;

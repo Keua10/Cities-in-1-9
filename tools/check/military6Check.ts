@@ -227,6 +227,33 @@ const bf = (me: Side, enemy: Side | null, now = 0): Battlefield => ({
   );
 }
 
+// 0-4. 공병 다리: 하천 청크에 1분 멈추면 나무 50으로 다리 → 내 부대는 평지처럼 건넌다.
+{
+  const river = find((cx, cy) => chunkTerrain(cx, cy).kind === 'river');
+  const origin = { cx: base.cx, cy: base.cy - 1 };
+  const world = new World(origin);
+  const sim = new MacroSim(world, { money: 0, population: 0, tick: 0, tickedAt: 0 } as never);
+  const sys = new ArmySystem(
+    sim.state,
+    sim.territory,
+    sim.resources,
+    () => [],
+    () => 9,
+    () => {},
+  );
+  sim.resources.addStock('wood', 60);
+  const e = newUnit(sys.army, 'engineer', { cx: river.cx, cy: river.cy }, {}, 0);
+  e.state = 'idle';
+  const key = chunkKey(river.cx, river.cy);
+  const slow = passFactor(bf(sys.mySide(), null), 'infantry', key, river.cx, river.cy);
+  for (let t = 1; t <= 70; t++) sys.update(1_000_000 + t * 1000);
+  assert.ok(sys.army.bridges?.includes(key), '다리 놓음');
+  assert.ok(sim.resources.stockNow.wood < 20, '나무 50 사용');
+  const fast = passFactor(bf(sys.mySide(), null), 'infantry', key, river.cx, river.cy);
+  assert.ok(slow < 1 && fast === 1, `다리 위 이동 ${slow} → ${fast}`);
+  console.log('  OK   공병 다리(하천 1분, 나무 50) → 평지처럼 건넘');
+}
+
 // 1. 기계 부대 전력, 땅·하늘·바다 이동
 {
   const a = emptyArmy();
