@@ -29,6 +29,8 @@ export class SaveManager {
   status: SaveStatus = 'idle';
   /** 상태가 바뀔 때마다 불린다. UI 배너가 여기에 물린다. */
   onStatus: ((status: SaveStatus, message: string) => void) | null = null;
+  /** 저장에 성공한 뒤 불린다(대륙 지도용 공개 문서 갱신). */
+  afterSave: (() => void) | null = null;
 
   private timer: number | null = null;
   private lastSaveAt = 0;
@@ -145,6 +147,7 @@ export class SaveManager {
       );
       this.lastSaveAt = Date.now();
       this.setStatus('saved');
+      this.afterSave?.();
     } catch (err) {
       // 저장에 실패했으면 변경 표시를 되돌려서 다음에 다시 시도한다.
       this.world.restoreDirty(taken.keys);
@@ -191,6 +194,7 @@ function describe(status: SaveStatus): string {
 export class OfflineSaveManager {
   status: SaveStatus = 'offline';
   onStatus: ((status: SaveStatus, message: string) => void) | null = null;
+  afterSave: (() => void) | null = null;
 
   start(): void {
     this.onStatus?.('offline', describe('offline'));

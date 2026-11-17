@@ -55,7 +55,7 @@ export async function loadContinentTable(): Promise<ChunkStatTable> {
   return new ChunkStatTable(new Uint8Array(await res.arrayBuffer()));
 }
 
-async function loadOverview(): Promise<HTMLImageElement> {
+export async function loadOverview(): Promise<HTMLImageElement> {
   const img = new Image();
   img.src = MAP_PNG;
   await img.decode();

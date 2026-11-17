@@ -27,6 +27,9 @@ import { CongestionMap } from './sim/congestion';
 import { MacroSim } from './sim/macro';
 import { remainingAt } from './sim/resources';
 import { Market } from './net/market';
+import { Presence } from './net/presence';
+import { loadPublicCities, publishProfile, type PublicProfile } from './net/publicCities';
+import { ContinentMap } from './ui/continentMap';
 import { CATCHUP_TICKS_PER_FRAME, START_MONEY } from './sim/simConstants';
 import { installPedestrianSystemPatch } from './sim/pedestrianSystemPatch';
 import { TrafficSim } from './sim/traffic/trafficSim';
@@ -270,11 +273,50 @@ async function boot(): Promise<void> {
   window.addEventListener('pointerdown', wakeAudio, { once: false });
   window.addEventListener('keydown', wakeAudio, { once: false });
 
+  // 대륙 지도 + 접속 표시 + 공개 문서 (군사 3단계).
+  const online = Boolean(session && city);
+  const myUid = session?.uid ?? 'local';
+  const myProfile = (): PublicProfile => ({
+    cityIndex: city?.cityIndex ?? 0,
+    cityName: city?.cityName ?? '둘러보기 도시',
+    origin: `${world.baseCx},${world.baseCy}`,
+    owned: [...sim.territory.ownedKeys()],
+    capital: macro.territory!.capital,
+    capitalLevel: sim.territory.capitalLevel,
+    cityLevel: sim.cityLevel,
+    population: Math.round(sim.stats.population),
+    updatedAt: Date.now(),
+  });
+  let lastPublished = '';
+  const publish = (): void => {
+    if (!online || !session) return;
+    const p = myProfile();
+    // 영토·레벨·인구(백 단위)가 그대로면 다시 쓰지 않는다(쓰기 아끼기).
+    const stamp = `${p.owned.length}|${p.capital}|${p.capitalLevel}|${p.cityLevel}|${Math.round(p.population / 100)}`;
+    if (stamp === lastPublished) return;
+    lastPublished = stamp;
+    publishProfile(session.uid, p).catch((err) => {
+      lastPublished = '';
+      console.warn('공개 정보 저장 실패', err);
+    });
+  };
+  saver.afterSave = publish;
+  window.setTimeout(publish, 5_000);
+  if (online && session && city) new Presence(session.uid, city.cityIndex).start();
+  const continentMap = new ContinentMap({
+    online,
+    load: loadPublicCities,
+    mine: () => ({ ...myProfile(), uid: myUid, online: true, lastSeen: Date.now() }),
+  });
+  document
+    .getElementById('btn-continent')
+    ?.addEventListener('click', () => void continentMap.open());
+
   const cityPanel = new CityPanel();
   cityPanel.world = world;
   // 공용 자원 시장: 로그인한 학생은 모든 도시가 함께 쓰는 재고, 둘러보기는 가상 시장.
   const market = new Market();
-  market.connect(Boolean(session && city));
+  market.connect(online);
   cityPanel.market = market;
   /** 수도 이전: 패널에서 버튼을 누르면 다음 탭 한 번이 새 수도 자리가 된다. */
   let pickCapital = false;
@@ -454,7 +496,6 @@ async function boot(): Promise<void> {
       tools.announce(`영토 +${gained.length}청크 · 지금 영토 ${sim.territory.count}청크`);
   };
   let roamRevision = -1;
-
 
   const cityLabel = city
     ? `${city.cityName} (${city.cityIndex}번)`

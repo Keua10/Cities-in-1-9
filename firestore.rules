@@ -70,6 +70,30 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // 대륙 지도용 공개 정보(군사 3단계). 자기 것만 쓴다. 영토 목록은 3,000청크까지.
+    match /public/{uid} {
+      allow read: if signedIn();
+      allow write: if signedIn()
+                   && request.auth.uid == uid
+                   && request.resource.data.keys().hasOnly(['cityIndex', 'cityName', 'origin',
+                        'owned', 'capital', 'capitalLevel', 'cityLevel', 'population', 'updatedAt'])
+                   && request.resource.data.owned is list
+                   && request.resource.data.owned.size() <= 3000
+                   && request.resource.data.cityName is string
+                   && request.resource.data.cityName.size() <= 40;
+      allow delete: if false;
+    }
+
+    // 접속 표시. 서버 시각(at)과 도시 번호만. 자기 것만 쓴다.
+    match /presence/{uid} {
+      allow read: if signedIn();
+      allow write: if signedIn()
+                   && request.auth.uid == uid
+                   && request.resource.data.keys().hasOnly(['at', 'city'])
+                   && request.resource.data.at == request.time;
+      allow delete: if false;
+    }
+
     match /cities/{cityId} {
       allow read: if signedIn();
 
