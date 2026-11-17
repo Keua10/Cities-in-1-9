@@ -20,7 +20,17 @@ export interface InputHandlers {
   onPaintStart?: (wx: number, wy: number) => void;
   onPaintMove?: (wx: number, wy: number) => void;
   onPaintEnd?: () => void;
+
+  /* ---------- 꾹 누른 뒤 드래그: 한 번에 여러 개 표시 ---------- */
+  /** 지금 도구가 꾹-드래그 표시를 지원하는가. 아니면 꾹 눌러도 보통 탭이다. */
+  canStamp?: () => boolean;
+  onStampStart?: (wx: number, wy: number) => void;
+  onStampMove?: (wx: number, wy: number) => void;
+  onStampEnd?: () => void;
 }
+
+/** 이만큼 제자리에서 누르고 있으면 꾹-드래그 표시가 시작된다. 그 전의 드래그는 지도 이동이다. */
+export const STAMP_HOLD_MS = 420;
 
 const TAP_MOVE_LIMIT = 18; // px
 const TAP_TIME_LIMIT = 600; // ms
@@ -65,6 +75,18 @@ export function attachInput(
   let multiTouchGesture = false;
   let painting = false;
   let tapPainting = false;
+  let stamping = false;
+  let stampTimer: ReturnType<typeof setTimeout> | null = null;
+  const clearStampTimer = (): void => {
+    if (stampTimer !== null) clearTimeout(stampTimer);
+    stampTimer = null;
+  };
+  const endStamp = (): void => {
+    clearStampTimer();
+    if (!stamping) return;
+    stamping = false;
+    handlers.onStampEnd?.();
+  };
 
   const midpoint = (): { x: number; y: number } => {
     let x = 0;
@@ -119,6 +141,7 @@ export function attachInput(
       multiTouchGesture = true;
       pinchDist = distance();
       tapPainting = false;
+      endStamp();
 
       if (painting) {
         painting = false;
@@ -135,6 +158,21 @@ export function attachInput(
       // 그래야 시설을 든 상태에서도 한 손가락/왼쪽 버튼 드래그로 지도를 움직일 수 있다.
       if (paintMode === 'tap') {
         tapPainting = true;
+        // 제자리에서 꾹 누르고 있으면 그때부터의 드래그는 지도 이동이 아니라 여러 개 표시다.
+        if (handlers.canStamp?.()) {
+          const id = e.pointerId;
+          clearStampTimer();
+          stampTimer = setTimeout(() => {
+            stampTimer = null;
+            const p = pointers.get(id);
+            if (!p || pointers.size !== 1 || !tapPainting || p.moved > TAP_MOVE_LIMIT) return;
+            stamping = true;
+            tapPainting = false;
+            navigator.vibrate?.(12);
+            const w = camera.screenToWorld(p.startX, p.startY);
+            handlers.onStampStart?.(w.wx, w.wy);
+          }, STAMP_HOLD_MS);
+        }
         return;
       }
 
@@ -187,6 +225,12 @@ export function attachInput(
       return;
     }
 
+    if (stamping) {
+      const w = camera.screenToWorld(e.clientX, e.clientY);
+      handlers.onStampMove?.(w.wx, w.wy);
+      return;
+    }
+
     /*
      * 일반 칠하기 중에는 지도를 움직이지 않는다.
      * 관성도 걸지 않는다(velX/velY 를 건드리지 않고 빠져나간다).
@@ -215,6 +259,7 @@ export function attachInput(
     if (tapPainting) {
       tapPainting = false;
     }
+    clearStampTimer();
 
     const dx = e.pointerType === 'mouse' ? mid.x - prevMid.x : dxPointer;
 
@@ -252,6 +297,14 @@ export function attachInput(
       painting = false;
       handlers.onPaintEnd?.();
     }
+    if (stamping) {
+      endStamp();
+      tapPainting = false;
+      multiTouchGesture = false;
+      pointers.clear();
+      return;
+    }
+    clearStampTimer();
 
     if (!p) {
       return;
@@ -371,6 +424,7 @@ export function attachInput(
   el.addEventListener('pointerleave', onLeave);
 
   return () => {
+    clearStampTimer();
     el.removeEventListener('pointerdown', onDown);
     el.removeEventListener('pointermove', onMove);
     el.removeEventListener('pointerup', onUp);

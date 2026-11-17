@@ -698,6 +698,20 @@ async function boot(): Promise<void> {
       tools.hoverTile(cursor);
       tools.tapAtWorld(wx, wy);
     },
+    // 꾹 누른 뒤 드래그: 여러 채(또는 두 점 도구의 범위)를 한 번에 표시하고 ✓ 한 번으로 짓는다.
+    canStamp: () => !pickCapital && tools.canStamp(),
+    onStampStart: (wx, wy) => {
+      constructionPanel.hide();
+      tools.stampStart(wx, wy);
+      cursor = pickTile(world, wx, wy);
+      renderer.setCursorTile(cursor);
+    },
+    onStampMove: (wx, wy) => {
+      tools.stampMove(wx, wy);
+      cursor = pickTile(world, wx, wy);
+      renderer.setCursorTile(cursor);
+    },
+    onStampEnd: () => tools.stampEnd(),
   });
 
   app.renderer.on('resize', (w: number, h: number) => {

@@ -156,6 +156,9 @@ export interface PlacementSummary {
   canConfirm: boolean;
 }
 
+/** 꾹-드래그 한 번에 표시할 수 있는 최대 채 수. */
+const MAX_STAMPS = 30;
+
 export class Tools {
   metroSelection: string | null = null;
   get metroMode(): boolean {
@@ -164,6 +167,8 @@ export class Tools {
   inspectMode: UtilityMode = 'off';
   tool: ToolId = 'select';
   facilityKind = 0;
+  /** 확정으로 무언가 지어졌을 때(튜토리얼이 듣는다). */
+  onPlaced?: (tool: ToolId, kind: number) => void;
 
   private message = '';
   private messageAt = 0;
@@ -171,6 +176,13 @@ export class Tools {
   /* ---------- 두 점 선택 상태 ---------- */
   private pos1: Point | null = null;
   private pos2: Point | null = null;
+  /**
+   * 꾹 누른 뒤 드래그로 표시한 여러 위치(한 채짜리 도구). 시작점 기준 span 간격으로 맞춰
+   * 서로 겹치지 않는다. 2개 이상이면 확정 한 번에 모두 짓는다.
+   */
+  private multi: Point[] = [];
+  private stampOrigin: Point | null = null;
+  private stampLast: Point | null = null;
   /** 마우스가 가리키는 칸. pos2 를 찍기 전 미리보기에만 쓴다(터치에는 없다). */
   private hover: Point | null = null;
   /*
@@ -249,9 +261,14 @@ export class Tools {
         return '자원 매장지 · 주황=철 · 흰색=석탄 · 노랑=석유 · 진할수록 많이 남음 · 테두리가 굵을수록 깊음(높은 단계 광산 필요) · 검정=다 캠';
       return this.utilityMode === 'power' ? '' : '';
     }
-    if (this.shape === 'line') return '시작점을 누르세요 · 두 점을 이어 일직선으로 놓습니다';
-    if (this.shape === 'area') return '한쪽 모서리를 누르세요 · 두 점이 사각형 범위가 됩니다';
-    if (this.shape === 'single') return '위치를 선택한 뒤 ✓ 건설 확인을 누르세요';
+    if (this.shape === 'line')
+      return '시작점을 누르세요 · 두 점을 이어 일직선으로 놓습니다 · 꾹 누른 채 끌어도 됩니다';
+    if (this.shape === 'area')
+      return '한쪽 모서리를 누르세요 · 두 점이 사각형 범위가 됩니다 · 꾹 누른 채 끌어도 됩니다';
+    if (this.shape === 'single')
+      return this.canStamp()
+        ? '위치를 누른 뒤 ✓ · 꾹 누른 채 끌면 여러 채를 한 번에 표시합니다'
+        : '위치를 선택한 뒤 ✓ 건설 확인을 누르세요';
     return '';
   }
 
@@ -270,6 +287,7 @@ export class Tools {
     const shape = this.shape;
     if (shape === 'none') return;
     if (shape === 'single') {
+      this.multi = [];
       this.pos1 = { tx, ty };
       this.pos2 = { tx, ty };
       return;
@@ -298,7 +316,82 @@ export class Tools {
   clearSelection(): void {
     this.pos1 = null;
     this.pos2 = null;
+    this.multi = [];
+    this.stampOrigin = null;
+    this.stampLast = null;
     this.invalidatePlan();
+  }
+
+  /* ---------------------------------------------------------------- *
+   * 꾹 누른 뒤 드래그 — 한 번에 여러 개 표시 (피드백 2차)
+   *
+   * 그냥 드래그는 언제나 지도 이동이다. 제자리에서 잠깐 누르고 있으면(입력 계층이
+   * 판정) 그때부터 손가락을 따라 표시가 늘어난다. 확정은 여전히 ✓ 한 번이다.
+   *   한 채짜리 도구: 시작 자리에서 건물 크기만큼씩 띄워 지나간 자리마다 하나씩
+   *   두 점 도구(도로·배관·구역 등): 누른 곳이 시작점, 손가락이 끝점
+   * ---------------------------------------------------------------- */
+
+  canStamp(): boolean {
+    const shape = this.shape;
+    if (shape === 'line' || shape === 'area') return true;
+    return shape === 'single' && (this.tool === 'facility' || this.tool === 'metroStation');
+  }
+
+  private stampSpan(): number {
+    return this.tool === 'facility' ? FACILITY_SPECS[this.facilityKind].span : 1;
+  }
+
+  stampStart(wx: number, wy: number): void {
+    const t = pickTile(this.world, wx, wy);
+    this.clearSelection();
+    this.pos1 = { tx: t.tx, ty: t.ty };
+    if (this.shape === 'single') {
+      this.pos2 = this.pos1;
+      this.multi = [this.pos1];
+      this.stampOrigin = this.pos1;
+      this.stampLast = { tx: 0, ty: 0 };
+    }
+    this.invalidatePlan();
+  }
+
+  stampMove(wx: number, wy: number): void {
+    const t = pickTile(this.world, wx, wy);
+    if (!this.pos1) return;
+    if (this.shape !== 'single') {
+      if (this.pos2?.tx === t.tx && this.pos2?.ty === t.ty) return;
+      this.pos2 = { tx: t.tx, ty: t.ty };
+      this.invalidatePlan();
+      return;
+    }
+    const o = this.stampOrigin,
+      last = this.stampLast;
+    if (!o || !last) return;
+    const span = this.stampSpan();
+    // 격자 좌표(시작점에서 몇 채 떨어졌나). 빠르게 끌어 건너뛴 칸도 채운다.
+    const gx = Math.round((t.tx - o.tx) / span),
+      gy = Math.round((t.ty - o.ty) / span);
+    if (gx === last.tx && gy === last.ty) return;
+    const steps = Math.max(Math.abs(gx - last.tx), Math.abs(gy - last.ty));
+    for (let i = 1; i <= steps; i++) {
+      if (this.multi.length >= MAX_STAMPS) break;
+      const cx = Math.round(last.tx + ((gx - last.tx) * i) / steps),
+        cy = Math.round(last.ty + ((gy - last.ty) * i) / steps);
+      const at = { tx: o.tx + cx * span, ty: o.ty + cy * span };
+      if (!this.multi.some((m) => m.tx === at.tx && m.ty === at.ty)) this.multi.push(at);
+    }
+    this.stampLast = { tx: gx, ty: gy };
+    this.invalidatePlan();
+  }
+
+  stampEnd(): void {
+    this.stampLast = null;
+    if (this.shape !== 'single' && this.pos1 && !this.pos2) this.pos2 = this.pos1;
+    this.invalidatePlan();
+  }
+
+  /** 꾹-드래그로 2개 이상 표시했으면 그 수, 아니면 0. */
+  get multiCount(): number {
+    return this.shape === 'single' && this.multi.length > 1 ? this.multi.length : 0;
   }
 
   /** 계획을 다시 계산해야 한다. 세계가 바뀌는 곳(확정)에서도 부른다. */
@@ -311,7 +404,7 @@ export class Tools {
   private selectionKey(): string {
     if (!this.pos1) return '';
     const end = this.pos2 ?? this.hover ?? this.pos1;
-    return `${this.tool}|${this.pos1.tx},${this.pos1.ty}|${end.tx},${end.ty}|${this.pos2 ? 1 : 0}`;
+    return `${this.tool}|${this.pos1.tx},${this.pos1.ty}|${end.tx},${end.ty}|${this.pos2 ? 1 : 0}|${this.multi.length}`;
   }
 
   /* ---------------------------------------------------------------- *
@@ -328,7 +421,7 @@ export class Tools {
     const end = this.pos2 ?? this.hover ?? this.pos1;
     const raw =
       shape === 'single'
-        ? { tiles: [this.pos1], truncated: false }
+        ? { tiles: this.multi.length > 1 ? this.multi : [this.pos1], truncated: false }
         : shape === 'line'
           ? lineTiles(this.pos1, end)
           : areaTiles(this.pos1, end);
@@ -507,10 +600,20 @@ export class Tools {
     const plan = this.plan();
     if (!plan) return null;
     if (this.previewCache) return this.previewCache;
+    let tiles = plan.tiles;
+    if (this.multiCount) {
+      // 여러 채: 각 자리의 발자국 전체를 그 자리 판정 색으로 칠한다.
+      const span = this.stampSpan();
+      tiles = [];
+      for (const t of plan.tiles)
+        for (let dy = 0; dy < span; dy++)
+          for (let dx = 0; dx < span; dx++)
+            tiles.push({ tx: t.tx + dx, ty: t.ty + dy, state: t.state });
+    }
     this.previewCache = {
       shape,
-      anchor: this.pos1,
-      tiles: plan.tiles,
+      anchor: this.multiCount ? null : this.pos1,
+      tiles,
       guide: shape === 'line' && !this.pos2 ? guideTiles(this.pos1) : [],
       key: `${this.cacheKey}|${plan.blockedCount},${plan.buildCount}`,
     };
@@ -524,7 +627,10 @@ export class Tools {
     const label =
       this.tool === 'facility' ? FACILITY_SPECS[this.facilityKind].name : TOOL_LABELS[this.tool];
     const parts: string[] = [];
-    if (facilityLike) {
+    if (facilityLike && this.multiCount) {
+      parts.push(`${plan.buildCount}채`);
+      if (plan.blockedCount > 0) parts.push(`불가 ${plan.blockedCount}`);
+    } else if (facilityLike) {
       const span = this.tool === 'facility' ? FACILITY_SPECS[this.facilityKind].span : 1;
       if (plan.buildCount > 0) parts.push(`${span}×${span}`);
     } else if (plan.buildCount > 0) parts.push(`${plan.buildCount}칸`);
@@ -565,9 +671,33 @@ export class Tools {
 
   confirmPlacement(): void {
     this.invalidatePlan();
+    if (this.shape === 'single' && this.multiCount) {
+      const plan = this.plan();
+      const spots = plan ? plan.tiles.filter((t) => t.state === 'build') : [];
+      let placed = 0;
+      for (const t of spots) {
+        const before = this.sim.money;
+        this.applySingle(t.tx, t.ty);
+        if (this.sim.money < before) placed++;
+      }
+      const skipped = (plan?.tiles.length ?? 0) - placed;
+      this.note(
+        placed === 0
+          ? plan?.reason || '지을 수 있는 자리가 없습니다'
+          : skipped > 0
+            ? `${placed}채 공사 시작 · ${skipped}곳은 짓지 못했습니다`
+            : `${placed}채 공사 시작`,
+        placed === 0 || skipped > 0 ? 'deny' : 'none',
+      );
+      if (placed > 0) this.onPlaced?.(this.tool, this.facilityKind);
+      this.clearSelection();
+      return;
+    }
     if (this.shape === 'single' && this.pos1) {
       const { tx, ty } = this.pos1;
+      const before = this.sim.money;
       this.applySingle(tx, ty);
+      if (this.sim.money < before) this.onPlaced?.(this.tool, this.facilityKind);
       this.clearSelection();
       return;
     }
@@ -614,6 +744,7 @@ export class Tools {
       prev = t.state === 'blocked' ? null : t;
     }
     this.invalidatePlan();
+    if (placed > 0 || linked > 0) this.onPlaced?.(this.tool, this.facilityKind);
 
     if (!this.message || performance.now() - this.messageAt > MESSAGE_MS) {
       const short = plan.buildCount - placed;
@@ -747,6 +878,7 @@ export class Tools {
     tx: number,
     ty: number,
   ): { tx: number; ty: number; kind: number; ok: boolean } | null {
+    if (this.multiCount) return null;
     if (this.shape === 'single' && this.pos1) {
       tx = this.pos1.tx;
       ty = this.pos1.ty;
