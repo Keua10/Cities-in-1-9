@@ -331,6 +331,40 @@ console.log('  OK   병원 회복 2배·전쟁 피로·승전 기분·전후 복
     return u.progress;
   };
   assert.ok(Math.abs(walk(wet) / walk(dry) - W.WET_MOVE) < 1e-6, '비·눈 이동 −20%');
+  // 계절은 대륙 공통: 겨울에는 비 대신 눈, 여름에는 눈이 없다.
+  const DAYMS = 60_000;
+  const winter = (270 + 10) * DAYMS;
+  const summer = (90 + 10) * DAYMS;
+  assert.equal(W.worldSeason(winter), 3);
+  assert.equal(W.worldSeason(summer), 1);
+  let snowSummer = 0;
+  let rainWinter = 0;
+  for (let p = 0; p < 200; p++) {
+    if (W.weatherAt(summer + (p % 4) * W.WEATHER_PERIOD_MS, base.cx + p, base.cy) === 'snow')
+      snowSummer++;
+    if (W.weatherAt(winter + (p % 4) * W.WEATHER_PERIOD_MS, base.cx + p, base.cy) === 'rain')
+      rainWinter++;
+  }
+  assert.equal(snowSummer + rainWinter, 0, '여름 눈·겨울 비 없음');
+  assert.ok(
+    W.temperatureAt(summer + 30 * DAYMS, base.cy) > W.temperatureAt(winter + 30 * DAYMS, base.cy),
+  );
+  // 도시 화면 날씨 = 전쟁 날씨(같은 시각·같은 자리).
+  const origin = { cx: base.cx + 3, cy: base.cy };
+  const world = new World(origin);
+  const sim = new MacroSim(world, { money: 0, population: 0, tick: 0, tickedAt: 0 } as never);
+  const realNow = Date.now;
+  for (const t of [wet, dry]) {
+    Date.now = () => t;
+    const kind = W.weatherAt(t, origin.cx, origin.cy);
+    const p = sim.nature.weather.precipitation;
+    assert.equal(
+      p === 'clear' ? kind === 'clear' || kind === 'wind' : kind === 'rain' || kind === 'snow',
+      true,
+      `도시 날씨 ${p} = 전쟁 날씨 ${kind}`,
+    );
+  }
+  Date.now = realNow;
 }
 {
   const origin = { cx: base.cx, cy: base.cy - 1 };
@@ -400,7 +434,7 @@ console.log('  OK   병원 회복 2배·전쟁 피로·승전 기분·전후 복
   assert.ok(!sim.blockaded && sim.food.importLimit === 1, '되찾으면 풀림');
 }
 console.log(
-  '  OK   밤(시야 절반)·날씨(비·눈 이동 −20%, 공유 시계로 같음)·공중 수송·식량 봉쇄(수입 절반·굶주림)',
+  '  OK   밤(시야 절반)·날씨(비·눈 이동 −20%, 공유 시계로 같음, 계절 공통, 도시 화면 = 전쟁 날씨)·공중 수송·식량 봉쇄(수입 절반·굶주림)',
 );
 
 void BOMB_INTERVAL_MS;

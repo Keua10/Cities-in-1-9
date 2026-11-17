@@ -3,8 +3,10 @@ import type { World } from '../world/world';
 import { isWater } from '../world/terrain';
 import { CHUNK_SIZE } from '../core/constants';
 import { isAnchor, isFacilityAnchor } from './buildings';
-import { sessionDaytimeAt } from './time';
 import { DAYTIME_DAY_MS } from './simConstants';
+import { sharedNow } from './sharedClock';
+import { parseChunkKey } from '../core/iso';
+import { temperatureAt, weatherAt, weatherIntensity, WEATHER_PERIOD_MS } from './military/weather';
 
 export type Precipitation = 'clear' | 'rain' | 'snow';
 export type HazardKind = 'typhoon' | 'flood' | 'blizzard' | 'earthquake';
@@ -76,21 +78,34 @@ export class NatureSystem {
   get elapsed(): number {
     return this.stepTime ?? this.macro.lifeElapsedMs ?? 0;
   }
+  /** 이 도시의 대륙 위치(수도 청크). 날씨는 대륙 공통 날씨에서 이 자리 값을 읽는다. */
+  private site(): { cx: number; cy: number } {
+    const cap = this.macro.territory?.capital;
+    if (cap) return parseChunkKey(cap);
+    return { cx: this.world.baseCx, cy: this.world.baseCy };
+  }
+
+  /**
+   * 지금 날씨. 대륙 공통 날씨(공유 시계·위치·계절, sim/military/weather.ts)를 이 도시 자리에서
+   * 읽는다 — 전쟁 날씨와 같다. 관리자가 덮어쓴 값이 있으면 그것.
+   */
   get weather(): Weather {
     if (this.state.override) return this.state.override;
-    const t = sessionDaytimeAt(this.elapsed, Math.floor(this.macro.tick / 24));
-    const front = (Math.sin(((this.elapsed / DAYTIME_DAY_MS) * Math.PI * 2) / 2.7) + 1) / 2;
-    const temperature =
-      12 +
-      17 * Math.sin((2 * Math.PI * t.gameDayOfYear) / 360) +
-      4 * Math.sin(((t.hour - 9) / 24) * Math.PI * 2);
+    const now = sharedNow();
+    const { cx, cy } = this.site();
+    const kind = weatherAt(now, cx, cy);
+    const temperature = temperatureAt(now, cy);
+    const wet = kind === 'rain' || kind === 'snow';
+    const intensity = wet ? weatherIntensity(now, cx, cy) : 0;
+    // 바람 방향은 날씨가 바뀔 때마다 천천히 돈다.
+    const phase = (now % (WEATHER_PERIOD_MS * 6)) / (WEATHER_PERIOD_MS * 6);
     return {
-      precipitation: front > 0.7 ? (temperature <= 0 ? 'snow' : 'rain') : 'clear',
-      intensity: clamp((front - 0.7) / 0.3),
-      windSpeed: 2 + 8 * front,
-      direction: (210 + 45 * Math.sin(this.elapsed / DAYTIME_DAY_MS)) % 360,
+      precipitation: wet ? (kind === 'snow' || temperature <= 0 ? 'snow' : 'rain') : 'clear',
+      intensity,
+      windSpeed: kind === 'wind' ? 14 + 6 * weatherIntensity(now, cx + 1, cy) : 2 + 4 * intensity,
+      direction: (210 + 90 * Math.sin(phase * Math.PI * 2) + 360) % 360,
       temperature,
-      cloud: 0.15 + 0.8 * front,
+      cloud: wet ? 0.55 + 0.4 * intensity : kind === 'wind' ? 0.45 : 0.15,
     };
   }
   setWeather(value: Weather | null): void {
