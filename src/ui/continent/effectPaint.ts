@@ -1,6 +1,7 @@
 import { parseChunkKey } from '../../core/iso';
 import type { MapEffect } from '../../sim/military/armySystem';
 import type { MapView } from './mapView';
+import { reducedMotion } from '../../core/motion';
 
 /** 효과 하나가 화면에 남는 시간(ms). armySystem 이 3초 지난 효과를 지운다. */
 const EFFECT_MS = 3000;
@@ -25,21 +26,34 @@ export function paintEffects(
     const t = (now - e.at) / 1000;
     const c = center(e.key);
     if (e.kind === 'missile' && e.from) missile(ctx, center(e.from), c, s, t);
-    else if (e.kind === 'boom' || e.kind === 'bomb') boom(ctx, c.x, c.y, s, t);
-    else if (e.kind === 'intercept') intercept(ctx, c.x, c.y, s, t);
-    else if (e.kind === 'occupy') flag(ctx, c.x, c.y, s, t);
-    else if (e.kind === 'clash') clash(ctx, c.x, c.y, s, t);
+    else if (e.kind === 'boom' || e.kind === 'bomb') {
+      boom(ctx, c.x, c.y, s, t);
+      shockwave(ctx, c.x, c.y, s, t);
+    } else if (e.kind === 'intercept') intercept(ctx, c.x, c.y, s, t);
+    else if (e.kind === 'occupy') {
+      spread(ctx, c.x, c.y, s, t);
+      flag(ctx, c.x, c.y, s, t);
+    } else if (e.kind === 'clash') clash(ctx, c.x, c.y, s, t);
   }
   return any;
 }
 
 type Pt = { x: number; y: number };
 
-/** 1.2초 동안 포물선으로 날아가 터진다. */
+/** 발사 섬광 → 연기 꼬리를 끌며 1.2초 포물선 비행 → 폭발 + 충격파. */
 function missile(ctx: CanvasRenderingContext2D, a: Pt, c: Pt, s: number, t: number): void {
+  if (t < 0.3) {
+    // 발사 섬광
+    const k = t / 0.3;
+    ctx.fillStyle = `rgba(255, 245, 220, ${0.85 * (1 - k)})`;
+    ctx.beginPath();
+    ctx.arc(a.x, a.y, Math.max(6, s * 0.5) * (0.5 + k), 0, Math.PI * 2);
+    ctx.fill();
+  }
   const f = Math.min(1, t / MISSILE_FLIGHT_S);
   if (f >= 1) {
     boom(ctx, c.x, c.y, s, t - MISSILE_FLIGHT_S);
+    shockwave(ctx, c.x, c.y, s, t - MISSILE_FLIGHT_S);
     return;
   }
   const lift = Math.hypot(c.x - a.x, c.y - a.y) * 0.35;
@@ -47,15 +61,16 @@ function missile(ctx: CanvasRenderingContext2D, a: Pt, c: Pt, s: number, t: numb
     x: a.x + (c.x - a.x) * g,
     y: a.y + (c.y - a.y) * g - Math.sin(g * Math.PI) * lift,
   });
-  ctx.strokeStyle = 'rgba(255, 220, 160, 0.6)';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  for (let i = 0; i <= 12; i++) {
-    const p = at((f * i) / 12);
-    if (i) ctx.lineTo(p.x, p.y);
-    else ctx.moveTo(p.x, p.y);
+  // 연기 꼬리: 머리 뒤로 갈수록 굵고 옅다.
+  for (let i = 1; i <= 14; i++) {
+    const g = f - i * 0.025;
+    if (g <= 0) break;
+    const p = at(g);
+    ctx.fillStyle = `rgba(205, 205, 200, ${0.5 - i * 0.032})`;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 1.5 + i * 0.45, 0, Math.PI * 2);
+    ctx.fill();
   }
-  ctx.stroke();
   const head = at(f);
   ctx.fillStyle = '#fff3c4';
   ctx.beginPath();
@@ -81,6 +96,32 @@ function boom(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, t:
   ctx.beginPath();
   ctx.arc(x, y, R * (0.5 + f * 1.2), 0, Math.PI * 2);
   ctx.stroke();
+}
+
+/** 터진 자리에서 퍼지는 얇은 충격파 고리. */
+function shockwave(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  s: number,
+  t: number,
+): void {
+  if (t < 0 || t > 0.9 || reducedMotion()) return;
+  const f = t / 0.9;
+  ctx.strokeStyle = `rgba(255, 240, 210, ${0.9 * (1 - f)})`;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(x, y, Math.max(8, s * 0.9) * (0.6 + f * 2.6), 0, Math.PI * 2);
+  ctx.stroke();
+}
+
+/** 점령: 내 색이 청크 가운데에서 가장자리로 번졌다가 옅어진다. */
+function spread(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, t: number): void {
+  if (t > 1.6) return;
+  const grow = Math.min(1, t / 0.5);
+  const half = (s / 2) * grow;
+  ctx.fillStyle = `rgba(111, 211, 184, ${0.6 * Math.min(1, (1.6 - t) / 1.1)})`;
+  ctx.fillRect(x - half, y - half, half * 2, half * 2);
 }
 
 /** 공중에서 막힘: 하늘색 방패 고리가 퍼지며 사라진다. */

@@ -2,6 +2,7 @@ import { parseChunkKey } from '../../core/iso';
 import { isNight, weatherAt, WEATHER_REGION, type Weather } from '../../sim/military/weather';
 import { CONTINENT_X0, CONTINENT_Y0 } from '../../world/continent';
 import type { MapView } from './mapView';
+import { reducedMotion } from '../../core/motion';
 
 /** 이보다 가까이(청크 px) 보면 비·눈·바람 입자를, 멀리서는 지역마다 아이콘만. */
 const PARTICLE_MIN_S = 12;
@@ -63,7 +64,7 @@ export function paintSky(
       ctx.clip();
       ctx.fillStyle = w === 'snow' ? 'rgba(220,230,240,0.06)' : 'rgba(40,60,80,0.07)';
       ctx.fillRect(x0, y0, size, size);
-      if (s < PARTICLE_MIN_S) {
+      if (s < PARTICLE_MIN_S || reducedMotion()) {
         ctx.restore();
         ctx.font = `${Math.max(10, Math.min(16, size * 0.3))}px system-ui, sans-serif`;
         ctx.textAlign = 'center';

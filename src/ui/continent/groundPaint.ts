@@ -79,14 +79,23 @@ export interface CityPaintOptions {
   atWarWith: (uid: string) => boolean;
 }
 
-/** 도시 영토(색 칠 + 바깥 경계선), 수도 금색 테두리, 이름표. */
+/** 이름표 하나(부대를 그린 뒤 따로 그린다). */
+export interface CityLabel {
+  text: string;
+  x: number;
+  y: number;
+  online: boolean;
+}
+
+/** 도시 영토(색 칠 + 바깥 경계선), 수도 금색 테두리. 이름표 자리를 돌려준다. */
 export function paintCities(
   ctx: CanvasRenderingContext2D,
   view: MapView,
   cities: readonly PublicCity[],
   o: CityPaintOptions,
-): void {
+): CityLabel[] {
   const { s, X, Y } = view;
+  const labels: CityLabel[] = [];
   for (const c of cities) {
     // 다른 도시는 내가 아는 땅에 걸친 부분만 보인다. 전쟁 상대는 영토 전체를 안다.
     const full = !o.known || c.uid === o.mineUid || o.atWarWith(c.uid);
@@ -125,13 +134,40 @@ export function paintCities(
       ctx.strokeRect(X(cap.cx), Y(cap.cy), span * s, span * s);
     }
     if (s >= 3 || c.uid === o.selected)
-      paintLabel(
-        ctx,
-        `${c.cityName} Lv.${c.cityLevel}`,
-        X(cap.cx) + (span * s) / 2,
-        Y(cap.cy) - 6,
-        c.uid === o.mineUid || c.online,
+      labels.push({
+        text: `${c.cityName} Lv.${c.cityLevel}`,
+        x: X(cap.cx) + (span * s) / 2,
+        y: Y(cap.cy) - 6,
+        online: c.uid === o.mineUid || c.online,
+      });
+  }
+  return labels;
+}
+
+/**
+ * 이름표: 부대 표와 겹치면 겹치지 않을 때까지 위로 올린다(최대 4줄).
+ * avoid = 부대 표 자리(가운데 x·y, 반지름 r).
+ */
+export function paintLabels(
+  ctx: CanvasRenderingContext2D,
+  labels: readonly CityLabel[],
+  avoid: ReadonlyArray<{ x: number; y: number; r: number }>,
+): void {
+  ctx.font = '600 12px system-ui, sans-serif';
+  for (const l of labels) {
+    const half = ctx.measureText(l.text).width / 2 + 14;
+    let y = l.y;
+    for (let step = 0; step < 4; step++) {
+      const hit = avoid.some(
+        (a) =>
+          Math.abs(a.x - l.x) < half + a.r &&
+          a.y + a.r * 0.75 + 14 > y - 12 &&
+          a.y - a.r * 0.75 - 8 < y + 3,
       );
+      if (!hit) break;
+      y -= 15;
+    }
+    paintLabel(ctx, l.text, l.x, y, l.online);
   }
 }
 

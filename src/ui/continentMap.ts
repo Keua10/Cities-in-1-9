@@ -9,7 +9,8 @@ import type { ArmySystem } from '../sim/military/armySystem';
 import type { WarSession } from '../net/warSession';
 import type { AllianceSession } from '../net/alliances';
 import { MapView } from './continent/mapView';
-import { makeBlurred, paintCities, paintGround } from './continent/groundPaint';
+import { makeBlurred, paintCities, paintGround, paintLabels } from './continent/groundPaint';
+import { EdgeAlerts, shakeOffset } from './continent/edgeAlerts';
 import { UnitPainter } from './continent/unitPaint';
 import { paintEffects } from './continent/effectPaint';
 import { paintSky } from './continent/skyPaint';
@@ -28,6 +29,7 @@ import './continentMap.css';
  *   unitPaint      점령지·부대(보간 이동·전투·진행 고리)
  *   effectPaint    미사일·폭발·요격·점령 깃발·교전 섬광
  *   skyPaint       밤·날씨
+ *   edgeAlerts     화면 밖 공격 화살표, 내 땅 피격 흔들림
  *   warBar         위쪽 전쟁 줄(항복·휴전)
  *   diplomacyPanel 동맹·통과·선전포고·대규모 전쟁 참가
  *   armyPanel      모집·부대 목록·영해 규율·무단 진입
@@ -82,6 +84,7 @@ export class ContinentMap {
   private overview: HTMLImageElement | null = null;
   private blurred: HTMLCanvasElement | null = null;
   private units = new UnitPainter();
+  private alerts = new EdgeAlerts();
   /** 이번 프레임에 움직이는 것(부대 이동·전투·효과·날씨)이 있었는가. */
   private animating = false;
   /** 아직 못 찾은 도시 수. */
@@ -379,48 +382,74 @@ export class ContinentMap {
 
   /* ---------------- 그리기 ---------------- */
 
+  /**
+   * 그리는 순서(효과가 서로 묻히지 않게):
+   * 땅·영토 → 밤·날씨 → 점령지·부대 → 효과 → 이름표 → 화면 밖 화살표.
+   * 내 땅에 폭발이 떨어진 직후에는 화살표를 뺀 전부가 살짝 흔들린다.
+   */
   private draw(): void {
     const ctx = this.ctx;
     const dpr = this.canvas.width / Math.max(1, this.canvas.clientWidth);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const army = this.source.army;
+    const now = performance.now();
+    // 내 땅 목록은 만들 때 비용이 있어 효과나 전쟁이 있을 때만 읽는다.
+    const owned: ReadonlySet<string> =
+      army.effects.length || army.war ? army.mySide().owned : new Set<string>();
+    const shake = shakeOffset(army.effects, owned, now);
+    ctx.save();
+    ctx.translate(shake.x, shake.y);
     const known = this.knownSet();
     if (known && this.overview && !this.blurred) this.blurred = makeBlurred(this.overview);
     paintGround(ctx, this.view, this.overview, this.blurred, known);
-    paintCities(ctx, this.view, this.cities, {
+    const labels = paintCities(ctx, this.view, this.cities, {
       mineUid: this.source.mine().uid,
       selected: this.sel.city,
       known,
       atWarWith: (uid) => !!this.source.war?.atWarWith(uid),
     });
-    const now = performance.now();
-    const moving = this.units.paint(ctx, this.view, this.source.army, this.sel, now);
-    const fx = paintEffects(ctx, this.view, this.source.army.effects, now);
     const sky = paintSky(ctx, this.view, known, now);
-    this.animating = moving || fx || sky;
+    const moving = this.units.paint(ctx, this.view, army, this.sel, now);
+    const fx = paintEffects(ctx, this.view, army.effects, now);
+    paintLabels(ctx, labels, this.units.hits);
+    ctx.restore();
+    this.alerts.update(army, owned, now);
+    const arrows = this.alerts.paint(ctx, this.view, now);
+    this.animating = moving || fx || sky || arrows || shake.x !== 0;
   }
 
   /* ---------------- 입력 ---------------- */
 
-  /** 화면 좌표 근처의 내 부대. */
+  /**
+   * 화면 좌표 근처의 내 부대(지난 프레임에 그린 표 기준).
+   * 여러 부대가 묶인 표를 다시 누르면 다음 부대로 넘어간다.
+   */
   private unitAt(px: number, py: number): Unit | null {
-    const { s, X, Y } = this.view;
-    const r = Math.max(9, Math.min(16, s * 0.5));
-    let best: Unit | null = null;
+    let best: { ids: string[] } | null = null;
     let bd = Infinity;
-    for (const u of this.source.army.units) {
-      const p = unitPosition(u);
-      const d = Math.hypot(px - X(p.x), py - Y(p.y));
-      if (d < r && d < bd) {
+    for (const h of this.units.hits) {
+      if (!h.ids.length) continue;
+      const d = Math.hypot(px - h.x, py - h.y);
+      if (d < Math.max(9, h.r * 1.15) && d < bd) {
         bd = d;
-        best = u;
+        best = h;
       }
     }
-    return best;
+    if (!best) return null;
+    const at = this.sel.unit ? best.ids.indexOf(this.sel.unit) : -1;
+    const id = at >= 0 && best.ids.length > 1 ? best.ids[(at + 1) % best.ids.length] : best.ids[0];
+    return this.source.army.units.find((u) => u.id === id) ?? null;
   }
 
   private tapAt(px: number, py: number): void {
     const army = this.source.army;
     const panel = this.armyPanel;
+    const arrow = this.alerts.hitAt(px, py);
+    if (arrow) {
+      this.view.centerOn(arrow.cx + 0.5, arrow.cy + 0.5, 5, true);
+      this.draw();
+      return;
+    }
     const hit = this.unitAt(px, py);
     if (hit && this.sel.picked.size) {
       panel.togglePick(hit.id);
@@ -444,6 +473,7 @@ export class ContinentMap {
       return;
     }
     if (hit) {
+      // 묶음이면 unitAt 이 다음 부대를 준다. 한 부대짜리를 다시 누르면 고르기 해제.
       this.sel.unit = hit.id === this.sel.unit ? null : hit.id;
       this.setTab('army');
       panel.refresh();
