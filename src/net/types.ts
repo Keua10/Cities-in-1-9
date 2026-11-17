@@ -55,6 +55,12 @@ export interface MacroState {
   /** 마지막 전쟁이 끝난 시각과 결과(전후 복구·승전 기분). */
   warEndedAt?: number;
   warOutcome?: 'win' | 'lose' | 'draw';
+  /** 부대가 가 본 청크(대륙 지도에서 선명하게 보인다). */
+  scouted?: string[];
+  /** 마지막으로 본 공지 시각. */
+  noticeSeenAt?: number;
+  /** 마지막으로 실행한 관리자 지시 id. */
+  adminOrderDone?: string;
   /** 마지막으로 동맹을 배신한 시각(24시간 새 동맹 불가). */
   betrayedAt?: number;
   /** 정산을 마친 동맹 id → 시각(보증금을 두 번 주고받지 않게). */
@@ -92,6 +98,14 @@ export function emptyMacro(): MacroState {
   return { money: START_MONEY, population: 0, tick: 0, tickedAt: Date.now() };
 }
 
+export interface AdminOrder {
+  id: string;
+  kind: 'reset' | 'grant';
+  /** grant: 줄 돈(만 원). */
+  amount?: number;
+  at: number;
+}
+
 export interface CityDoc {
   schemaVersion: number;
   /** 도시 번호. 지도 v2 부터 위치와 무관하고 이름·관리용으로만 쓴다. */
@@ -107,6 +121,8 @@ export interface CityDoc {
   cityName: string;
   explored: string[];
   macro: MacroState;
+  /** 관리자가 남긴 지시(다음 접속 때 이 도시 기기가 실행한다). */
+  adminOrder?: AdminOrder;
   saveToken: string;
   saveCount: number;
   createdAt: number;

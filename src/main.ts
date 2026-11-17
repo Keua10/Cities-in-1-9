@@ -44,6 +44,9 @@ import { createHudUpdater } from './ui/gameHud';
 import { Hud } from './ui/hud';
 import { FacilityFinder } from './ui/facilityFinder';
 import { requireSession } from './ui/loginScreen';
+import { askCityName } from './ui/cityNameDialog';
+import { loadSettings } from './net/admin';
+import { formatMoney } from './ui/money';
 import { Minimap } from './ui/minimap';
 import { SaveBadge } from './ui/saveBadge';
 import { bindToolbar } from './ui/toolbar';
@@ -123,6 +126,10 @@ async function boot(): Promise<void> {
       },
     });
   }
+
+  // 처음 자리를 고른 도시는 이름을 정한다(저장은 다음 자동 저장 때).
+  if (city && session && !city.macro?.tick && city.cityName === `${session.loginId}의 도시`)
+    city.cityName = await askCityName(city.cityName);
 
   if (loading) loading.textContent = '지형을 그리는 중…';
   const world = new World(origin);
@@ -323,6 +330,10 @@ async function boot(): Promise<void> {
   if (warSession) warSession.alliances = alliances;
   // 부대가 움직이면 공개 정보(부대 위치)도 가끔 갱신한다.
   window.setInterval(publish, 60_000);
+  // 대륙 지도의 "아는 땅" 캐시(개척·영토·탐사가 바뀔 때만 다시 만든다).
+  const knownCache = { rev: '', set: new Set<string>() };
+  const knownRev = () =>
+    `${world.exploredCount()}:${sim.territory.count}:${sim.army.scoutRevision}`;
   const continentMap = new ContinentMap({
     online,
     load: loadPublicCities,
@@ -334,6 +345,20 @@ async function boot(): Promise<void> {
     alliances,
     onForeign: (owned) => {
       sim.territory.foreign = owned;
+    },
+    seeAll: !!session?.isAdmin,
+    known: () => {
+      // 개척한 땅 + 내 영토 + 부대가 가 본 곳 + 레이더·통신탑 시야.
+      if (knownCache.rev === knownRev()) return knownCache.set;
+      const set = new Set<string>(world.exploredKeys());
+      for (const k of sim.territory.ownedKeys()) set.add(k);
+      for (const k of sim.army.scouted()) set.add(k);
+      for (const v of sim.army.visionSources())
+        for (let dy = -v.r; dy <= v.r; dy++)
+          for (let dx = -v.r; dx <= v.r; dx++) set.add(`${v.cx + dx},${v.cy + dy}`);
+      knownCache.set = set;
+      knownCache.rev = knownRev();
+      return set;
     },
   });
   if (warSession) warSession.onNotice = (text) => tools.announce(text);
@@ -503,6 +528,41 @@ async function boot(): Promise<void> {
     camera.resize(w, h);
   });
 
+  const resetCity = async (mode: 'metropolis' | 'empty', mark?: string): Promise<void> => {
+    if (saver.status === 'saving' || saver.status === 'conflict')
+      throw new Error('저장 중이거나 다른 기기와 충돌했습니다. 저장 상태를 확인하세요.');
+    app.ticker.stop();
+    transportPanel.hide();
+    world.clearBuilt();
+    // transport 를 비우는 것까지 여기서 하지 않는다. resetState 가 선택 필드를
+    // 전부 **키째로** 지운다. `= undefined` 로 두면 Firestore 가 그 저장을
+    // 거부하고, 그러면 초기화가 서버에 안 실려서 새로고침 뒤에 예전 도시가
+    // 그대로 돌아온다. genSeed·metropolisRequest 도 거기서 지워지므로,
+    // 대도시 요청은 반드시 resetState **뒤에** 적는다.
+    sim.resetState(mode === 'metropolis' ? SEEDED_CITY_MONEY : START_MONEY, Date.now());
+    if (mark) macro.adminOrderDone = mark;
+    if (mode === 'metropolis') {
+      // 새 씨앗. 이게 없으면 다시 눌러도 똑같은 도시가 만들어진다.
+      // sessionStorage 에도 적어 둔다 — 둘러보기 모드에는 저장이 없다.
+      const seed = randomCitySeed();
+      macro.genSeed = seed;
+      macro.metropolisRequest = true;
+      rememberMetropolisRequest(seed);
+    } else forgetMetropolisRequest();
+    try {
+      await saver.saveNow();
+      if (session && saver.status !== 'saved' && saver.status !== 'idle')
+        throw new Error('새 도시 초기화 상태를 서버에 저장하지 못했습니다.');
+    } catch (err) {
+      // 조용히 새로고침하면 학생은 "버튼이 안 먹는다" 로만 본다. 실제로
+      // 무슨 일이 있었는지 알려주고 나서 화면을 서버 상태에 맞춘다.
+      console.error('초기화 저장 실패', err);
+      app.ticker.start();
+      throw err;
+    }
+    location.reload();
+  };
+
   bindToolbar({
     nature: sim.nature,
     mapCenter: () => worldToTile(camera.x, camera.y),
@@ -510,6 +570,7 @@ async function boot(): Promise<void> {
     renderer,
     saver,
     loggedIn: Boolean(session),
+    isAdmin: !!session?.isAdmin,
     getMoney: () => sim.money,
     setMoney: async (amount) => {
       if (saver.status === 'saving' || saver.status === 'conflict')
@@ -522,40 +583,33 @@ async function boot(): Promise<void> {
           '자금은 현재 화면에 적용됐지만 서버 저장은 완료되지 않았습니다. 저장 상태를 확인하세요.',
         );
     },
-    resetCity: async (mode) => {
-      if (saver.status === 'saving' || saver.status === 'conflict')
-        throw new Error('저장 중이거나 다른 기기와 충돌했습니다. 저장 상태를 확인하세요.');
-      app.ticker.stop();
-      transportPanel.hide();
-      world.clearBuilt();
-      // transport 를 비우는 것까지 여기서 하지 않는다. resetState 가 선택 필드를
-      // 전부 **키째로** 지운다. `= undefined` 로 두면 Firestore 가 그 저장을
-      // 거부하고, 그러면 초기화가 서버에 안 실려서 새로고침 뒤에 예전 도시가
-      // 그대로 돌아온다. genSeed·metropolisRequest 도 거기서 지워지므로,
-      // 대도시 요청은 반드시 resetState **뒤에** 적는다.
-      sim.resetState(mode === 'metropolis' ? SEEDED_CITY_MONEY : START_MONEY, Date.now());
-      if (mode === 'metropolis') {
-        // 새 씨앗. 이게 없으면 다시 눌러도 똑같은 도시가 만들어진다.
-        // sessionStorage 에도 적어 둔다 — 둘러보기 모드에는 저장이 없다.
-        const seed = randomCitySeed();
-        macro.genSeed = seed;
-        macro.metropolisRequest = true;
-        rememberMetropolisRequest(seed);
-      } else forgetMetropolisRequest();
-      try {
-        await saver.saveNow();
-        if (session && saver.status !== 'saved' && saver.status !== 'idle')
-          throw new Error('새 도시 초기화 상태를 서버에 저장하지 못했습니다.');
-      } catch (err) {
-        // 조용히 새로고침하면 학생은 "버튼이 안 먹는다" 로만 본다. 실제로
-        // 무슨 일이 있었는지 알려주고 나서 화면을 서버 상태에 맞춘다.
-        console.error('초기화 저장 실패', err);
-        app.ticker.start();
-        throw err;
-      }
-      location.reload();
-    },
+    resetCity,
   });
+  // 관리자 지시(선생님이 관리자 도구에서 남김): 이 기기에서 한 번 실행한다.
+  const order = city?.adminOrder;
+  if (order && order.id !== macro.adminOrderDone) {
+    if (order.kind === 'grant' && order.amount) {
+      macro.money += order.amount;
+      macro.adminOrderDone = order.id;
+      saver.noteMacroChange();
+      window.setTimeout(
+        () => tools.announce(`🎁 선생님이 ${formatMoney(order.amount!)}을 보냈습니다`),
+        1500,
+      );
+    } else if (order.kind === 'reset') {
+      window.alert('선생님이 이 도시를 초기화했습니다. 빈 땅에서 다시 시작합니다.');
+      await resetCity('empty', order.id);
+      return;
+    }
+  }
+  // 공지(관리자 도구) — 새 공지면 한 번 보여 준다.
+  if (session)
+    void loadSettings().then((st) => {
+      if (st.notice && st.noticeAt !== macro.noticeSeenAt) {
+        macro.noticeSeenAt = st.noticeAt;
+        tools.announce(`📢 ${st.notice}`);
+      }
+    });
   bindToolButtons(tools);
   const chrome = bindGameChrome(camera, tools, centerCamera);
   constructionPanel.onCancel = (tx, ty) => tools.cancelConstruction(tx, ty);

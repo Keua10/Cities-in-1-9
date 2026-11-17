@@ -1,154 +1,101 @@
-import {
-  allowSignup,
-  AuthError,
-  createAccount,
-  restoreSession,
-  signIn,
-  type Session,
-} from '../net/auth';
+import { AuthError, restoreSession, signInWithGoogle, signOut, type Session } from '../net/auth';
 import { firebaseConfigured } from '../net/firebase';
 
 /**
- * 로그인 화면.
+ * 첫 화면 = 로그인 화면. 개인 구글 계정으로 들어간다.
  *
- * 가입 버튼은 기본적으로 없다. 계정은 선생님이 콘솔에서 만든 것만 존재한다
- * (도시가 망했다고 계정을 새로 파는 걸 막기 위해서다).
- * 개발 중에 계정을 몰아서 만들 때만 VITE_ALLOW_SIGNUP=1 로 켠다.
+ * 이미 이 기기에서 로그인했으면 "○○(으)로 계속"과 "다른 계정" 을 보여 준다.
+ * 서버 설정이 없을 때(개발 컴퓨터)만 저장 없는 둘러보기가 있다.
  *
- * 돌려주는 값:
- *   Session  로그인 성공
- *   null     서버 없이 둘러보기 (저장 안 됨)
+ * 돌려주는 값: Session(로그인) 또는 null(둘러보기 — 서버 설정이 없을 때만).
  */
 export async function requireSession(): Promise<Session | null> {
-  if (!firebaseConfigured) {
-    return showScreen({ offlineOnly: true });
-  }
-
+  if (!firebaseConfigured) return showScreen(null, true);
   const existing = await restoreSession();
-  if (existing) return existing;
-
-  return showScreen({ offlineOnly: false });
+  return showScreen(existing, false);
 }
 
-interface ScreenOptions {
-  offlineOnly: boolean;
-}
-
-function showScreen(options: ScreenOptions): Promise<Session | null> {
+function showScreen(existing: Session | null, offlineOnly: boolean): Promise<Session | null> {
   return new Promise((resolve) => {
+    document.getElementById('loading')?.classList.add('behind-login');
     const overlay = document.createElement('div');
     overlay.id = 'login';
-
-    const card = document.createElement('div');
-    card.className = 'login-card';
-    overlay.appendChild(card);
-
-    const title = document.createElement('h1');
-    title.textContent = '1-9 도시';
-    card.appendChild(title);
-
-    const message = document.createElement('p');
-    message.className = 'login-msg';
-    card.appendChild(message);
+    overlay.innerHTML = `
+      <div class="login-sky" aria-hidden="true"><i></i><i></i><i></i></div>
+      <div class="login-card">
+        <div class="login-logo" aria-hidden="true">
+          <span class="b1"></span><span class="b2"></span><span class="b3"></span><span class="b4"></span>
+        </div>
+        <h1>1-9 도시</h1>
+        <p class="login-sub">도시를 세우고, 땅을 넓히고, 이웃과 겨루는 우리 반 도시 만들기</p>
+        <p class="login-msg"></p>
+        <div class="login-actions"></div>
+        <p class="login-error" role="alert"></p>
+        <p class="login-foot"></p>
+      </div>`;
+    const msg = overlay.querySelector<HTMLElement>('.login-msg')!;
+    const actions = overlay.querySelector<HTMLElement>('.login-actions')!;
+    const error = overlay.querySelector<HTMLElement>('.login-error')!;
+    const foot = overlay.querySelector<HTMLElement>('.login-foot')!;
 
     const finish = (session: Session | null): void => {
-      overlay.remove();
+      overlay.classList.add('leaving');
+      window.setTimeout(() => overlay.remove(), 350);
+      document.getElementById('loading')?.classList.remove('behind-login');
       resolve(session);
     };
 
-    if (options.offlineOnly) {
-      message.textContent = '서버 설정이 없어 저장 없이 둘러보기만 할 수 있습니다.';
-      const browse = button('둘러보기', 'primary', () => finish(null));
-      card.appendChild(browse);
-      document.body.appendChild(overlay);
+    if (offlineOnly) {
+      msg.textContent = '서버 설정이 없어 저장 없이 둘러보기만 할 수 있습니다.';
+      actions.append(button('둘러보기', 'primary', () => finish(null)));
+      document.body.append(overlay);
       return;
     }
 
-    message.textContent = '선생님께 받은 번호와 비밀번호를 입력하세요.';
-
-    const idInput = field(card, '번호', 'text');
-    idInput.inputMode = 'numeric';
-    idInput.autocomplete = 'username';
-
-    const pwInput = field(card, '비밀번호', 'password');
-    pwInput.autocomplete = 'current-password';
-
-    const error = document.createElement('p');
-    error.className = 'login-error';
-    card.appendChild(error);
-
-    const actions = document.createElement('div');
-    actions.className = 'login-actions';
-    card.appendChild(actions);
-
     let busy = false;
-
-    const run = async (fn: () => Promise<Session>): Promise<void> => {
+    const google = button('', 'google', async () => {
       if (busy) return;
       busy = true;
       error.textContent = '';
-      submit.disabled = true;
-      submit.textContent = '들어가는 중…';
+      google.disabled = true;
+      google.querySelector('span')!.textContent = '구글 창에서 계정을 고르세요…';
       try {
-        finish(await fn());
+        finish(await signInWithGoogle());
       } catch (err) {
         error.textContent = err instanceof AuthError ? err.message : '로그인에 실패했습니다.';
-        if (!(err instanceof AuthError)) console.error(err);
-        offerOffline();
         busy = false;
-        submit.disabled = false;
-        submit.textContent = '들어가기';
+        google.disabled = false;
+        google.querySelector('span')!.textContent = 'Google 계정으로 시작하기';
       }
-    };
-
-    const submit = button('들어가기', 'primary', () => {
-      void run(() => signIn(idInput.value, pwInput.value));
     });
-    actions.appendChild(submit);
+    google.innerHTML = `${GOOGLE_G}<span>Google 계정으로 시작하기</span>`;
 
-    if (allowSignup) {
-      const make = button('계정 만들기(개발용)', 'ghost', () => {
-        void run(() => createAccount(idInput.value, pwInput.value));
+    if (existing) {
+      msg.textContent = `${existing.loginId} 님, 다시 오셨네요.`;
+      const go = button(`${existing.loginId}(으)로 계속하기`, 'primary', () => finish(existing));
+      const other = button('다른 계정으로 로그인', 'ghost', async () => {
+        await signOut();
+        msg.textContent = '개인 구글 계정으로 로그인하세요.';
+        go.remove();
+        other.remove();
+        actions.prepend(google);
       });
-      actions.appendChild(make);
+      actions.append(go, other);
+      foot.textContent = existing.email;
+    } else {
+      msg.textContent = '개인 구글 계정으로 로그인하세요. 계정 하나에 도시 하나입니다.';
+      actions.append(google);
+      foot.textContent = '처음이면 대륙 지도에서 도시를 세울 자리를 고르게 됩니다.';
     }
-
-    let offlineShown = false;
-    const offerOffline = (): void => {
-      if (offlineShown) return;
-      offlineShown = true;
-      const skip = button('저장 없이 둘러보기', 'ghost', () => finish(null));
-      actions.appendChild(skip);
-    };
-
-    for (const input of [idInput, pwInput]) {
-      input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') submit.click();
-      });
-    }
-
-    document.body.appendChild(overlay);
-    idInput.focus();
+    document.body.append(overlay);
   });
 }
 
-function field(parent: HTMLElement, label: string, type: string): HTMLInputElement {
-  const wrap = document.createElement('label');
-  wrap.className = 'login-field';
-  const text = document.createElement('span');
-  text.textContent = label;
-  const input = document.createElement('input');
-  input.type = type;
-  input.autocapitalize = 'off';
-  input.spellcheck = false;
-  wrap.append(text, input);
-  parent.appendChild(wrap);
-  return input;
-}
+const GOOGLE_G = `<svg viewBox="0 0 48 48" width="20" height="20" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9 3.6l6.7-6.7C35.6 2.4 30.2 0 24 0 14.6 0 6.6 5.4 2.6 13.3l7.8 6C12.3 13.6 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.1 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.4c-.5 2.9-2.2 5.3-4.6 6.9l7.4 5.7c4.3-4 6.9-9.9 6.9-17.1z"/><path fill="#FBBC05" d="M10.4 28.7c-.5-1.4-.8-3-.8-4.7s.3-3.2.8-4.7l-7.8-6C1 16.5 0 20.1 0 24s1 7.5 2.6 10.7l7.8-6z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.4-5.7c-2.1 1.4-4.8 2.2-8.5 2.2-6.3 0-11.7-4.1-13.6-9.8l-7.8 6C6.6 42.6 14.6 48 24 48z"/></svg>`;
 
 function button(
   label: string,
-  variant: 'primary' | 'ghost',
+  variant: 'primary' | 'ghost' | 'google',
   onClick: () => void,
 ): HTMLButtonElement {
   const el = document.createElement('button');

@@ -250,7 +250,11 @@ export class MacroSim {
       () => this.onMacroChange?.(),
     );
     // 폭격·미사일에 맞은 시설을 헌다.
-    this.army.destroyFacility = (f) => world.removeFacilityAt(f.tx, f.ty);
+    this.army.destroyFacility = (f) => {
+      const ok = world.removeFacilityAt(f.tx, f.ty);
+      if (ok) world.onStructureEvent?.({ kind: 'explode', tx: f.tx, ty: f.ty, span: f.span });
+      return ok;
+    };
     this.water.power = this.power;
     this.services.power = this.power;
     this.macro.policies = normalizePolicies(macro.policies);

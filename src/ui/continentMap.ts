@@ -3,7 +3,7 @@ import { parseChunkKey } from '../core/iso';
 import type { PublicCity } from '../net/publicCities';
 import { sharedClockOffset, sharedNow } from '../sim/sharedClock';
 import { loadOverview } from './startPicker';
-import { UNIT_SPECS, VISION_CHUNKS, type UnitType } from '../sim/config/military';
+import { OCCUPY_SECONDS, UNIT_SPECS, VISION_CHUNKS, type UnitType } from '../sim/config/military';
 import { unitPosition, type Unit } from '../sim/military/army';
 import type { ArmySystem } from '../sim/military/armySystem';
 import type { WarSession } from '../net/warSession';
@@ -40,6 +40,13 @@ export interface ContinentMapSource {
   war: WarSession | null;
   /** 동맹 연결(로그인했을 때만). */
   alliances?: AllianceSession | null;
+  /**
+   * 내가 아는 청크(개척한 땅·내 영토·부대가 가 본 곳·레이더 시야). 여기만 선명하게
+   * 보이고, 다른 도시는 이 안에 땅이 있거나 동맹·전쟁 상대일 때만 보인다.
+   */
+  known?: () => ReadonlySet<string>;
+  /** 관리자: 지도 전체와 모든 도시가 보인다. */
+  seeAll?: boolean;
   /** 다른 도시 영토를 새로 읽었을 때(자동 점령 막기). */
   onForeign?: (owned: Set<string>) => void;
 }
@@ -84,6 +91,15 @@ export class ContinentMap {
   private list: HTMLElement;
   private status: HTMLElement;
   private overview: HTMLImageElement | null = null;
+  /** 안 가 본 곳에 쓰는 흐린 지도(작게 줄였다 늘려서 흐리게 — 오래된 아이패드에서도 됨). */
+  private blurred: HTMLCanvasElement | null = null;
+  /** 부대가 화면에 그려진 자리(스냅숏 사이를 부드럽게 잇는다). */
+  private shown = new Map<string, { x: number; y: number }>();
+  private lastFrameAt = 0;
+  /** 이번 프레임에 움직이는 것(부대 이동·전투·효과)이 있었는가. */
+  private animating = false;
+  /** 아직 못 찾은 도시 수(목록 아래 안내). */
+  private hiddenCount = 0;
   private cities: PublicCity[] = [];
   private scale = 1;
   private fitScale = 1;
@@ -278,7 +294,8 @@ export class ContinentMap {
         this.renderList();
       }
       this.draw();
-      this.frame = window.setTimeout(() => requestAnimationFrame(loop), 120);
+      // 움직이는 것이 있으면 부드럽게(약 30fps), 없으면 아껴서(8fps).
+      this.frame = window.setTimeout(() => requestAnimationFrame(loop), this.animating ? 16 : 120);
     };
     loop();
     await this.refresh();
@@ -583,7 +600,9 @@ export class ContinentMap {
       this.status.textContent = '다른 도시를 불러오는 중…';
       try {
         const others = (await this.source.load()).filter((c) => c.uid !== mine.uid);
-        this.cities = [mine, ...others];
+        const found = others.filter((c) => this.discovered(c));
+        this.hiddenCount = others.length - found.length;
+        this.cities = [mine, ...found];
         // 평시에는 남의 영토로 부대를 보낼 수 없다.
         const foreign = new Set<string>();
         for (const c of others) for (const k of c.owned) foreign.add(k);
@@ -592,7 +611,8 @@ export class ContinentMap {
         const online = this.cities.filter((c) => c.online).length;
         const clock = sharedClockOffset();
         this.status.textContent =
-          `도시 ${this.cities.length}곳 · 접속 중 ${online}곳` +
+          `찾은 도시 ${this.cities.length}곳 · 접속 중 ${online}곳` +
+          (this.hiddenCount ? ` · 아직 못 찾은 도시가 있습니다(부대로 탐사)` : '') +
           (clock.synced ? ` · 서버 시각 ${new Date(sharedNow()).toLocaleTimeString('ko-KR')}` : '');
       } catch (err) {
         console.warn('다른 도시를 읽지 못했습니다', err);
@@ -602,6 +622,54 @@ export class ContinentMap {
     }
     this.renderList();
     this.draw();
+  }
+
+  /** 내가 아는 청크(관리자는 null = 전부). */
+  private knownSet(): ReadonlySet<string> | null {
+    if (this.source.seeAll) return null;
+    return this.source.known?.() ?? null;
+  }
+
+  /** 이 도시를 찾았는가: 아는 땅에 영토가 있거나, 동맹(신청 포함)·전쟁 상대. */
+  private discovered(c: PublicCity): boolean {
+    if (c.uid === this.source.mine().uid || this.source.seeAll) return true;
+    if (this.source.alliances?.openWith(c.uid)) return true;
+    const w = this.source.war?.current();
+    if (w?.parties.includes(c.uid)) return true;
+    const known = this.knownSet();
+    if (!known) return true;
+    return c.owned.some((k) => known.has(k));
+  }
+
+  /** 흐린 지도를 한 번 만든다. */
+  private makeBlurred(): void {
+    const img = this.overview;
+    if (!img || this.blurred) return;
+    const w = img.naturalWidth || img.width;
+    const h = img.naturalHeight || img.height;
+    const small = document.createElement('canvas');
+    small.width = Math.max(1, Math.round(w / 10));
+    small.height = Math.max(1, Math.round(h / 10));
+    const sctx = small.getContext('2d')!;
+    sctx.imageSmoothingEnabled = true;
+    sctx.drawImage(img, 0, 0, small.width, small.height);
+    const out = document.createElement('canvas');
+    out.width = w;
+    out.height = h;
+    const octx = out.getContext('2d')!;
+    octx.imageSmoothingEnabled = true;
+    octx.imageSmoothingQuality = 'high';
+    octx.drawImage(small, 0, 0, w, h);
+    // 색을 죽이고 어둡게: 지형 윤곽만 어렴풋이.
+    octx.globalCompositeOperation = 'saturation';
+    octx.fillStyle = 'hsl(0, 0%, 50%)';
+    octx.globalAlpha = 0.7;
+    octx.fillRect(0, 0, w, h);
+    octx.globalCompositeOperation = 'source-over';
+    octx.globalAlpha = 1;
+    octx.fillStyle = 'rgba(12, 20, 26, 0.55)';
+    octx.fillRect(0, 0, w, h);
+    this.blurred = out;
   }
 
   private renderList(): void {
@@ -647,7 +715,12 @@ export class ContinentMap {
 
   /** 도시가 화면 가운데 오게, 적당히 확대해서. */
   private focus(c: PublicCity): void {
-    const { cx, cy } = parseChunkKey(c.capital);
+    const known = this.knownSet();
+    const anchor =
+      !known || c.uid === this.source.mine().uid || known.has(c.capital)
+        ? c.capital
+        : (c.owned.find((k) => known.has(k)) ?? this.source.mine().capital);
+    const { cx, cy } = parseChunkKey(anchor);
     const w = this.canvas.clientWidth || 640;
     const h = this.canvas.clientHeight || 448;
     this.scale = Math.max(this.fitScale, 3);
@@ -686,15 +759,42 @@ export class ContinentMap {
     const s = this.scale * PX_PER_CHUNK;
     const mw = CONTINENT_W * s;
     const mh = CONTINENT_H * s;
-    if (this.overview) {
-      ctx.imageSmoothingEnabled = this.scale < 1.5;
-      ctx.drawImage(this.overview, this.ox, this.oy, mw, mh);
-    }
     const X = (cx: number) => this.ox + (cx - CONTINENT_X0) * s;
     const Y = (cy: number) => this.oy + (cy - CONTINENT_Y0) * s;
+    const known = this.knownSet();
+    if (this.overview) {
+      if (known) {
+        // 안 가 본 곳은 흐리게, 아는 곳만 선명하게.
+        this.makeBlurred();
+        ctx.imageSmoothingEnabled = true;
+        if (this.blurred) ctx.drawImage(this.blurred, this.ox, this.oy, mw, mh);
+        ctx.save();
+        ctx.beginPath();
+        for (const k of known) {
+          const { cx, cy } = parseChunkKey(k);
+          ctx.rect(X(cx) - 0.25, Y(cy) - 0.25, s + 0.5, s + 0.5);
+        }
+        ctx.clip();
+        ctx.imageSmoothingEnabled = this.scale < 1.5;
+        ctx.drawImage(this.overview, this.ox, this.oy, mw, mh);
+        ctx.restore();
+      } else {
+        ctx.imageSmoothingEnabled = this.scale < 1.5;
+        ctx.drawImage(this.overview, this.ox, this.oy, mw, mh);
+      }
+    }
     const mineUid = this.source.mine().uid;
     for (const c of this.cities) {
-      const owned = new Set(c.owned);
+      // 다른 도시는 내가 아는 땅에 걸친 부분만 보인다.
+      // 동맹(맺은 것)과 지금 같은 전쟁의 도시는 영토 전체를 안다.
+      const full =
+        !known ||
+        c.uid === mineUid ||
+        !!this.source.alliances?.isAllied(c.uid) ||
+        !!this.source.war?.current()?.parties.includes(c.uid);
+      const owned = new Set(full ? c.owned : c.owned.filter((k) => known.has(k)));
+      if (!owned.size) continue;
+      const capKnown = full || owned.has(c.capital);
       ctx.fillStyle = cityColor(c.cityIndex, c.uid === mineUid ? 0.55 : 0.45);
       ctx.beginPath();
       for (const key of owned) {
@@ -716,14 +816,16 @@ export class ContinentMap {
         if (!owned.has(`${cx - 1},${cy}`)) (ctx.moveTo(x0, y0), ctx.lineTo(x0, y0 + s));
       }
       ctx.stroke();
-      const cap = parseChunkKey(c.capital);
-      const span = [2, 4, 6][c.capitalLevel - 1];
-      ctx.strokeStyle = '#1b1408';
-      ctx.lineWidth = 3;
-      ctx.strokeRect(X(cap.cx), Y(cap.cy), span * s, span * s);
-      ctx.strokeStyle = '#f2cf7a';
-      ctx.lineWidth = 1.5;
-      ctx.strokeRect(X(cap.cx), Y(cap.cy), span * s, span * s);
+      const cap = parseChunkKey(capKnown ? c.capital : [...owned][0]);
+      const span = capKnown ? [2, 4, 6][c.capitalLevel - 1] : 1;
+      if (capKnown) {
+        ctx.strokeStyle = '#1b1408';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(X(cap.cx), Y(cap.cy), span * s, span * s);
+        ctx.strokeStyle = '#f2cf7a';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(X(cap.cx), Y(cap.cy), span * s, span * s);
+      }
       // 이름표
       if (s >= 3 || c.uid === this.selected) {
         const label = `${c.cityName} Lv.${c.cityLevel}`;
@@ -765,10 +867,66 @@ export class ContinentMap {
       }
     }
     const r = Math.max(7, Math.min(14, s * 0.45));
+    const now = performance.now();
+    const dt = Math.min(0.2, (now - (this.lastFrameAt || now)) / 1000);
+    this.lastFrameAt = now;
+    const pulse = (Math.sin(now / 160) + 1) / 2;
+    let moving = false;
+    const seen = new Set<string>();
+    /** 그릴 자리: 목표(계산된 위치) 쪽으로 미끄러지듯. 3청크 넘게 튀면 바로 옮긴다. */
+    const place = (u: Unit, mine: boolean): { x: number; y: number } => {
+      const target = unitPosition(u);
+      const id = `${mine ? 'm' : 'e'}${u.id}`;
+      seen.add(id);
+      const cur = this.shown.get(id);
+      if (!cur || Math.hypot(cur.x - target.x, cur.y - target.y) > 3) {
+        this.shown.set(id, { ...target });
+        return target;
+      }
+      const k = Math.min(1, dt * 6);
+      cur.x += (target.x - cur.x) * k;
+      cur.y += (target.y - cur.y) * k;
+      if (Math.hypot(cur.x - target.x, cur.y - target.y) > 0.01) moving = true;
+      return cur;
+    };
     const drawUnit = (u: Unit, mine: boolean) => {
-      const p = unitPosition(u);
+      const p = place(u, mine);
+      if (u.state === 'moving' || u.state === 'retreating' || u.state === 'fighting') moving = true;
       const x = X(p.x - 0.5) + s / 2;
       const y = Y(p.y - 0.5) + s / 2;
+      // 전투 중: 붉은 고리가 맥박치고 불꽃이 튄다.
+      if (u.state === 'fighting') {
+        ctx.strokeStyle = `rgba(255, 96, 64, ${0.35 + pulse * 0.5})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(x, y, r * (1.3 + pulse * 0.35), 0, Math.PI * 2);
+        ctx.stroke();
+        const a = (now / 90 + u.id.length) % (Math.PI * 2);
+        ctx.fillStyle = '#ffd36b';
+        ctx.fillRect(x + Math.cos(a) * r * 1.2 - 1.5, y + Math.sin(a) * r * 1.2 - 1.5, 3, 3);
+      }
+      // 후퇴: 흐릿하게 깜빡인다.
+      ctx.globalAlpha = u.state === 'retreating' ? 0.55 + pulse * 0.35 : 1;
+      if (mine && u.state === 'training' && u.readyAt) {
+        // 훈련 진행 고리
+        const total = UNIT_SPECS[u.type].buildSec * 1000;
+        const f = Math.max(0, Math.min(1, 1 - (u.readyAt - Date.now()) / total));
+        ctx.strokeStyle = '#9fb3bd';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(x, y, r * 1.35, -Math.PI / 2, -Math.PI / 2 + f * Math.PI * 2);
+        ctx.stroke();
+      }
+      if (mine && u.occupyAt !== undefined) {
+        // 점령 진행 고리(60초)
+        const f = Math.max(0, Math.min(1, (Date.now() - u.occupyAt) / (OCCUPY_SECONDS * 1000)));
+        ctx.strokeStyle = '#6fd3b8';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(x, y, r * 1.45, -Math.PI / 2, -Math.PI / 2 + f * Math.PI * 2);
+        ctx.stroke();
+        moving = true;
+      }
       if (mine && u.id === this.selectedUnit && u.path.length) {
         ctx.strokeStyle = '#f2cf7a';
         ctx.setLineDash([4, 3]);
@@ -805,6 +963,7 @@ export class ContinentMap {
         ctx.fillText(`${Math.round(u.men)}`, x, y + r * 0.75 + 12);
       }
       ctx.textBaseline = 'alphabetic';
+      ctx.globalAlpha = 1;
     };
     for (const u of army.units) drawUnit(u, true);
     if (war) {
@@ -826,6 +985,108 @@ export class ContinentMap {
       };
       for (const e of war.enemy.units) if (e.state !== 'training' && seeing(e)) drawUnit(e, false);
     }
+    for (const id of [...this.shown.keys()]) if (!seen.has(id)) this.shown.delete(id);
+    const fx = this.drawEffects(X, Y, s, now);
+    this.animating = moving || fx;
+  }
+
+  /** 미사일·폭발·요격·점령·교전 효과. 그린 게 있으면 true. */
+  private drawEffects(
+    X: (cx: number) => number,
+    Y: (cy: number) => number,
+    s: number,
+    now: number,
+  ): boolean {
+    const ctx = this.ctx;
+    const list = this.source.army.effects.filter((e) => now - e.at < 3000);
+    const center = (key: string) => {
+      const { cx, cy } = parseChunkKey(key);
+      return { x: X(cx) + s / 2, y: Y(cy) + s / 2 };
+    };
+    for (const e of list) {
+      const t = (now - e.at) / 1000;
+      const c = center(e.key);
+      if (e.kind === 'missile' && e.from) {
+        // 1.2초 동안 포물선으로 날아가 터진다.
+        const a = center(e.from);
+        const f = Math.min(1, t / 1.2);
+        const lift = Math.hypot(c.x - a.x, c.y - a.y) * 0.35;
+        const px = a.x + (c.x - a.x) * f;
+        const py = a.y + (c.y - a.y) * f - Math.sin(f * Math.PI) * lift;
+        if (f < 1) {
+          ctx.strokeStyle = 'rgba(255, 220, 160, 0.6)';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          for (let i = 0; i <= 12; i++) {
+            const g = (f * i) / 12;
+            const x = a.x + (c.x - a.x) * g;
+            const y = a.y + (c.y - a.y) * g - Math.sin(g * Math.PI) * lift;
+            if (i) ctx.lineTo(x, y);
+            else ctx.moveTo(x, y);
+          }
+          ctx.stroke();
+          ctx.fillStyle = '#fff3c4';
+          ctx.beginPath();
+          ctx.arc(px, py, 3.5, 0, Math.PI * 2);
+          ctx.fill();
+        } else this.boom(c.x, c.y, s, t - 1.2);
+      } else if (e.kind === 'boom' || e.kind === 'bomb') this.boom(c.x, c.y, s, t);
+      else if (e.kind === 'intercept') {
+        // 공중에서 막힘: 하얀 섬광 + 방패 고리
+        const f = Math.min(1, t / 0.8);
+        ctx.strokeStyle = `rgba(150, 210, 255, ${1 - f})`;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(c.x, c.y - s * 0.6, s * (0.3 + f), 0, Math.PI * 2);
+        ctx.stroke();
+      } else if (e.kind === 'occupy') {
+        // 깃발이 올라간다
+        const f = Math.min(1, t / 0.6);
+        ctx.globalAlpha = Math.min(1, (3 - t) / 0.6);
+        ctx.strokeStyle = '#1b1408';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(c.x, c.y + s * 0.3);
+        ctx.lineTo(c.x, c.y - s * 0.5 * f);
+        ctx.stroke();
+        ctx.fillStyle = '#6fd3b8';
+        ctx.fillRect(c.x, c.y - s * 0.5 * f, s * 0.35, s * 0.22);
+        ctx.globalAlpha = 1;
+      } else if (e.kind === 'clash') {
+        const f = Math.min(1, t / 0.7);
+        ctx.strokeStyle = `rgba(255, 210, 120, ${1 - f})`;
+        ctx.lineWidth = 2;
+        for (let i = 0; i < 6; i++) {
+          const a = (i / 6) * Math.PI * 2;
+          ctx.beginPath();
+          ctx.moveTo(c.x + Math.cos(a) * s * 0.2 * f, c.y + Math.sin(a) * s * 0.2 * f);
+          ctx.lineTo(c.x + Math.cos(a) * s * 0.6 * f, c.y + Math.sin(a) * s * 0.6 * f);
+          ctx.stroke();
+        }
+      }
+    }
+    return list.length > 0;
+  }
+
+  /** 폭발: 섬광 → 불덩이 → 연기 고리. t = 터진 뒤 초. */
+  private boom(x: number, y: number, s: number, t: number): void {
+    if (t < 0 || t > 1.8) return;
+    const ctx = this.ctx;
+    const R = Math.max(8, s * 0.9);
+    const f = t / 1.8;
+    ctx.fillStyle = `rgba(255, 240, 200, ${Math.max(0, 0.9 - t * 4)})`;
+    ctx.beginPath();
+    ctx.arc(x, y, R * (0.4 + t * 2), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = `rgba(255, 120, 40, ${Math.max(0, 0.8 - f)})`;
+    ctx.beginPath();
+    ctx.arc(x, y, R * (0.3 + f * 0.7), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = `rgba(60, 60, 60, ${Math.max(0, 0.6 - f * 0.6)})`;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(x, y, R * (0.5 + f * 1.2), 0, Math.PI * 2);
+    ctx.stroke();
   }
 
   /** 화면 좌표 근처의 내 부대. */

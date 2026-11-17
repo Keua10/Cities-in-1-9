@@ -237,14 +237,13 @@ class StartPicker {
     if (this.pending.length) this.raf = requestAnimationFrame(this.pumpSpacing);
   };
 
-  /** 칸마다 초록(고를 수 있는 자리에 속함) / 어두움(막힌 자리에만 속함). */
+  /** 칸마다 초록(지형상 고를 수 있는 자리에 속함). 다른 도시 자리는 칠하지 않는다. */
   private paintOverlay(): void {
     const ctx = this.overlay.getContext('2d')!;
     const img = ctx.createImageData(CONTINENT_W, CONTINENT_H);
     for (let y = 0; y < CONTINENT_H; y++) {
       for (let x = 0; x < CONTINENT_W; x++) {
         let ok = false;
-        let blocked = false;
         for (let dy = 1 - SPAN; dy <= 0; dy++)
           for (let dx = 1 - SPAN; dx <= 0; dx++) {
             const ox = x + dx;
@@ -252,12 +251,11 @@ class StartPicker {
             if (ox < 0 || oy < 0 || ox >= ORIGINS_W || oy >= ORIGINS_H) continue;
             const i = oy * ORIGINS_W + ox;
             if (!this.terrainOk[i]) continue;
-            if (this.spacing[i] === Spacing.Ok) ok = true;
-            else if (this.spacing[i] === Spacing.Blocked) blocked = true;
+            // 다른 도시 자리는 보여 주지 않는다(서로 위치를 모른다). 고를 때만 막는다.
+            ok = true;
           }
         const p = (y * CONTINENT_W + x) * 4;
         if (ok) img.data.set([70, 214, 150, 78], p);
-        else if (blocked) img.data.set([6, 10, 13, 170], p);
       }
     }
     ctx.putImageData(img, 0, 0);
@@ -276,7 +274,7 @@ class StartPicker {
         const iy = o.cy - CONTINENT_Y0;
         if (ix < 0 || iy < 0 || ix >= ORIGINS_W || iy >= ORIGINS_H) continue;
         const i = this.idx(o);
-        const rank = !this.terrainOk[i] ? 2 : this.spacing[i] === Spacing.Blocked ? 1 : 0;
+        const rank = !this.terrainOk[i] ? 2 : 0;
         const dist = Math.hypot(o.cx + HALF - fx, o.cy + HALF - fy);
         const score = rank * 100 + dist;
         if (score < bestScore) {

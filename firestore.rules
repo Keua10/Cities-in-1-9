@@ -20,6 +20,25 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    // 관리자(선생님) 구글 계정. 공개 저장소에 주소를 적지 않으려고 이메일(소문자)의
+    // SHA-256 으로 비교한다. 구글이 확인한 이메일만 인정한다.
+    function isAdmin() {
+      return signedIn()
+             && request.auth.token.email_verified == true
+             && hashing.sha256(request.auth.token.email.lower()).toHexString().lower()
+                == 'dd324353f3c2d4b7b6c74c3dab4b5f2da09440e4629be626bafff53acd106886';
+    }
+
+    // 게임 전체 설정(선전포고 허용, 공지). 모두 읽고 관리자만 쓴다.
+    match /meta/settings {
+      allow read: if signedIn();
+      allow write: if isAdmin()
+                   && request.resource.data.keys().hasOnly(['warsEnabled', 'notice', 'noticeAt'])
+                   && request.resource.data.warsEnabled is bool
+                   && request.resource.data.notice is string
+                   && request.resource.data.notice.size() <= 120;
+    }
+
     // 도시 번호 발급기. 문서 하나에 nextIndex 하나만 들어 있다.
     // 아무나 쓸 수 있지만 "정확히 1 증가" 외의 값은 거부한다.
     match /meta/registry {
@@ -37,6 +56,7 @@ service cloud.firestore {
     // 지도 판마다 문서가 따로 있다: bases(v2), bases_v3(청크 32칸) ...
     match /meta/{basesId} {
       allow read: if signedIn() && basesId.matches('bases(_v[0-9]+)?');
+      // (meta/settings 는 위에서 따로 다룬다 — 이 규칙의 basesId 검사에 걸리지 않는다)
       allow create: if signedIn()
                     && basesId.matches('bases(_v[0-9]+)?')
                     && request.resource.data.keys().hasOnly(['origins'])
@@ -103,17 +123,19 @@ service cloud.firestore {
                     && request.resource.data.parties == [request.resource.data.a, request.resource.data.b]
                     && request.resource.data.a != request.resource.data.b;
       // 참가국은 상태를 고친다. 대규모 전쟁에는 다른 도시가 자기 uid 만 덧붙여 참가할 수 있다.
-      allow update: if signedIn()
-                    && request.resource.data.a == resource.data.a
-                    && request.resource.data.b == resource.data.b
-                    && ((request.auth.uid in resource.data.parties
-                         && request.resource.data.parties == resource.data.parties)
-                        || (!(request.auth.uid in resource.data.parties)
-                            && resource.data.kind == 'large'
-                            && resource.data.state != 'ended'
-                            && request.resource.data.state == resource.data.state
-                            && request.resource.data.parties
-                               == resource.data.parties.concat([request.auth.uid])));
+      // 관리자는 아무 전쟁이나 끝낼 수 있다(강제 휴전).
+      allow update: if isAdmin()
+                    || (signedIn()
+                        && request.resource.data.a == resource.data.a
+                        && request.resource.data.b == resource.data.b
+                        && ((request.auth.uid in resource.data.parties
+                             && request.resource.data.parties == resource.data.parties)
+                            || (!(request.auth.uid in resource.data.parties)
+                                && resource.data.kind == 'large'
+                                && resource.data.state != 'ended'
+                                && request.resource.data.state == resource.data.state
+                                && request.resource.data.parties
+                                   == resource.data.parties.concat([request.auth.uid]))));
       allow delete: if false;
       // 한쪽의 전장 스냅숏. 자기 것만 쓴다.
       match /sides/{uid} {
@@ -134,11 +156,12 @@ service cloud.firestore {
                     && request.resource.data.state == 'pending'
                     && request.resource.data.deposit is number
                     && request.resource.data.deposit >= 0;
-      allow update: if signedIn()
-                    && request.auth.uid in resource.data.parties
-                    && request.resource.data.parties == resource.data.parties
-                    && request.resource.data.from == resource.data.from
-                    && request.resource.data.deposit == resource.data.deposit;
+      allow update: if isAdmin()
+                    || (signedIn()
+                        && request.auth.uid in resource.data.parties
+                        && request.resource.data.parties == resource.data.parties
+                        && request.resource.data.from == resource.data.from
+                        && request.resource.data.deposit == resource.data.deposit);
       allow delete: if false;
     }
 
@@ -161,6 +184,10 @@ service cloud.firestore {
                             && request.resource.data.mapVersion is int
                             && request.resource.data.mapVersion
                                  > resource.data.get('mapVersion', 0)));
+
+      // 관리자는 지시(adminOrder: 자금 지급·초기화)만 남길 수 있다. 실행은 그 도시 기기가 한다.
+      allow update: if isAdmin()
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['adminOrder']);
 
       allow delete: if false;
 

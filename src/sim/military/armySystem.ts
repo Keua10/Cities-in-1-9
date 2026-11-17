@@ -21,6 +21,7 @@ import {
   MISSILE_UNIT_LOSS,
   MUNITIONS_SPEEDUP,
   RADAR_VISION_CHUNKS,
+  VISION_CHUNKS,
   COMM_TOWER_VISION,
   HOSPITAL_RANGE_CHUNKS,
   UNIT_SPECS,
@@ -103,6 +104,35 @@ export class ArmySystem {
   ) {
     this.army = normalizeArmy(macro.army);
     macro.army = this.army;
+    this.scoutSet = new Set(Array.isArray(macro.scouted) ? macro.scouted : []);
+  }
+
+  private scoutSet: Set<string>;
+  /** 가 본 곳이 늘 때마다 1 씩(대륙 지도가 다시 그릴지 본다). */
+  scoutRevision = 0;
+
+  /** 부대가 가 본 청크(시야 2청크). 대륙 지도에서 선명하게 보이고 다른 도시를 찾는다. */
+  scouted(): ReadonlySet<string> {
+    return this.scoutSet;
+  }
+
+  /** 부대 둘레(시야)를 가 본 곳에 더한다. */
+  private scout(): void {
+    let added = 0;
+    for (const u of this.army.units) {
+      if (u.state === 'training' || UNIT_SPECS[u.type].domain === 'strike') continue;
+      for (let dy = -VISION_CHUNKS; dy <= VISION_CHUNKS; dy++)
+        for (let dx = -VISION_CHUNKS; dx <= VISION_CHUNKS; dx++) {
+          const k = chunkKey(u.cx + dx, u.cy + dy);
+          if (this.scoutSet.has(k)) continue;
+          this.scoutSet.add(k);
+          added++;
+        }
+    }
+    if (!added) return;
+    this.macro.scouted = [...this.scoutSet];
+    this.scoutRevision++;
+    this.changed();
   }
 
   get units(): readonly Unit[] {
@@ -291,6 +321,7 @@ export class ArmySystem {
       if (struck.length) this.emit(struck);
       return struck;
     }
+    this.scout();
     // 오래 비웠다 돌아오면 한 번에 최대 10분만 진행한다(이동·훈련).
     const span = Math.min(dt, 10 * 60_000);
     const events: BattleEvent[] = [];
@@ -303,7 +334,26 @@ export class ArmySystem {
     return events;
   }
 
+  /** 대륙 지도 애니메이션용 최근 효과(3초). 화면만 쓰고 저장하지 않는다. */
+  effects: MapEffect[] = [];
+
   private emit(events: BattleEvent[]): void {
+    const at = performance.now();
+    this.effects = this.effects.filter((e) => at - e.at < 3000);
+    for (const e of events) {
+      if (e.type === 'strike')
+        this.effects.push({
+          kind: e.kind === 'missile' ? 'missile' : 'bomb',
+          key: e.key,
+          from: e.from,
+          at,
+        });
+      else if (e.type === 'struck')
+        this.effects.push({ kind: e.intercepted ? 'intercept' : 'boom', key: e.key, at });
+      else if (e.type === 'occupied') this.effects.push({ kind: 'occupy', key: e.key, at });
+      else if (e.type === 'engaged') this.effects.push({ kind: 'clash', key: e.key, at });
+    }
+    if (this.effects.length > 40) this.effects.splice(0, this.effects.length - 40);
     for (const e of events) this.onEvent?.(e);
     this.war?.onEvents?.(events);
     this.bump();
@@ -332,7 +382,7 @@ export class ArmySystem {
       power: UNIT_SPECS.missile.attack,
     });
     this.army.units = this.army.units.filter((x) => x !== u);
-    this.emit([{ type: 'strike', key, kind: 'missile' }]);
+    this.emit([{ type: 'strike', key, kind: 'missile', from: chunkKey(u.cx, u.cy) }]);
     return '';
   }
 
@@ -434,6 +484,15 @@ export class ArmySystem {
     this.revision++;
     this.changed();
   }
+}
+
+/** 대륙 지도에 잠깐 그리는 효과. at = performance.now(). */
+export interface MapEffect {
+  kind: 'missile' | 'bomb' | 'boom' | 'intercept' | 'occupy' | 'clash';
+  key: string;
+  /** 미사일이 날아오른 청크. */
+  from?: string;
+  at: number;
 }
 
 /** 민간 시설 kind: 경찰서 1, 병원 2, 통신탑 17. */

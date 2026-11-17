@@ -25,6 +25,7 @@ const DURATION: Record<StructureEvent['kind'], number> = {
   build: 420,
   grow: 900,
   demolish: 620,
+  explode: 2600,
 };
 
 /** 한 번에 살아 있는 효과의 최대 수. 도시가 한꺼번에 자랄 때 화면이 죽지 않게. */
@@ -63,6 +64,7 @@ export class EffectLayer {
       const y = tileToWorldY(e.tx + mid, e.ty + mid, world.sampleHeight(e.tx, e.ty));
       if (e.kind === 'build') ring(g, x, y, e.span, t);
       else if (e.kind === 'grow') rise(g, x, y, e.span, t);
+      else if (e.kind === 'explode') explode(g, x, y, e.span, t);
       else dust(g, x, y, e.span, t);
     }
     this.effects = alive;
@@ -130,4 +132,31 @@ function dust(g: Graphics, x: number, y: number, span: number, t: number): void 
     g.circle(px, py, 3 + span + t * 3);
   }
   g.fill({ color: 0xcfc4b2, alpha: (1 - t) * 0.55 });
+}
+
+/** 폭격·미사일: 섬광 → 불덩이 → 검은 연기 기둥이 피어오른다. */
+function explode(g: Graphics, x: number, y: number, span: number, t: number): void {
+  const R = TILE_HW * span;
+  if (t < 0.12) {
+    g.circle(x, y - TILE_HH * span, R * (0.4 + t * 6));
+    g.fill({ color: 0xfff4d0, alpha: 0.9 - t * 6 });
+  }
+  if (t < 0.45) {
+    const f = t / 0.45;
+    g.circle(x, y - TILE_HH * span * (0.6 + f), R * (0.35 + f * 0.5));
+    g.fill({ color: 0xff7a2a, alpha: 0.75 * (1 - f) });
+    g.circle(x, y - TILE_HH * span * (0.6 + f), R * (0.2 + f * 0.3));
+    g.fill({ color: 0xffd36b, alpha: 0.8 * (1 - f) });
+  }
+  // 연기: 위로 올라가며 퍼지고 옅어지는 덩어리 여섯
+  for (let i = 0; i < 6; i++) {
+    const k = (t + i * 0.07) % 1;
+    const px = x + Math.sin(i * 1.7 + t * 3) * R * 0.25 * (1 + k);
+    const py = y - TILE_HH * span * (0.8 + k * 4);
+    g.circle(px, py, R * (0.18 + k * 0.4));
+  }
+  g.fill({ color: 0x2b2a2a, alpha: 0.45 * (1 - t) });
+  // 바닥 그을음
+  g.poly([x, y - TILE_HH * span, x + R, y, x, y + TILE_HH * span, x - R, y]);
+  g.fill({ color: 0x1a1512, alpha: 0.35 * (1 - t * 0.5) });
 }

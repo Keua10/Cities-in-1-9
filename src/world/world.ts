@@ -114,7 +114,8 @@ export interface Chunk {
  *   demolish  헐렸다
  */
 export interface StructureEvent {
-  kind: 'build' | 'grow' | 'demolish';
+  /** explode = 폭격·미사일로 부서짐(군사). */
+  kind: 'build' | 'grow' | 'demolish' | 'explode';
   tx: number;
   ty: number;
   span: number;

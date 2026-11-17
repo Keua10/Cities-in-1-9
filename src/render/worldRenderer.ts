@@ -163,7 +163,8 @@ export class WorldRenderer {
   private placementKey = '';
   private facilityFocus: { tx: number; ty: number; span: number } | null = null;
 
-  showFog = true;
+  /** 안개는 늘 켜져 있다(끄면 다른 도시가 다 보여서 없앴다). */
+  readonly showFog = true;
   showGrid = false;
 
   stats: RenderStats = {

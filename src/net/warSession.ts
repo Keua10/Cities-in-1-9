@@ -54,6 +54,7 @@ import {
 import { sharedNow } from '../sim/sharedClock';
 import { UNIT_SPECS } from '../sim/config/military';
 import type { AllianceSession } from './alliances';
+import { loadSettings } from './admin';
 import { getFirebase } from './firebase';
 import type { PublicCity } from './publicCities';
 
@@ -534,11 +535,13 @@ export class WarSession {
     if (!mine || !winner) {
       settled[w.id] = now;
       this.onNotice?.(
-        w.result === 'ceasefire'
-          ? w.agreedCeasefire
-            ? '휴전 협정 · 참가국 2/3 이상이 동의했습니다 · 배상 없음, 12시간 동안 다시 전쟁할 수 없습니다'
-            : '휴전 · 큰 전투 없이 1시간이 지났습니다 · 12시간 동안 다시 전쟁할 수 없습니다'
-          : '종전 협정 · 피해가 비슷해 배상 없이 끝났습니다',
+        w.adminEnded
+          ? '선생님이 전쟁을 멈췄습니다 · 배상 없음, 12시간 동안 다시 전쟁할 수 없습니다'
+          : w.result === 'ceasefire'
+            ? w.agreedCeasefire
+              ? '휴전 협정 · 참가국 2/3 이상이 동의했습니다 · 배상 없음, 12시간 동안 다시 전쟁할 수 없습니다'
+              : '휴전 · 큰 전투 없이 1시간이 지났습니다 · 12시간 동안 다시 전쟁할 수 없습니다'
+            : '종전 협정 · 피해가 비슷해 배상 없이 끝났습니다',
       );
       this.done();
       return;
@@ -724,6 +727,7 @@ export class WarSession {
       wars: this.wars,
     });
     if (why) return why;
+    if (!(await loadSettings()).warsEnabled) return '지금은 선생님이 선전포고를 막아 두었습니다';
     if (surprise) {
       const s = surpriseBlock({
         now,

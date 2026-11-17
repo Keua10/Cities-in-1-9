@@ -51,3 +51,31 @@
   margin-top: 20px;
   border: 1px solid #7594a2;
 }
+
+#admin-panel {
+  width: min(460px, calc(100vw - 32px));
+}
+.admin-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  padding: 6px 0;
+  border-bottom: 1px solid #ffffff1a;
+}
+.admin-row span {
+  flex: 1 1 200px;
+  font-size: 13px;
+}
+#admin-panel .admin-row button {
+  min-height: 36px;
+  padding: 6px 10px;
+}
+#admin-panel .admin-check {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+#admin-panel .admin-check input {
+  width: auto;
+}

@@ -11,6 +11,8 @@ interface ToolbarDeps {
   renderer: WorldRenderer;
   saver: AnySaveManager;
   loggedIn: boolean;
+  /** 관리자 구글 계정인가. */
+  isAdmin: boolean;
   getMoney: () => number;
   setMoney: (amount: number) => Promise<void>;
   /**
@@ -23,19 +25,13 @@ interface ToolbarDeps {
 
 export function bindToolbar(deps: ToolbarDeps): void {
   const { renderer } = deps;
-  const fogBtn = document.getElementById('btn-fog');
   const gridBtn = document.getElementById('btn-grid');
   const centerBtn = document.getElementById('btn-center');
   const saveBtn = document.getElementById('btn-save');
   const logoutBtn = document.getElementById('btn-logout');
 
-  fogBtn?.setAttribute('aria-pressed', String(renderer.showFog));
   gridBtn?.setAttribute('aria-pressed', String(renderer.showGrid));
 
-  fogBtn?.addEventListener('click', () => {
-    renderer.showFog = !renderer.showFog;
-    fogBtn.setAttribute('aria-pressed', String(renderer.showFog));
-  });
   gridBtn?.addEventListener('click', () => {
     renderer.showGrid = !renderer.showGrid;
     gridBtn.setAttribute('aria-pressed', String(renderer.showGrid));

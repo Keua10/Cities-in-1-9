@@ -372,97 +372,170 @@ body.clean-view #minimap-shell {
   }
 }
 
-/* ---------- 1단계: 로그인 화면 ---------- */
+/* ---------- 로그인 화면(첫 화면) ---------- */
 
 #login {
   position: fixed;
   inset: 0;
-  z-index: 20;
+  z-index: 40;
   display: grid;
   place-content: center;
   padding: 24px;
-  background: #0e1418;
+  overflow: hidden;
+  background: radial-gradient(120% 90% at 50% 110%, #1f4a3f 0%, #12262c 45%, #0b1216 100%);
+  transition: opacity 0.35s ease;
+}
+#login.leaving {
+  opacity: 0;
+  pointer-events: none;
+}
+#loading.behind-login {
+  opacity: 0;
+}
+.login-sky i {
+  position: absolute;
+  left: -30%;
+  width: 60%;
+  height: 40px;
+  border-radius: 40px;
+  background: rgba(255, 255, 255, 0.05);
+  filter: blur(6px);
+  animation: login-cloud 38s linear infinite;
+}
+.login-sky i:nth-child(1) {
+  top: 14%;
+}
+.login-sky i:nth-child(2) {
+  top: 32%;
+  animation-duration: 52s;
+  animation-delay: -20s;
+}
+.login-sky i:nth-child(3) {
+  top: 70%;
+  animation-duration: 46s;
+  animation-delay: -34s;
+}
+@keyframes login-cloud {
+  to {
+    transform: translateX(230%);
+  }
 }
 
 .login-card {
-  width: min(340px, 86vw);
-  padding: 24px 22px 20px;
+  position: relative;
+  width: min(360px, 88vw);
+  padding: 26px 22px 18px;
   border: 1px solid var(--edge);
-  border-radius: 16px;
-  background: rgba(20, 28, 33, 0.9);
+  border-radius: 18px;
+  background: rgba(16, 24, 28, 0.88);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+  text-align: center;
+  animation: login-in 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
-
+@keyframes login-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.98);
+  }
+}
+.login-logo {
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 5px;
+  height: 46px;
+  margin-bottom: 10px;
+}
+.login-logo span {
+  width: 12px;
+  border-radius: 3px 3px 0 0;
+  background: linear-gradient(#7fe0c2, #3aa58a);
+  transform-origin: bottom;
+  animation: login-grow 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.login-logo .b1 {
+  height: 22px;
+}
+.login-logo .b2 {
+  height: 40px;
+  animation-delay: 0.08s;
+}
+.login-logo .b3 {
+  height: 30px;
+  animation-delay: 0.16s;
+}
+.login-logo .b4 {
+  height: 46px;
+  animation-delay: 0.24s;
+  background: linear-gradient(#f3d27a, #d39b35);
+}
+@keyframes login-grow {
+  from {
+    transform: scaleY(0);
+  }
+}
 .login-card h1 {
-  margin: 0 0 6px;
-  font-size: 20px;
+  margin: 0 0 4px;
+  font-size: 22px;
   font-weight: 700;
   letter-spacing: -0.01em;
 }
-
-.login-msg {
-  margin: 0 0 18px;
-  color: var(--ink-dim);
-  font-size: 13px;
-}
-
-.login-field {
-  display: block;
-  margin-bottom: 12px;
-}
-
-.login-field span {
-  display: block;
-  margin-bottom: 5px;
+.login-sub {
+  margin: 0 0 16px;
   color: var(--ink-dim);
   font-size: 12px;
 }
-
-.login-field input {
-  width: 100%;
-  /* 16px 미만이면 아이패드 사파리가 입력할 때 화면을 확대해버린다 */
-  font-size: 16px;
-  min-height: 44px;
-  padding: 0 12px;
-  border: 1px solid var(--edge);
-  border-radius: 10px;
-  background: rgba(0, 0, 0, 0.28);
-  color: var(--ink);
-  font-family: inherit;
+.login-msg {
+  margin: 0 0 12px;
+  font-size: 14px;
 }
-
-.login-field input:focus {
-  outline: 2px solid var(--accent);
-  outline-offset: 0;
-}
-
 .login-error {
-  margin: 4px 0 0;
+  margin: 8px 0 0;
   min-height: 18px;
   color: #ff9d8a;
   font-size: 12px;
 }
-
+.login-foot {
+  margin: 6px 0 0;
+  color: var(--ink-dim);
+  font-size: 11px;
+}
 .login-actions {
   display: grid;
   gap: 8px;
-  margin-top: 12px;
 }
-
 .login-btn {
-  min-height: 46px;
+  min-height: 48px;
   border: 0;
-  border-radius: 10px;
+  border-radius: 12px;
   font: inherit;
   font-size: 15px;
   cursor: pointer;
+  transition:
+    transform 0.12s ease,
+    filter 0.12s ease;
 }
-
+.login-btn:active {
+  transform: scale(0.98);
+}
+.login-btn:disabled {
+  filter: grayscale(0.4) brightness(0.85);
+  cursor: progress;
+}
 .login-btn.primary {
   background: var(--accent);
   color: #06120f;
   font-weight: 600;
 }
-
+.login-btn.google {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: #fff;
+  color: #1f1f1f;
+  font-weight: 600;
+}
 .login-btn.ghost {
   background: transparent;
   color: var(--ink-dim);
@@ -1281,4 +1354,39 @@ body.clean-view #minimap-shell {
 }
 #war-banner[hidden] {
   display: none;
+}
+
+.city-name-input {
+  width: 100%;
+  min-height: 46px;
+  padding: 0 12px;
+  border: 1px solid var(--edge);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.28);
+  color: var(--ink);
+  font: inherit;
+  /* 16px 미만이면 아이패드 사파리가 확대한다 */
+  font-size: 16px;
+  text-align: center;
+}
+.city-name-input:focus {
+  outline: 2px solid var(--accent);
+}
+
+/* 전쟁 띠: 은은하게 숨 쉬듯 */
+#war-banner {
+  animation: war-breathe 2.4s ease-in-out infinite;
+}
+@keyframes war-breathe {
+  50% {
+    box-shadow: 0 0 0 3px rgba(226, 87, 76, 0.35);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  #war-banner,
+  .login-sky i,
+  .login-logo span,
+  .login-card {
+    animation: none;
+  }
 }

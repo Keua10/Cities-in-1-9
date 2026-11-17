@@ -58,6 +58,8 @@ export interface WarDoc {
   surrender?: { by: string; at: number; votes?: Record<string, boolean> };
   /** 휴전 제안. votes = 참가국별 찬성(true)·반대(false). 모든 진영 2/3 + 직접 참여국 둘 다 찬성이면 휴전. */
   ceasefireOffer?: { by: string; at: number; votes: Record<string, boolean> };
+  /** 관리자(선생님)가 강제로 끝낸 전쟁. */
+  adminEnded?: boolean;
   /** 휴전 제안이 받아들여져 끝났다(큰 전투 없이 1시간 휴전과 구분). */
   agreedCeasefire?: boolean;
   result?: WarResult;

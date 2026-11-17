@@ -159,7 +159,7 @@ export type BattleEvent =
   | { type: 'destroyed'; unit: string; why: 'encircled' | 'casualties' }
   | { type: 'engaged'; key: string }
   | { type: 'trained'; unit: string }
-  | { type: 'strike'; key: string; kind: 'bomb' | 'missile' }
+  | { type: 'strike'; key: string; kind: 'bomb' | 'missile'; from?: string }
   | {
       type: 'struck';
       key: string;
