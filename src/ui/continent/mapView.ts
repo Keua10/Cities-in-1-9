@@ -2,7 +2,8 @@ import { CONTINENT_H, CONTINENT_W, CONTINENT_X0, CONTINENT_Y0 } from '../../worl
 
 /** 배율 1 에서 청크 하나의 화면 크기(px). */
 export const PX_PER_CHUNK = 2;
-const MAX_SCALE = 16;
+/** 가장 크게 확대하면 청크 하나가 96px(타일 하나 3px) — 밝혀진 청크를 자세히 본다. */
+const MAX_SCALE = 48;
 
 /**
  * 대륙 지도의 시점(확대·이동). 청크 좌표 ↔ 화면 좌표 변환은 전부 여기서 한다.

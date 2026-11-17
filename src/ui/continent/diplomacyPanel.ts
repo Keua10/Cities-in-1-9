@@ -4,6 +4,7 @@ import { PASS_RULE_NAMES, passValid } from '../../sim/military/waters';
 import { formatMoney } from '../money';
 import type { ContinentMapSource } from '../continentMap';
 import type { MapSelection } from './shared';
+import { attachInfo } from '../infoCard';
 
 /**
  * 도시 칸의 외교: 받은 요청(동맹·통과 허가), 다른 도시들의 대규모 전쟁(진영 참가),
@@ -35,6 +36,10 @@ export class DiplomacyPanel {
     this.declareEl
       .querySelector('.cm-ally-go')!
       .addEventListener('click', () => void this.allyAction());
+    attachInfo(
+      this.declareEl.querySelector('.cm-ally')!,
+      '동맹 보증금은 양쪽이 같은 금액을 겁니다. 동맹을 깨고 선전포고하면 내 보증금이 상대에게 갑니다.',
+    );
     this.declareEl.querySelector('.cm-pass-go')!.addEventListener('click', async () => {
       const them = this.target();
       const ps = this.source.passes;
@@ -78,12 +83,12 @@ export class DiplomacyPanel {
     const go = allyEl.querySelector<HTMLButtonElement>('.cm-ally-go')!;
     allyEl.querySelector<HTMLSelectElement>('.cm-ally-deposit')!.hidden = !!open;
     if (!open) {
-      stateEl.textContent = '동맹 아님 · 보증금은 양쪽이 같은 금액을 겁니다(배신하면 상대에게)';
+      stateEl.textContent = '동맹 아님';
       go.textContent = '동맹 신청';
     } else if (open.state === 'active') {
       stateEl.textContent = `🤝 동맹${open.deposit ? ` · 보증금 각 ${formatMoney(open.deposit)}` : ''}`;
       go.textContent = '동맹 해제(보증금 돌려받음)';
-      warn.textContent = `⚠ 선전포고하면 배신입니다 — ${open.deposit ? `보증금 ${formatMoney(open.deposit)}이 상대에게 가고, ` : ''}${Math.round(BETRAYAL_LOCK_MS / 3_600_000)}시간 동안 새 동맹을 맺을 수 없습니다`;
+      warn.textContent = `⚠ 선전포고 = 배신 · ${open.deposit ? `보증금 ${formatMoney(open.deposit)} 상대에게 · ` : ''}${Math.round(BETRAYAL_LOCK_MS / 3_600_000)}시간 새 동맹 불가`;
     } else if (open.from === mine.uid) {
       stateEl.textContent = '동맹 신청을 보냈습니다 · 답을 기다리는 중';
       go.textContent = '신청 취소(보증금 돌려받음)';

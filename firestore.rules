@@ -135,6 +135,19 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // 도시 배치 요약(디자인 2차): 청크 키 → 64글자(0~6). 본인만 쓰고, 로그인하면 누구나 읽는다.
+    // 대륙 지도에서 밝혀진 청크를 크게 확대할 때 그 도시의 도로·구역을 그리는 데 쓴다.
+    match /plans/{uid} {
+      allow read: if signedIn();
+      allow write: if signedIn()
+                   && request.auth.uid == uid
+                   && request.resource.data.keys().hasOnly(['chunks', 'updatedAt'])
+                   && request.resource.data.chunks is map
+                   && request.resource.data.chunks.size() <= 3000
+                   && request.resource.data.updatedAt is number;
+      allow delete: if false;
+    }
+
     // 영해·영공 통과(피드백 1차). passes/{from}_{to}: from 이 신고·요청을 쓰고, to 만 허가·거절한다.
     match /passes/{passId} {
       allow read: if signedIn()

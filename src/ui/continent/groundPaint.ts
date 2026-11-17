@@ -77,6 +77,8 @@ export interface CityPaintOptions {
   known: ReadonlySet<string> | null;
   /** 지금 전쟁 상대면 영토 전체를 안다. */
   atWarWith: (uid: string) => boolean;
+  /** 자세히 보기 중: 영토 색을 옅게(아래 지형·배치가 보이게). */
+  faint?: boolean;
 }
 
 /** 이름표 하나(부대를 그린 뒤 따로 그린다). */
@@ -102,7 +104,7 @@ export function paintCities(
     const owned = new Set(full ? c.owned : c.owned.filter((k) => o.known!.has(k)));
     if (!owned.size) continue;
     const capKnown = full || owned.has(c.capital);
-    ctx.fillStyle = cityColor(c.cityIndex, c.uid === o.mineUid ? 0.55 : 0.45);
+    ctx.fillStyle = cityColor(c.cityIndex, o.faint ? 0.12 : c.uid === o.mineUid ? 0.55 : 0.45);
     ctx.beginPath();
     for (const key of owned) {
       const { cx, cy } = parseChunkKey(key);

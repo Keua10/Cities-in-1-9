@@ -1,5 +1,6 @@
 import { BUILD_LABELS } from '../world/build';
 import { TERRAIN_KEYS } from '../world/terrain';
+import { escapeHtml, renderCard, type InfoCard } from './infoCard';
 
 export interface HudData {
   fps: number;
@@ -23,15 +24,17 @@ export interface HudData {
   /** 배치가 거부됐을 때의 사유. 없으면 빈 문자열. */
   message: string;
   /* ---------- 3.1단계 ---------- */
-  /** 커서 칸에 서 있는 건물 설명. 없으면 null. */
+  /** 커서 칸에 서 있는 건물 한 줄 요약(진단용). 없으면 null. */
   building: string | null;
+  /** 커서 칸 건물·시설 정보 카드. 있으면 building 대신 이것을 보여 준다. */
+  card?: InfoCard | null;
   /** 화면에 그려지고 있는 건물 수. */
   visibleBuildings: number;
   /* ---------- 3.3단계 ---------- */
   /** 커서 칸의 필수 서비스 상태. 커서가 없으면 null. */
-  service: string | null;
+  service?: string | null;
   /** 커서 칸의 복지 상태. 점수와 계층별 요구량을 나란히 담는다. */
-  amenity: string | null;
+  amenity?: string | null;
   incident: string | null;
   /** 화면에 그려지고 있는 시설 수. */
   visibleFacilities: number;
@@ -57,6 +60,9 @@ export class Hud {
   private debug: HTMLElement;
   private message: HTMLElement;
   private lastPaint = 0;
+  private lastContext = '';
+  /** ⓘ 설명을 펼쳤는가(다시 그려도 유지). */
+  private helpOpen = false;
 
   constructor(selector = '#hud') {
     const el = document.querySelector<HTMLElement>(selector);
@@ -67,6 +73,14 @@ export class Hud {
     this.context = el.querySelector('.hud-context')!;
     this.debug = el.querySelector('.hud-debug')!;
     this.message = el.querySelector('.hud-message')!;
+    el.addEventListener?.('click', (ev) => {
+      const btn = (ev.target as HTMLElement).closest?.('.i-btn');
+      if (!btn) return;
+      this.helpOpen = !this.helpOpen;
+      btn.setAttribute('aria-expanded', String(this.helpOpen));
+      const pop = this.context.querySelector<HTMLElement>('.i-pop');
+      if (pop) pop.hidden = !this.helpOpen;
+    });
   }
 
   update(now: number, source: HudData | (() => HudData)): void {
@@ -83,28 +97,31 @@ export class Hud {
       data.build === null || data.build === undefined ? '—' : (BUILD_LABELS[data.build] ?? '빈 땅');
 
     this.summary.innerHTML = `<b>1–9 도시</b><span>${escapeHtml(data.weekday)}요일 · ${escapeHtml(data.season)} ${formatHour(data.daytimeHour)}</span><small>${escapeHtml(data.tool)} · 확대 ${Math.round(data.zoom * 100)}%</small>`;
-    const context = [];
-    if (data.building)
-      context.push(
-        `<b>${escapeHtml(data.building.split(' · ')[0])}</b>`,
-        escapeHtml(data.building.split(' · ').slice(1).join(' · ')),
-      );
+    const context: string[] = [];
+    const card: InfoCard | null =
+      data.card ??
+      (data.building
+        ? {
+            title: data.building.split(' · ')[0],
+            facts: data.building.split(' · ').slice(1).length
+              ? [data.building.split(' · ').slice(1).join(' · ')]
+              : [],
+          }
+        : null);
+    if (card) context.push(renderCard(card, this.helpOpen));
     else if (data.tile)
       context.push(
-        `<b>${escapeHtml(build)}</b>`,
-        `고도 ${data.height ?? '—'}${data.roadAccess === null ? '' : data.roadAccess ? ' · 도로 연결' : ' · 도로 미연결'}`,
+        `<div><b>${escapeHtml(build)}</b></div><div>고도 ${data.height ?? '—'}${data.roadAccess === null ? '' : data.roadAccess ? ' · 도로 연결' : ' · <span class="warn">도로 미연결</span>'}</div>`,
       );
-    else
-      context.push(
-        '<span class="hud-hint">건물을 가리키거나 선택하면 상태를 볼 수 있습니다.</span>',
-      );
-    if (data.service && data.building) context.push(escapeHtml(data.service));
-    if (data.amenity && data.building) context.push(escapeHtml(data.amenity));
-    if (data.incident) context.push(`<strong class="warn">${escapeHtml(data.incident)}</strong>`);
-    this.context.innerHTML = context
-      .filter(Boolean)
-      .map((s) => `<div>${s}</div>`)
-      .join('');
+    else context.push('<div class="hud-hint">건물을 누르면 상태가 보입니다.</div>');
+    if (data.incident)
+      context.push(`<div><strong class="warn">${escapeHtml(data.incident)}</strong></div>`);
+    const html = context.join('');
+    // 바뀌었을 때만 다시 쓴다(ⓘ 를 누르는 사이에 버튼이 바뀌지 않게).
+    if (html !== this.lastContext) {
+      this.lastContext = html;
+      this.context.innerHTML = html;
+    }
     this.message.textContent = data.message ?? '';
     const lines = [
       `${data.fps.toFixed(0)} fps · 확대 ${data.zoom.toFixed(2)}x`,
@@ -115,8 +132,6 @@ export class Hud {
       `고도 ${data.height === null ? '—' : data.height}`,
       `시설 ${build}${data.roadAccess === null ? '' : data.roadAccess ? '   도로 연결' : '   도로 미연결'}`,
       `건물 ${data.building ?? '—'}`,
-      `필수 ${data.service ?? '—'}`,
-      `복지 ${data.amenity ?? '—'}`,
       `사건 ${data.incident ?? '없음'}`,
       `화면 청크 ${data.visibleChunks}   메시 ${data.loadedMeshes}   필지 ${data.parcels}`,
       `화면 건물 ${data.visibleBuildings}   화면 시설 ${data.visibleFacilities}`,
@@ -127,13 +142,6 @@ export class Hud {
     if (data.placeholderArt) lines.push('그림: 임시 타일 사용 중');
     this.debug.textContent = lines.join('\n');
   }
-}
-
-function escapeHtml(value: unknown): string {
-  return String(value ?? '').replace(
-    /[&<>"']/g,
-    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!,
-  );
 }
 
 function formatHour(hour: number): string {

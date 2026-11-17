@@ -13,7 +13,11 @@ import { DAYTIME_DAY_MS, GAMETIME_DAY_MS } from '../sim/simConstants';
 import type { TrafficSim } from '../sim/traffic/trafficSim';
 import { Build, hasRoadAccess, isZone } from '../world/build';
 import type { World } from '../world/world';
-import { describeAmenity, describeFacility, describeService } from './cursorDetails';
+import { buildingAmenity, buildingServices, facilityCard } from './cursorDetails';
+import { FACILITY_SPECS } from '../sim/facilities';
+
+const FACILITY_SPECS_NAME = (kind: number): string => FACILITY_SPECS[kind]?.name ?? '시설';
+import type { InfoCard } from './infoCard';
 import type { Hud } from './hud';
 import { TOOL_LABELS, type Tools } from './tools';
 
@@ -32,18 +36,56 @@ interface GameHudDeps {
 }
 
 /**
- * 환경도 항목을 한 줄로 (수정사항 4).
- * 좋은 항목은 생략하고 **깎아먹는 것만** 보여준다 — 플레이어가 고칠 것이 그것뿐이다.
+ * 환경도에서 깎아먹는 것만 (수정사항 4) — 플레이어가 고칠 것이 그것뿐이다.
  */
-function describeEnvironment(parts: EnvironmentParts | null): string {
-  if (!parts) return '측정 중';
+function environmentProblems(parts: EnvironmentParts | null): string[] {
+  if (!parts) return [];
   const bad: string[] = [];
-  if (parts.parks < 0.6) bad.push(`공원 부족 ${Math.round(parts.parks * 100)}%`);
-  if (parts.noise > 0.35) bad.push(`소음 ${Math.round(parts.noise * 100)}%`);
-  if (parts.pollution > 0.2) bad.push(`오염 ${Math.round(parts.pollution * 100)}%`);
-  if (parts.traffic > 0.35) bad.push(`정체 ${Math.round(parts.traffic * 100)}%`);
-  if (parts.access < 0.6) bad.push(`접근성 ${Math.round(parts.access * 100)}%`);
-  return bad.length ? bad.join(' · ') : '쾌적함';
+  if (parts.parks < 0.6) bad.push('공원 부족');
+  if (parts.noise > 0.35) bad.push('소음');
+  if (parts.pollution > 0.2) bad.push('오염');
+  if (parts.traffic > 0.35) bad.push('정체');
+  if (parts.access < 0.6) bad.push('접근성 낮음');
+  return bad;
+}
+
+const BUILDING_HELP =
+  '전력·급수·하수가 모두 닿아야 사람이 들어옵니다. 환경도는 공원·소음·오염·정체·접근성으로 정해지고, 소득이 높을수록 복지가 더 필요합니다.';
+
+/** 구역 건물 카드: 이름·등급, 입주, 기반 시설 막대, 고칠 것, 서비스 칸. */
+function buildingCard(
+  sim: MacroSim,
+  here: { tx: number; ty: number; span: number; zone: number; level: number; born: number },
+  occupancy: number | null,
+  environment: number | null,
+  envParts: EnvironmentParts | null,
+): InfoCard {
+  const water = sim.water.statusAt(here.tx, here.ty);
+  const amenity = buildingAmenity(sim, here.tx, here.ty, here.span, here.level);
+  const problems = environmentProblems(envParts);
+  if (sim.water.contaminationAt(here.tx, here.ty) > 0) problems.unshift('수질 오염');
+  if (amenity.problem) problems.push(amenity.problem);
+  const empty = occupancy === null || occupancy <= 0;
+  return {
+    title:
+      BUILDING_NAMES[here.zone][here.level - 1][
+        simHash(WORLD_SEED, here.tx, here.ty, here.level) % BUILDING_ART_VARIANTS
+      ],
+    sub: `${ZONE_NAMES[here.zone]} ${here.level}단계 · ${TIER_NAMES[here.level - 1]}`,
+    status: empty ? { text: '공실', tone: 'warn' } : undefined,
+    meters: [
+      ...(empty ? [] : [{ label: '입주', value: occupancy! }]),
+      { label: '전력', value: sim.power.supplyAt(here.tx, here.ty) },
+      { label: '급수', value: water.supply },
+      { label: '하수', value: water.drainage },
+      ...(environment === null ? [] : [{ label: '환경', value: environment }]),
+      { label: '복지', value: amenity.value },
+    ],
+    problems,
+    services: buildingServices(sim, here.tx, here.ty, here.span),
+    foot: buildingAge(sim.day - here.born),
+    help: BUILDING_HELP,
+  };
 }
 
 /** Bind once; query the world only when the HUD is due to paint. */
@@ -75,18 +117,14 @@ export function createHudUpdater(deps: GameHudDeps): (now: number, fps: number) 
         chunk: cursor ? { cx: chunkIndexOf(cursor.tx), cy: chunkIndexOf(cursor.ty) } : null,
         building: here
           ? here.kind !== null
-            ? describeFacility(sim, here.tx, here.ty, here.kind)
-            : `${BUILDING_NAMES[here.zone][here.level - 1][simHash(WORLD_SEED, here.tx, here.ty, here.level) % BUILDING_ART_VARIANTS]} · ${ZONE_NAMES[here.zone]} L${here.level} (${TIER_NAMES[here.level - 1]}) · ` +
-              `${occupancy === null || occupancy <= 0 ? '공실' : `입주 ${Math.round(occupancy * 100)}%`} · ` +
-              `${buildingAge(sim.day - here.born)} · 전력 ${Math.round(sim.power.supplyAt(here.tx, here.ty) * 100)}% · 급수 ${Math.round(sim.water.statusAt(here.tx, here.ty).supply * 100)}% · 하수 ${Math.round(sim.water.statusAt(here.tx, here.ty).drainage * 100)}%${sim.water.contaminationAt(here.tx, here.ty) > 0 ? ' · 수질 오염' : ''}` +
-              (environment === null
-                ? ''
-                : `\n환경도 ${Math.round(environment * 100)}% · ${describeEnvironment(envParts)}`)
+            ? FACILITY_SPECS_NAME(here.kind)
+            : `${ZONE_NAMES[here.zone]} L${here.level}`
           : null,
-        service:
-          cursor && here?.kind == null ? describeService(sim, cursor.tx, cursor.ty, here) : null,
-        amenity:
-          cursor && here?.kind == null ? describeAmenity(sim, cursor.tx, cursor.ty, here) : null,
+        card: here
+          ? here.kind !== null
+            ? facilityCard(sim, here.tx, here.ty, here.kind)
+            : buildingCard(sim, here, occupancy, environment, envParts)
+          : null,
         incident: incident
           ? `${DISASTER_NAMES[incident.kind]} · 발생 후 ${sim.tick - incident.startedTick}시간`
           : null,

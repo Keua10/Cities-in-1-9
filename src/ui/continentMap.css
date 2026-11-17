@@ -360,3 +360,37 @@
 .cm-trespass[hidden] {
   display: none;
 }
+
+/* 범례·군대 칸 머리: 짧은 글 + ⓘ */
+#continent-map .cm-legend,
+#continent-map .cm-army-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+}
+#continent-map .cm-army-head > .cm-army-info {
+  flex: 1;
+}
+#continent-map .cm-legend > .i-pop,
+#continent-map .cm-army-head > .i-pop,
+#continent-map .cm-ally > .i-pop {
+  flex-basis: 100%;
+}
+#continent-map .cm-ally {
+  position: relative;
+}
+#continent-map .cm-ally > .i-btn {
+  position: absolute;
+  top: 0;
+  right: 0;
+}
+.cm-key-cap {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid #f2cf7a;
+}
+.cm-key-on {
+  color: #6fe08a;
+}

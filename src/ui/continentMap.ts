@@ -11,6 +11,8 @@ import type { AllianceSession } from '../net/alliances';
 import { MapView } from './continent/mapView';
 import { makeBlurred, paintCities, paintGround, paintLabels } from './continent/groundPaint';
 import { EdgeAlerts, shakeOffset } from './continent/edgeAlerts';
+import { DetailPainter, DETAIL_MIN_S, planLookup } from './continent/detailPaint';
+import type { PlanChunks, PlanReader } from '../net/cityPlans';
 import { UnitPainter } from './continent/unitPaint';
 import { paintEffects } from './continent/effectPaint';
 import { paintSky } from './continent/skyPaint';
@@ -18,6 +20,7 @@ import { WarBar } from './continent/warBar';
 import { DiplomacyPanel } from './continent/diplomacyPanel';
 import { ArmyPanel, LONG_PRESS_MS } from './continent/armyPanel';
 import { ago, cityColor, type MapSelection } from './continent/shared';
+import { attachInfo } from './infoCard';
 import './continentMap.css';
 
 /**
@@ -29,6 +32,7 @@ import './continentMap.css';
  *   unitPaint      점령지·부대(보간 이동·전투·진행 고리)
  *   effectPaint    미사일·폭발·요격·점령 깃발·교전 섬광
  *   skyPaint       밤·날씨
+ *   detailPaint    크게 확대하면 밝혀진 청크의 실제 지형·도시 배치
  *   edgeAlerts     화면 밖 공격 화살표, 내 땅 피격 흔들림
  *   warBar         위쪽 전쟁 줄(항복·휴전)
  *   diplomacyPanel 동맹·통과·선전포고·대규모 전쟁 참가
@@ -67,6 +71,10 @@ export interface ContinentMapSource {
   /** 내 영해·영공 규율. */
   passRule?: () => PassRule;
   setPassRule?: (r: PassRule) => void;
+  /** 내 도시 배치 요약(자세히 보기). */
+  myPlan?: () => PlanChunks;
+  /** 다른 도시 배치 요약 읽기(로그인했을 때만). */
+  plans?: PlanReader | null;
 }
 
 /** 움직이는 것이 있을 때 / 없을 때 다음 프레임까지(ms). */
@@ -85,6 +93,7 @@ export class ContinentMap {
   private blurred: HTMLCanvasElement | null = null;
   private units = new UnitPainter();
   private alerts = new EdgeAlerts();
+  private detail = new DetailPainter();
   /** 이번 프레임에 움직이는 것(부대 이동·전투·효과·날씨)이 있었는가. */
   private animating = false;
   /** 아직 못 찾은 도시 수. */
@@ -127,7 +136,7 @@ export class ContinentMap {
             <button type="button" data-tab="army" aria-pressed="false">군대</button>
           </div>
           <div class="cm-pane" data-pane="cities">
-            <div class="cm-legend">금색 테두리 = 수도 · ● 접속 중 · 전쟁은 양쪽이 접속해 있어야 합니다</div>
+            <div class="cm-legend"><span class="cm-key-cap"></span>수도 <span class="cm-key-on">●</span>접속 중</div>
             <div class="cm-incoming" hidden></div>
             <div class="cm-open-wars" hidden></div>
             <ol class="cm-list"></ol>
@@ -160,7 +169,7 @@ export class ContinentMap {
               </select>
             </label>
             <div class="cm-trespass" hidden></div>
-            <div class="cm-army-info cm-legend"></div>
+            <div class="cm-army-head"><div class="cm-army-info cm-legend"></div></div>
             <div class="cm-recruit"></div>
             <div class="cm-army-msg" role="status"></div>
             <div class="cm-pick" hidden>
@@ -174,6 +183,14 @@ export class ContinentMap {
         </aside>
       </div>`;
     this.root.querySelector('.cm-map')!.append(this.canvas);
+    attachInfo(
+      this.root.querySelector('.cm-legend')!,
+      '전쟁은 양쪽이 접속해 있어야 합니다. 지도를 크게 확대하면 밝혀진 땅의 지형과 도시 배치가 보입니다.',
+    );
+    attachInfo(
+      this.root.querySelector('.cm-army-head')!,
+      '부대를 누르고 지도에서 갈 곳을 누르세요. 길게 누르면 여러 부대를 함께 고릅니다. 적 부대가 없는 적 청크에 1분 머물면 점령합니다(땅 부대만). 미사일은 고른 뒤 적 땅을 누르면 발사됩니다(60청크).',
+    );
     this.list = this.root.querySelector('.cm-list')!;
     this.status = this.root.querySelector('.cm-status')!;
     this.warBar = new WarBar(
@@ -402,11 +419,14 @@ export class ContinentMap {
     const known = this.knownSet();
     if (known && this.overview && !this.blurred) this.blurred = makeBlurred(this.overview);
     paintGround(ctx, this.view, this.overview, this.blurred, known);
+    const close = this.view.s >= DETAIL_MIN_S;
+    const building = close && this.detail.paint(ctx, this.view, known, this.planOf());
     const labels = paintCities(ctx, this.view, this.cities, {
       mineUid: this.source.mine().uid,
       selected: this.sel.city,
       known,
       atWarWith: (uid) => !!this.source.war?.atWarWith(uid),
+      faint: close,
     });
     const sky = paintSky(ctx, this.view, known, now);
     const moving = this.units.paint(ctx, this.view, army, this.sel, now);
@@ -415,7 +435,17 @@ export class ContinentMap {
     ctx.restore();
     this.alerts.update(army, owned, now);
     const arrows = this.alerts.paint(ctx, this.view, now);
-    this.animating = moving || fx || sky || arrows || shake.x !== 0;
+    this.animating = moving || fx || sky || arrows || shake.x !== 0 || building;
+  }
+
+  /** 청크 → 배치 요약: 내 도시는 지금 상태, 다른 도시는 plans 문서(2분 캐시). */
+  private planOf(): (key: string) => string {
+    const list: PlanChunks[] = [];
+    if (this.source.myPlan) list.push(this.source.myPlan());
+    const mine = this.source.mine().uid;
+    if (this.source.plans)
+      for (const c of this.cities) if (c.uid !== mine) list.push(this.source.plans.get(c.uid));
+    return planLookup(list);
   }
 
   /* ---------------- 입력 ---------------- */

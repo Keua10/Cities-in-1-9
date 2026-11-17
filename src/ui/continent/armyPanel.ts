@@ -173,12 +173,9 @@ export class ArmyPanel {
     if (!force && army.revision === this.lastRevision && !this.host.visible()) return;
     const units = army.units;
     this.infoEl.textContent =
-      `병영 ${army.barracks().length}곳 · 부대 ${units.length}개 · 병력 ${Math.round(army.soldiers).toLocaleString('ko-KR')}명 · 더 뽑을 수 있는 인원 ${army.draftRoom().toLocaleString('ko-KR')}명` +
+      `병영 ${army.barracks().length} · 부대 ${units.length} · 병력 ${Math.round(army.soldiers).toLocaleString('ko-KR')}명 · 징병 여유 ${army.draftRoom().toLocaleString('ko-KR')}명` +
       ` · 유지비 ${formatMoney(army.upkeepMoney)}/일` +
-      '\n부대를 누르고 지도에서 갈 곳을 누르세요. 적 땅 부대가 없는 적 청크에 1분 머물면 점령합니다(땅 부대만).' +
-      (army.missiles().length
-        ? `\n미사일 ${army.missiles().length}발 · 미사일을 누르고 적 땅을 누르면 발사(60청크)`
-        : '');
+      (army.missiles().length ? ` · 미사일 ${army.missiles().length}발` : '');
     this.renderRecruit();
     if (!force && army.revision === this.lastRevision) {
       // 진행 막대만 고친다.

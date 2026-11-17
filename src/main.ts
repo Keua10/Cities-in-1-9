@@ -3,6 +3,7 @@ import { airspace, passValid, territorialSea, trespassing } from './sim/military
 import { ConstructionPanel } from './ui/constructionPanel';
 import { NatureLayer } from './render/natureLayer';
 import { CityFx } from './render/fx/cityFx';
+import { encodePlan, PlanPublisher, PlanReader, type PlanChunks } from './net/cityPlans';
 import { AlertPanel } from './ui/alertPanel';
 import { lightingColor } from './render/dayNight';
 import { audio } from './audio/audio';
@@ -315,8 +316,21 @@ async function boot(): Promise<void> {
     pass: macro.passRule ?? 'open',
   });
   let lastPublished = '';
+  // 도시 배치 요약(plans/{uid}): 대륙 지도에서 밝혀진 청크를 자세히 볼 때 쓴다.
+  const planPublisher = online && session ? new PlanPublisher(session.uid) : null;
+  const planReader = online && session ? new PlanReader() : null;
+  const myPlanCache = { at: 0, plan: {} as PlanChunks };
+  const myPlan = (): PlanChunks => {
+    const t = Date.now();
+    if (t - myPlanCache.at > 5_000) {
+      myPlanCache.at = t;
+      myPlanCache.plan = encodePlan(world, sim.territory.ownedKeys());
+    }
+    return myPlanCache.plan;
+  };
   const publish = (): void => {
     if (!online || !session) return;
+    void planPublisher?.maybePublish(myPlan());
     const p = myProfile();
     // 영토·레벨·인구(백 단위)가 그대로면 다시 쓰지 않는다(쓰기 아끼기).
     const stamp = `${p.owned.length}|${p.capital}|${p.capitalLevel}|${p.cityLevel}|${Math.round(p.population / 100)}|${JSON.stringify(p.units)}|${p.pass}`;
@@ -418,6 +432,8 @@ async function boot(): Promise<void> {
     war: warSession,
     alliances,
     passes,
+    myPlan,
+    plans: planReader,
     passRule: () => macro.passRule ?? 'open',
     setPassRule: (r) => {
       macro.passRule = r;
