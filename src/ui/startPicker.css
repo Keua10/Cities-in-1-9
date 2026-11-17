@@ -202,3 +202,14 @@
     font-size: 12px;
   }
 }
+
+.sp-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.sp-logout {
+  font-size: 12px;
+  padding: 4px 10px;
+}

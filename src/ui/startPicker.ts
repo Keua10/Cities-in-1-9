@@ -1,3 +1,4 @@
+import { signOut } from '../net/auth';
 import { BASE_CHUNK_SPAN } from '../core/constants';
 import { CONTINENT_H, CONTINENT_W, CONTINENT_X0, CONTINENT_Y0 } from '../world/continent';
 import {
@@ -120,9 +121,7 @@ class StartPicker {
     r.innerHTML = `
       <header class="sp-head">
         <h1>시작할 땅을 고르세요</h1>
-        <p>초록색 칸만 고를 수 있습니다. 하천이 흐르고 평지가 넉넉한 4×4 청크(가운데 2×2 가 수도)입니다.
-        산·큰 강·바다로 갈린 곳은 다른 도시 가까이에도 지을 수 있지만, 평지로 이어진
-        곳은 멀리 떨어져야 합니다.</p>
+        <button type="button" class="sp-logout">로그아웃</button>
       </header>
       <div class="sp-body">
         <div class="sp-map">
@@ -139,6 +138,9 @@ class StartPicker {
         </div>
         <aside class="sp-side"></aside>
       </div>`;
+    r.querySelector('.sp-logout')!.addEventListener('click', () => {
+      void signOut().then(() => location.reload());
+    });
     r.querySelector('.sp-map')!.prepend(this.canvas);
     const side = r.querySelector('.sp-side')!;
     this.info.className = 'sp-info';
@@ -450,15 +452,13 @@ class StartPicker {
   private renderInfo(): void {
     const v = this.evaluate();
     if (!v || !this.selected) {
-      this.info.innerHTML = `<h2>자리를 고르세요</h2>
-        <p class="sp-hint">지도에서 초록색 칸을 누르면 그 땅의 모습이 여기에 나옵니다.
-        끌어서 움직이고, 두 손가락이나 휠로 확대합니다.</p>`;
+      this.info.innerHTML = `<h2>초록색 칸을 누르세요</h2>`;
       this.button.textContent = '여기서 시작';
       this.button.disabled = true;
       return;
     }
     const s = v.summary;
-    const fert = s.fertility >= 85 ? '높음' : s.fertility >= 65 ? '보통' : '낮음';
+    const fert = s.fertility >= 70 ? '높음' : s.fertility >= 45 ? '보통' : '낮음';
     const water = s.bigRiver ? '큰 강이 흐름' : s.river ? '개울이 흐름' : '없음';
     this.info.innerHTML = `
       <h2>${regionName(this.selected)}</h2>
