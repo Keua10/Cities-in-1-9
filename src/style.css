@@ -1641,3 +1641,47 @@ body.clean-view #minimap-shell {
   font-size: 11px;
   line-height: 1.55;
 }
+
+#capital-bar,
+#capital-progress {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 13;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid #f2cf7a;
+  background: rgba(20, 28, 36, 0.94);
+  color: #f6ecd2;
+  font-size: 13px;
+}
+#capital-bar {
+  bottom: 84px;
+}
+#capital-progress {
+  top: 92px;
+}
+#capital-bar[hidden],
+#capital-progress[hidden] {
+  display: none;
+}
+#capital-bar button {
+  padding: 4px 12px;
+}
+.cpg-bar {
+  width: 160px;
+  height: 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+.cpg-bar i {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: #f2cf7a;
+  transition: width 0.4s linear;
+}

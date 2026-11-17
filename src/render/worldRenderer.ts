@@ -387,9 +387,12 @@ export class WorldRenderer {
     }
     this.stats.sceneRebuilds = this.scene.rebuildCount;
     this.stats.sceneBuildMs = this.scene.lastBuildMs;
-    if (rangeKey !== this.lastRangeKey || zoomChanged) {
+    const pulseDue = !!this.territory?.moving && performance.now() - this.lastGridAt > 120;
+    if (rangeKey !== this.lastRangeKey || zoomChanged || this.gridDirty || pulseDue) {
       this.lastRangeKey = rangeKey;
       this.lastZoom = camera.zoom;
+      this.gridDirty = false;
+      this.lastGridAt = performance.now();
       this.drawGrid(range, camera.zoom);
       this.drawCursor();
       this.drawPlacement();
@@ -656,10 +659,40 @@ export class WorldRenderer {
     g.poly(this.borders.capital, true);
     g.stroke({ width: px * 3, color: 0xf2cf7a, alpha: 0.9 });
     if (this.borders.move.length) {
+      // 옮기는 중인 새 수도 자리: 금색 굵은 테두리가 천천히 깜빡인다.
+      const pulse = 0.55 + 0.4 * Math.sin(performance.now() / 300);
       g.poly(this.borders.move, true);
-      g.stroke({ width: px * 2, color: 0xf2cf7a, alpha: 0.45 });
+      g.stroke({ width: px * 4, color: 0xf2cf7a, alpha: pulse });
+    }
+    // 수도 옮길 자리 고르는 중: 고른 자리를 초록(가능)·빨강(불가) 굵은 테두리로.
+    if (this.capitalPreview) {
+      const r = this.capitalPreview.rect;
+      const path = baseBorderPath(
+        b,
+        r.cx * CHUNK_SIZE,
+        r.cy * CHUNK_SIZE,
+        (r.cx + r.span) * CHUNK_SIZE - 1,
+        (r.cy + r.span) * CHUNK_SIZE - 1,
+      );
+      const color = this.capitalPreview.ok ? 0x7be08a : 0xe2574c;
+      g.poly(path, true);
+      g.fill({ color, alpha: 0.12 });
+      g.poly(path, true);
+      g.stroke({ width: px * 4, color, alpha: 0.95 });
     }
   }
+
+  /** 수도 옮길 자리 미리보기(고르는 동안만). */
+  private capitalPreview: { rect: { cx: number; cy: number; span: number }; ok: boolean } | null =
+    null;
+  setCapitalPreview(
+    p: { rect: { cx: number; cy: number; span: number }; ok: boolean } | null,
+  ): void {
+    this.capitalPreview = p;
+    this.gridDirty = true;
+  }
+  private gridDirty = false;
+  private lastGridAt = 0;
 
   private drawCursor(): void {
     const g = this.cursorLayer;

@@ -1,3 +1,4 @@
+import { CAPITAL_MOVE_MS } from './sim/territory';
 import { PassSession } from './net/passes';
 import { airspace, passValid, territorialSea, trespassing } from './sim/military/waters';
 import { ConstructionPanel } from './ui/constructionPanel';
@@ -548,11 +549,56 @@ async function boot(): Promise<void> {
   cityPanel.market = market;
   /** 수도 이전: 패널에서 버튼을 누르면 다음 탭 한 번이 새 수도 자리가 된다. */
   let pickCapital = false;
+  let capitalTarget: { cx: number; cy: number; span: number } | null = null;
+  // 수도 옮기기: 지도에서 고르면 테두리로 보여 주고, 확정을 눌러야 시작한다.
+  const capitalBar = document.createElement('div');
+  capitalBar.id = 'capital-bar';
+  capitalBar.hidden = true;
+  capitalBar.innerHTML = `<span class="cb-text"></span>
+    <button type="button" class="cb-ok">확정</button>
+    <button type="button" class="cb-cancel">취소</button>`;
+  document.body.append(capitalBar);
+  const capitalText = capitalBar.querySelector<HTMLElement>('.cb-text')!;
+  const capitalOk = capitalBar.querySelector<HTMLButtonElement>('.cb-ok')!;
+  const endCapitalPick = () => {
+    pickCapital = false;
+    capitalTarget = null;
+    capitalBar.hidden = true;
+    renderer.setCapitalPreview(null);
+  };
+  capitalBar.querySelector('.cb-cancel')!.addEventListener('click', endCapitalPick);
+  capitalOk.addEventListener('click', () => {
+    if (!capitalTarget) return;
+    const why = sim.territory.startMove(capitalTarget);
+    tools.announce(why ? `수도를 옮길 수 없습니다 · ${why}` : '수도 이전 시작 · 5분 뒤 완료');
+    if (!why) endCapitalPick();
+  });
   cityPanel.onCapitalMove = () => {
     pickCapital = true;
+    capitalTarget = null;
     tools.setTool('select');
-    tools.announce('새 수도의 가운데가 될 곳을 지도에서 누르세요 · 내 영토 안이어야 합니다');
+    chrome.closePanels();
+    capitalText.textContent = '새 수도 자리를 지도에서 누르세요';
+    capitalOk.disabled = true;
+    capitalBar.hidden = false;
   };
+  // 옮기는 중이면 위쪽에 진행 막대.
+  const capitalProgress = document.createElement('div');
+  capitalProgress.id = 'capital-progress';
+  capitalProgress.hidden = true;
+  capitalProgress.innerHTML = `<span class="cpg-text">수도 이전 중</span><span class="cpg-bar"><i></i></span><span class="cpg-time"></span>`;
+  document.body.append(capitalProgress);
+  window.setInterval(() => {
+    const m = sim.territory.moving;
+    capitalProgress.hidden = !m;
+    if (!m) return;
+    const done = 1 - m.leftMs / CAPITAL_MOVE_MS;
+    capitalProgress.querySelector<HTMLElement>('.cpg-bar i')!.style.width =
+      `${Math.round(done * 100)}%`;
+    const s = Math.ceil(m.leftMs / 1000);
+    capitalProgress.querySelector('.cpg-time')!.textContent =
+      `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+  }, 500);
   const facilityFinder = new FacilityFinder(world, sim, (f) => {
     renderer.setFacilityFocus(f);
     if (!f) return;
@@ -595,12 +641,13 @@ async function boot(): Promise<void> {
       cursor = pickTile(world, wx, wy);
       renderer.setCursorTile(cursor);
       if (pickCapital) {
-        pickCapital = false;
+        // 고를 때마다 자리만 바꾼다. 시작은 확정 버튼으로.
         const target = sim.territory.moveTarget(chunkIndexOf(cursor.tx), chunkIndexOf(cursor.ty));
-        const why = sim.territory.startMove(target);
-        tools.announce(
-          why ? `수도를 옮길 수 없습니다 · ${why}` : '수도 이전 시작 · 실제 5분 뒤 완료',
-        );
+        const why = sim.territory.moveBlock(target);
+        capitalTarget = why ? null : target;
+        renderer.setCapitalPreview({ rect: target, ok: !why });
+        capitalText.textContent = why || '여기로 옮길까요? 5분 걸립니다';
+        capitalOk.disabled = !!why;
         return;
       }
       if (tools.tool === 'select' && sim.construction.at(cursor.tx, cursor.ty)) {
