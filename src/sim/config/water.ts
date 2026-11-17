@@ -19,4 +19,7 @@ export const WATER_SPECS: Readonly<
   [FAC_RIVER_PUMP]: { pipe: PIPE_WATER, capacity: 11000, pollution: 0, needsWater: true },
   [FAC_OUTFALL]: { pipe: PIPE_SEWER, capacity: 4200, pollution: 1, needsWater: true },
   [FAC_TREATMENT]: { pipe: PIPE_SEWER, capacity: 14000, pollution: 0.15, needsWater: true },
+  // 2단계(대형, config/tiers.ts)
+  70: { pipe: PIPE_WATER, capacity: 36000, pollution: 0, needsWater: true },
+  71: { pipe: PIPE_SEWER, capacity: 45000, pollution: 0.1, needsWater: true },
 };

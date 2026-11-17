@@ -24,6 +24,10 @@ export const FACILITY_EMISSIONS: Readonly<Record<number, { radius: number; peak:
   [FAC_COAL_POWER]: { radius: 10, peak: 0.85 },
   [FAC_STEEL_MILL]: { radius: 8, peak: 0.6 },
   [FAC_REFINERY]: { radius: 8, peak: 0.55 },
+  // 2단계(대형): 대형 소각장 · 대형 화장장 · 복합화력
+  66: { radius: 11, peak: 1 },
+  67: { radius: 6, peak: 0.55 },
+  73: { radius: 8, peak: 0.6 },
 };
 export interface PollutedTile {
   tx: number;

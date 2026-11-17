@@ -6,6 +6,7 @@ import { FACILITY_SPECS } from '../../src/sim/facilities';
 import { FACILITY_COUNT } from '../../src/sim/buildings';
 import {
   FACILITY_ATLAS_W,
+  FACILITY_SHEET_H,
   FACILITY_ATLAS_H,
   FACILITY_ATLAS_COLUMN,
   facilityBandY,
@@ -27,7 +28,7 @@ const entries = JSON.parse(
 assert.equal(entries.length, FACILITY_SHEET_KINDS);
 const sheet = await loadImage('public/sprites/facilities-v2.png');
 assert.equal(sheet.width, FACILITY_SHEET_W);
-assert.equal(sheet.height, FACILITY_ATLAS_H);
+assert.equal(sheet.height, FACILITY_SHEET_H);
 const canvas = createCanvas(sheet.width, sheet.height),
   ctx = canvas.getContext('2d');
 ctx.drawImage(sheet, 0, 0);
@@ -150,9 +151,9 @@ try {
     // 실제 아틀라스 캔버스는 코드로 그리는 시설(27~) 열만큼 시트보다 넓다.
     assert.deepEqual(atlas.uv(e.kind), [
       e.x / FACILITY_ATLAS_W,
-      e.y / sheet.height,
+      e.y / FACILITY_ATLAS_H,
       (e.x + e.size) / FACILITY_ATLAS_W,
-      (e.y + e.size) / sheet.height,
+      (e.y + e.size) / FACILITY_ATLAS_H,
     ]);
     const thumb = globalThis.document.createElement('canvas') as any;
     thumb.width = thumb.height = e.size;

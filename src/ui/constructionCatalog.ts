@@ -1,4 +1,5 @@
 import type { ToolId } from './tools';
+import { baseKind } from '../sim/config/tiers';
 import { METRO_TUNNEL_COST, METRO_STATION_COST } from '../sim/metro';
 import { formatMoney } from './money';
 import { FACILITY_SPECS } from '../sim/facilities';
@@ -258,16 +259,17 @@ for (const spec of FACILITY_SPECS) {
     });
     continue;
   }
+  const b = baseKind(k);
   const category: BuildCategory =
-    k <= 3 || k === 20
+    b <= 3 || b === 20
       ? 'service'
-      : k <= 6 || k === 17
+      : b <= 6 || b === 17
         ? 'park'
         : WATER_SPECS[k]
           ? 'water'
           : POWER_SPECS[k]
             ? 'power'
-            : k >= 14 && k <= 16
+            : b >= 14 && b <= 16
               ? 'environment'
               : 'transport';
   const capacity = POWER_SPECS[k]?.capacity ?? WATER_SPECS[k]?.capacity ?? spec.capacity;
@@ -286,6 +288,7 @@ for (const spec of FACILITY_SPECS) {
       (spec.needsRoad ? ' · 도로 필요' : '') +
       (k === FAC_COAL_POWER ? ` · ${CONSUMER_SPECS[k].blurb}` : '') +
       (k === 17 ? ' · 장식용, 현재 도시 기능 없음' : '') +
+      (b !== k ? ' · 2단계(대형)' : '') +
       (WATER_SPECS[k]?.needsWater || [19, 21, 22, 23].includes(k) ? ' · 수역 인접' : '') +
       ([18, 24, 25].includes(k) ? ' · 외부 활주로·유도로 연결 필요' : ''),
   });

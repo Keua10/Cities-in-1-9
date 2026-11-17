@@ -20,6 +20,7 @@ import {
 } from './config/water';
 import { FACILITY_SPECS, touchesRoadTiles, touchesWater } from './facilities';
 import { rangeOffsets } from './utilityRange';
+import { baseKind } from './config/tiers';
 import type { PowerField } from './power';
 const reach = rangeOffsets(PIPE_REACH);
 
@@ -174,7 +175,7 @@ export class WaterField {
     }
     // 상·하수도는 깊이가 달라 옆에 닿거나 겹쳐도 섞이지 않는다(피드백 2차). 오염은 하천 방류로만.
     for (const pump of this.plants) {
-      if (!pump.active || pump.kind !== FAC_RIVER_PUMP) continue;
+      if (!pump.active || baseKind(pump.kind) !== FAC_RIVER_PUMP) continue;
       let pollution = 0;
       for (const outlet of this.plants) {
         const spec = WATER_SPECS[outlet.kind];

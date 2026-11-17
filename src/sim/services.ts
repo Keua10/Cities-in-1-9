@@ -484,8 +484,12 @@ export class ServiceField {
    */
   private runCoverageBfs(world: World): void {
     for (const kind of ROAD_SERVICE_KINDS) {
-      const spec = FACILITY_SPECS[kind];
-      const maxDist = Math.min(spec.range, SERVICE_FIELD_MAX_DIST, SERVICE_DIST_NONE - 1);
+      // 2단계(대형) 시설은 같은 채널을 쓰되 반경이 더 넓다. 시설마다 자기 반경까지만 퍼진다.
+      let widest = FACILITY_SPECS[kind].range;
+      for (const f of this.facilities)
+        if (serviceChannel(f.kind) === kind)
+          widest = Math.max(widest, FACILITY_SPECS[f.kind].range);
+      const maxDist = Math.min(widest, SERVICE_FIELD_MAX_DIST, SERVICE_DIST_NONE - 1);
 
       // 출발점: 시설 footprint 테두리에 맞닿은 도로 칸.
       // 시설 목록 순서대로 넣으므로 동률에서 항상 같은 쪽이 이긴다.
@@ -506,6 +510,7 @@ export class ServiceField {
           const ty = queue[i + 1];
           const owner = this.readOwner(tx, ty, kind);
           if (owner < 0) continue;
+          if (dist > FACILITY_SPECS[this.facilities[owner].kind].range) continue;
           for (const dir of DIRS) {
             const nx = tx + dir[0];
             const ny = ty + dir[1];

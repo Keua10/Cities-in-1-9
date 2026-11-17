@@ -23,7 +23,7 @@ import { Build } from '../../src/world/build';
 import { Terrain } from '../../src/world/terrain';
 import { World } from '../../src/world/world';
 
-assert.equal(FACILITY_COUNT, 62); // 지하철역(26), 식량(27~35), 자원(36~47), 군사(48~58), 정찰타워·벌목장·탄약 공장(59~61)
+assert.equal(FACILITY_COUNT, 75); // 지하철역(26), 식량(27~35), 자원(36~47), 군사(48~58), 정찰타워·벌목장·탄약 공장(59~61), 2단계 대형(62~74)
 assert.deepEqual(
   [FAC_COMM_TOWER, FAC_AIRPORT, FAC_HARBOR, FAC_PRISON],
   [17, 18, 19, 20],

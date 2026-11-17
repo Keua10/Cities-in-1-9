@@ -10,6 +10,8 @@ export const FACILITY_SPAN: readonly number[] = [
   3, 5, 2, 7, 7, 7, 7, 2,
   // 피드백 1차 59~61: 정찰타워·벌목장·탄약 공장
   1, 3, 3,
+  // 피드백 2차 62~74: 2단계(대형) 시설 — config/tiers.ts
+  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
 ];
 
 export const FACILITY_NAMES: readonly string[] = [
@@ -72,7 +74,22 @@ export const FACILITY_NAMES: readonly string[] = [
   '군사 공항(중간)',
   '미사일 기지',
   '미사일 방어',
-  '정찰타워', '벌목장', '탄약 공장',
+  '정찰타워',
+  '벌목장',
+  '탄약 공장',
+  '대형 소방서',
+  '경찰청',
+  '종합병원',
+  '대학교',
+  '대형 소각장',
+  '대형 화장장',
+  '추모공원',
+  '광역 교도소',
+  '대형 취수장',
+  '대형 하수처리장',
+  '풍력 단지',
+  '복합화력 발전소',
+  '대형 태양광 단지',
 ];
 
 export const FACILITY_COST: readonly number[] = [
@@ -80,22 +97,22 @@ export const FACILITY_COST: readonly number[] = [
   22_000, 10_000, 6_500, 3_000, 2_000, 60_000, 35_000, 25_000, 35_000, 90_000, 210_000, 150_000,
   360_000, 18_000, 9_000, 4_000, 5_500, 11_000, 6_000, 16_000, 7_000, 3_500, 14_000, 6_000, 5_000,
   8_000, 18_000, 15_000, 22_000, 45_000, 38_000, 55_000, 30_000, 34_000, 24_000, 3_000, 200, 20_000,
-  8_000, 20_000, 6_000, 40_000, 60_000, 90_000, 150_000, 120_000,
-  600, 4_000, 12_000,
+  8_000, 20_000, 6_000, 40_000, 60_000, 90_000, 150_000, 120_000, 600, 4_000, 12_000, 13_000,
+  12_000, 42_000, 30_000, 30_000, 18_000, 9_000, 70_000, 24_000, 36_000, 15_000, 52_000, 62_000,
 ];
 
 export const FACILITY_UPKEEP_PER_DAY: readonly number[] = [
   170, 160, 360, 300, 15, 110, 135, 90, 180, 50, 240, 100, 650, 180, 280, 140, 70, 0, 950, 600, 420,
   600, 1_600, 4_200, 2_400, 6_200, 0, 120, 60, 70, 150, 110, 260, 90, 25, 200, 120, 100, 150, 260,
   220, 320, 520, 450, 650, 400, 450, 550, 80, 5, 200, 150, 300, 100, 600, 800, 1_200, 2_000, 1_500,
-  10, 60, 250,
+  10, 60, 250, 480, 450, 1_000, 850, 780, 400, 200, 1_200, 520, 700, 290, 1_800, 520,
 ];
 
 /** Road-BFS range for service facilities; transport hubs have no service field. */
 export const FACILITY_RANGE: readonly number[] = [
   40, 34, 55, 30, 8, 16, 14, 0, 0, 0, 0, 0, 0, 0, 64, 64, 64, 0, 0, 0, 34, 0, 0, 0, 0, 0, 0, 0, 0,
-  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-  0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  40, 34, 55, 30, 64, 64, 64, 34, 0, 0, 0, 0, 0,
 ];
 
 export const FACILITY_NEEDS_ROAD: readonly boolean[] = [
@@ -158,15 +175,29 @@ export const FACILITY_NEEDS_ROAD: readonly boolean[] = [
   true,
   true,
   true,
-  false, true, true,
+  false,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
+  true,
 ];
 
 /** Service capacities. Transport hubs deliberately use zero: their effects live in TransportSystem. */
 export const FACILITY_CAPACITY: readonly number[] = [
   220, 3_000, 5_000, 2_500, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 10_000, 6_000, 5_000, 0, 0, 0, 1_200, 0,
   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-  0, 0, 0, 0,
-  0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 700, 10_000, 16_000, 8_000, 32_000, 19_000, 16_000, 4_000, 0, 0, 0, 0, 0,
 ];
 
 export const FACILITY_CAPACITY_IS_BUILDINGS: readonly boolean[] = [
@@ -229,7 +260,22 @@ export const FACILITY_CAPACITY_IS_BUILDINGS: readonly boolean[] = [
   false,
   false,
   false,
-  false, false, false,
+  false,
+  false,
+  false,
+  true,
+  false,
+  false,
+  false,
+  false,
+  false,
+  false,
+  false,
+  false,
+  false,
+  false,
+  false,
+  false,
 ];
 
 export const OVERLOAD_SLOPE = 0.8;
@@ -249,8 +295,8 @@ export const LOAD_SMOOTH = 0.3;
 
 export const FACILITY_STRENGTH: readonly number[] = [
   0, 0, 0, 0, 0.65, 1.5, 1.6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-  0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 ];
 
 export const SERVICE_WEIGHT: readonly (readonly number[])[] = [

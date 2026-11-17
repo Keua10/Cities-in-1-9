@@ -4,14 +4,15 @@ import { FACILITY_COUNT } from '../sim/buildings';
 import { FACILITY_SPECS } from '../sim/facilities';
 import { facilityArt } from './facilityArt';
 
-export const FACILITY_SPANS = [1, 2, 3, 5, 7] as const;
+/** 띠 순서. 4칸(2단계 시설)은 PNG 시트 좌표가 바뀌지 않게 맨 아래에 붙인다. */
+export const FACILITY_SPANS = [1, 2, 3, 5, 7, 4] as const;
 export function facilityCellSize(span: number): number {
   return span * TILE_W;
 }
 export function facilityBandY(span: number): number {
   let y = 0;
   for (const s of FACILITY_SPANS) {
-    if (s >= span) break;
+    if (s === span) break;
     y += facilityCellSize(s);
   }
   return y;
@@ -31,6 +32,8 @@ export const FACILITY_ATLAS_COLUMN: readonly number[] = [
   20, 11, 11, 5, 6, 7, 8, 12,
   // 피드백 1차: 정찰타워(1칸) 4, 벌목장·탄약 공장(3칸) 21·22
   4, 21, 22,
+  // 피드백 2차: 2단계(대형) 시설 13종, 모두 4칸 0~12
+  0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
 ];
 /** facilities-v2.png 에 들어 있는 시설(0~25). 그 뒤는 코드로 그린다. */
 export const FACILITY_SHEET_KINDS = 26;
@@ -49,6 +52,11 @@ export const FACILITY_ATLAS_W = Math.max(
   ...FACILITY_SPECS.map((s) => (FACILITY_ATLAS_COLUMN[s.kind] + 1) * facilityCellSize(s.span)),
 );
 export const FACILITY_ATLAS_H = FACILITY_SPANS.reduce(
+  (sum, span) => sum + facilityCellSize(span),
+  0,
+);
+/** PNG 시트 높이: 4칸 띠(2단계 시설, 코드로 그림)가 붙기 전의 띠들만. */
+export const FACILITY_SHEET_H = FACILITY_SPANS.filter((s) => s !== 4).reduce(
   (sum, span) => sum + facilityCellSize(span),
   0,
 );
@@ -94,7 +102,7 @@ export function loadFacilitySpriteSheet(
       const image = new Image();
       image.src = source;
       await image.decode();
-      if (image.naturalWidth !== FACILITY_SHEET_W || image.naturalHeight !== FACILITY_ATLAS_H)
+      if (image.naturalWidth !== FACILITY_SHEET_W || image.naturalHeight !== FACILITY_SHEET_H)
         throw new Error(`시설 아틀라스 규격 오류: ${image.naturalWidth}x${image.naturalHeight}`);
       return image;
     })();

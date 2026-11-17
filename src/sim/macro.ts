@@ -66,6 +66,7 @@ import {
   WATER_RAMP_DAYS,
 } from './config/water';
 import { FAC_COAL_POWER, FAC_GAS, FAC_SOLAR, FAC_WIND } from './config/power';
+import { baseKind } from './config/tiers';
 import {
   CITY_LEVELS,
   cityLevelFor,
@@ -250,7 +251,9 @@ export class MacroSim {
       this.world.utilityRevision++;
     };
     this.services.kindUpkeepMul = (kind) =>
-      kind === FAC_GAS && this.resources.summary.gasDiscount ? 1 - REFINERY_GAS_DISCOUNT : 1;
+      baseKind(kind) === FAC_GAS && this.resources.summary.gasDiscount
+        ? 1 - REFINERY_GAS_DISCOUNT
+        : 1;
     world.mineRule = (kind, tx, ty) => mineSiteProblem(kind, tx, ty, this.macro);
     this.army = new ArmySystem(
       macro,
@@ -408,6 +411,7 @@ export class MacroSim {
     const ratio = (demand: number, capacity: number) =>
       capacity > 0 ? Math.min(1, demand / capacity) : 0;
     const w = this.water.summary;
+    kind = baseKind(kind);
     if (kind === FAC_GROUNDWATER || kind === FAC_RIVER_PUMP)
       return ratio(w.demand, w.waterCapacity);
     if (kind === FAC_OUTFALL || kind === FAC_TREATMENT) return ratio(w.demand, w.sewerCapacity);

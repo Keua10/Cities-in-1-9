@@ -623,11 +623,232 @@ function militaryArt(a: PixelArt, kind: number, n: number): void {
   a.rect(slit[0] - 4, slit[1] - 1, 8, 2, 'ink');
 }
 
+/* ---------------- 2단계(대형) 공공시설 (62~74) ---------------- */
+
+function turbine(a: PixelArt, u: number, v: number, h: number): void {
+  const base = a.p(u, v),
+    hub = a.p(u, v, h);
+  a.rect(base[0] - 1, hub[1], 3, base[1] - hub[1], 'paper');
+  for (const [dx, dy] of [
+    [0, -18],
+    [-15, 11],
+    [15, 11],
+  ]) {
+    a.line(hub, [hub[0] + dx, hub[1] + dy], 'white');
+    a.line([hub[0] + 1, hub[1]], [hub[0] + dx + 1, hub[1] + dy], 'paper');
+  }
+  a.rect(hub[0] - 2, hub[1] - 2, 5, 4, 'stoneDark');
+}
+
+function tier2Art(a: PixelArt, kind: number, n: number): void {
+  if (kind === 62) {
+    // 대형 소방서: 차고 6칸 + 훈련탑 + 헬기장
+    office(a, 0.25, 0.25, 2.6, 1.1, 24, M.red);
+    a.box(3.05, 0.3, 0.55, 0.55, 46, M.brick);
+    a.slab(3.1, 0.35, 0.45, 0.45, 47, 'roofDark');
+    for (let i = 0; i < 6; i++) {
+      const x = 0.35 + i * 0.42;
+      a.poly(
+        [a.p(x, 1.36, 1), a.p(x + 0.32, 1.36, 1), a.p(x + 0.32, 1.36, 12), a.p(x, 1.36, 12)],
+        'ink',
+      );
+      if (i % 2 === 0) a.vehicle(x + 0.05, 1.7, M.red, true);
+    }
+    a.slab(2.7, 2.4, 1, 1, 1, 'stoneDark', 'yellow');
+    const h = a.p(3.2, 2.9, 2);
+    a.rect(h[0] - 1, h[1] - 4, 2, 8, 'yellow');
+    a.vehicle(0.5, 2.6, M.red, true);
+    a.vehicle(1.2, 2.6, M.red, true);
+    treeRow(a, n);
+    return;
+  }
+  if (kind === 63) {
+    // 경찰청: 고층 본청 + 저층 별관 + 순찰차 주차장
+    office(a, 0.35, 0.3, 1.5, 1.2, 62, M.blue);
+    office(a, 2, 0.3, 1.6, 0.9, 22, M.glass);
+    const [x, y] = a.p(1.1, 1.5, 40);
+    a.poly(
+      [
+        [x - 5, y - 6],
+        [x + 5, y - 6],
+        [x + 4, y + 2],
+        [x, y + 5],
+        [x - 4, y + 2],
+      ],
+      'yellow',
+      'ink',
+    );
+    a.slab(0.3, 2, 3.4, 1.4, 0, 'stoneDark');
+    for (let u = 0.45; u < 3.5; u += 0.55) {
+      a.line(a.p(u, 2.05), a.p(u, 2.6), 'white');
+      a.vehicle(u + 0.05, 2.35, M.blue, true);
+    }
+    treeRow(a, n);
+    return;
+  }
+  if (kind === 64) {
+    // 종합병원: 고층 병동 + 양 날개 + 옥상 헬기장
+    office(a, 1, 0.4, 1.9, 1.5, 66, M.cream);
+    a.slab(1.3, 0.65, 0.9, 0.9, 67, 'stoneDark', 'yellow');
+    a.cross(1.75, 1.1, 68);
+    office(a, 0.25, 0.3, 0.7, 2.4, 26, M.cream);
+    office(a, 3, 0.3, 0.75, 2.4, 26, M.cream);
+    a.box(1.3, 2.05, 1.2, 0.55, 10, M.teal);
+    a.cross(1.9, 2.3, 13);
+    for (const u of [1.1, 1.8, 2.5]) a.vehicle(u, 2.95, M.cream, true);
+    a.line(a.p(1, 3.45), a.p(3.2, 3.45), 'red');
+    a.tree(0.3, 3.4);
+    a.tree(3.6, 3.4);
+    return;
+  }
+  if (kind === 65) {
+    // 대학교: 캠퍼스 건물 여러 동 + 시계탑 + 잔디 광장
+    a.slab(1.2, 1.2, 1.6, 1.6, 0, 'grassDark', 'paper');
+    a.slab(1.95, 1.2, 0.1, 1.6, 0, 'paper');
+    office(a, 0.2, 0.2, 2.2, 0.8, 26, M.brick);
+    a.gable(0.18, 0.18, 2.24, 0.84, 26, M.roof);
+    office(a, 2.6, 0.2, 1.15, 1.6, 30, M.brick);
+    a.gable(2.58, 0.18, 1.19, 1.64, 30, M.roof);
+    office(a, 0.2, 1.2, 0.8, 1.5, 20, M.cream);
+    office(a, 2.95, 2.05, 0.85, 1.4, 18, M.glass);
+    a.box(1.85, 3.05, 0.35, 0.35, 48, M.brick);
+    a.gable(1.83, 3.03, 0.39, 0.39, 48, M.roof);
+    const c = a.p(2.02, 3.4, 40);
+    a.rect(c[0] - 3, c[1] - 3, 6, 6, 'white');
+    a.dot(c[0], c[1] - 1, 'ink');
+    for (const [u, v] of [
+      [1.3, 1.35],
+      [2.6, 2.6],
+      [1.3, 2.6],
+      [0.4, 3.4],
+      [3.5, 3.6],
+    ])
+      a.tree(u, v);
+    return;
+  }
+  if (kind === 66 || kind === 67) {
+    // 대형 소각장/화장장: 기존 공장형 외관을 크게, 굴뚝을 늘림
+    const big = kind === 66;
+    office(a, 0.25, 0.25, 2.9, 2.3, big ? 26 : 18, big ? M.brick : M.steel);
+    a.gable(0.23, 0.23, 2.94, 2.34, big ? 26 : 18, M.roof);
+    chimney(a, 3.3, 0.4, big ? 60 : 38);
+    chimney(a, 3.3, 1.05, big ? 52 : 34);
+    if (big) {
+      chimney(a, 3.3, 1.7, 46);
+      for (let x = 0.35; x < 3.4; x += 0.45) a.box(x, 2.85, 0.3, 0.3, 5, M.teal);
+    } else {
+      treeRow(a, n);
+    }
+    return;
+  }
+  if (kind === 68) {
+    // 추모공원: 묘역 + 중앙 추모탑 + 숲길
+    a.slab(1.85, 0.15, 0.25, 3.7, 0, 'paper');
+    a.slab(0.15, 1.85, 3.7, 0.25, 0, 'paper');
+    for (let v = 0.35; v < 3.6; v += 0.5)
+      for (const u of [0.35, 0.85, 1.35, 2.4, 2.9, 3.4]) {
+        if (v > 1.6 && v < 2.2) continue;
+        a.slab(u, v, 0.2, 0.28, 0, 'stone');
+        a.box(u, v, 0.18, 0.05, 5, M.steel);
+      }
+    a.box(1.85, 1.85, 0.25, 0.25, 36, M.cream);
+    a.slab(1.88, 1.88, 0.19, 0.19, 37, 'stone');
+    for (const t of [0.2, 3.7]) {
+      a.tree(t, 0.2);
+      a.tree(t, 3.7);
+    }
+    return;
+  }
+  if (kind === 69) {
+    // 광역 교도소: 수용동 3개 + 망루 4개 + 이중 담장
+    for (const [u, v] of [
+      [0.5, 0.5],
+      [2.1, 0.5],
+      [0.5, 2],
+    ])
+      office(a, u, v, 1.3, 1.1, 22, M.steel);
+    a.slab(2.2, 2.1, 1.2, 1.2, 0, 'stoneDark', 'white');
+    for (const [u, v] of [
+      [0.15, 0.15],
+      [3.55, 0.15],
+      [0.15, 3.55],
+      [3.55, 3.55],
+    ]) {
+      a.box(u, v, 0.28, 0.28, 30, M.steel);
+      a.box(u - 0.04, v - 0.04, 0.36, 0.36, 6, M.blue, 30);
+    }
+    fence(a, n);
+    return;
+  }
+  if (kind === 70) {
+    // 대형 취수장: 관리동 + 저수탑 2기 + 침전지
+    office(a, 0.2, 0.2, 1.1, 0.8, 16, M.teal);
+    for (const u of [1.6, 2.6]) {
+      a.box(u, 0.35, 0.65, 0.65, 26, M.blue);
+      a.slab(u + 0.04, 0.39, 0.57, 0.57, 27, 'glassLight');
+    }
+    for (const u of [0.3, 1.5, 2.7]) basin(a, u, 1.5, 0.95, 0.9);
+    for (const u of [0.5, 1.2, 1.9, 2.6, 3.3]) {
+      a.box(u, 2.8, 0.2, 0.45, 5, M.blue);
+      a.slab(u, 3.2, 0.2, 0.18, 1, 'water');
+    }
+    return;
+  }
+  if (kind === 71) {
+    // 대형 하수처리장: 침전조 3×2 + 관리동
+    office(a, 0.2, 0.2, 1, 0.7, 14, M.teal);
+    for (const u of [1.4, 2.6]) for (const v of [0.25, 1.35, 2.45]) basin(a, u, v, 1, 0.95, true);
+    for (const v of [1.3, 2.4]) basin(a, 0.25, v, 0.95, 0.9, true);
+    a.line(a.p(1.3, 0.3), a.p(1.3, 3.7), 'tealLight');
+    return;
+  }
+  if (kind === 72) {
+    // 풍력 단지: 터빈 4기
+    office(a, 0.2, 3.1, 0.7, 0.55, 9, M.cream);
+    for (const [u, v] of [
+      [0.9, 0.9],
+      [2.9, 0.9],
+      [1.9, 2],
+      [2.9, 3],
+    ])
+      turbine(a, u, v, 52);
+    return;
+  }
+  if (kind === 73) {
+    // 복합화력 발전소: 본관 + 굴뚝 + 냉각탑 + 연료탱크
+    office(a, 0.25, 0.25, 2.1, 1.5, 28, M.steel);
+    a.gable(0.23, 0.23, 2.14, 1.54, 28, M.roof);
+    chimney(a, 2.55, 0.35, 66);
+    chimney(a, 2.55, 0.9, 58);
+    for (const u of [2.95, 3.4]) {
+      a.box(u, 0.35, 0.4, 0.4, 40, M.cream);
+      a.slab(u + 0.04, 0.39, 0.32, 0.32, 41, 'stone');
+    }
+    for (let x = 0.4; x < 3.6; x += 0.6) {
+      a.box(x, 2.3, 0.45, 0.45, 10, M.steel);
+      a.slab(x + 0.03, 2.33, 0.39, 0.39, 11, 'paper');
+    }
+    for (let x = 0.4; x < 3.6; x += 0.5) a.box(x, 3.2, 0.35, 0.35, 8, M.steel);
+    return;
+  }
+  // 74 대형 태양광 단지
+  for (let v = 0.2; v < n - 0.45; v += 0.55)
+    for (let u = 0.2; u < n - 0.6; u += 0.75) {
+      if (u < 1 && v > 2.9) continue;
+      solar(a, u, v);
+    }
+  office(a, 0.2, 3.2, 0.7, 0.5, 8, M.cream);
+}
+
 /** All civic facilities share the residential pixel grid and prop dimensions. */
 export function facilityArt(kind: number): PixelArt {
   const n = FACILITY_SPAN[kind],
     a = new PixelArt(n * 64);
-  a.ground(n, kind === 4 || kind === 5 || kind === 16 || (kind >= 27 && kind <= 32));
+  a.ground(n, kind === 4 || kind === 5 || kind === 16 || kind === 68 || (kind >= 27 && kind <= 32));
+  if (kind >= 62) {
+    tier2Art(a, kind, n);
+    return a;
+  }
   if (kind >= 48) {
     militaryArt(a, kind, n);
     return a;

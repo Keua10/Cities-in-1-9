@@ -94,6 +94,8 @@ export const FACILITY_UNLOCK_LEVEL: readonly number[] = [
   4, 5, 6, 6, 7, 8, 9, 9,
   // 피드백 1차: 정찰타워 2, 벌목장 2, 탄약 공장 4
   2, 2, 4,
+  // 피드백 2차: 2단계(대형) 시설
+  4, 4, 5, 5, 5, 5, 4, 6, 5, 6, 4, 6, 7,
 ];
 
 export function normalizeProsperity(value: unknown): number {

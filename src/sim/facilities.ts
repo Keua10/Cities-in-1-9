@@ -25,7 +25,7 @@ import { mineSiteProblem } from './resources';
  * 발전·상하수도·위생·농장·교통 시설은 탐사한 땅이면 어디든 지을 수 있다(보호는 안 됨).
  */
 export const OWNED_ONLY_FACILITIES: ReadonlySet<number> = new Set([
-  0, 1, 2, 3, 4, 5, 6, 20, 48, 49, 51, 52, 53, 54, 55, 56, 57, 58, 60, 61,
+  0, 1, 2, 3, 4, 5, 6, 20, 48, 49, 51, 52, 53, 54, 55, 56, 57, 58, 60, 61, 62, 63, 64, 65, 69,
 ]);
 import {
   FACILITY_CAPACITY,
