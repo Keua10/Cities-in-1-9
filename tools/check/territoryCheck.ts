@@ -80,6 +80,14 @@ const tile = (cx: number, cy: number) => ({ tx: cx * CHUNK_SIZE + 10, ty: cy * C
   assert.ok(!r.ok && r.reason.includes('영토'), '공공 시설은 개척지에 못 짓는다');
   // 발전소(풍력 11)는 개척지에도 짓는다.
   assert.ok(canPlaceFacility(world, frontier.tx, frontier.ty, 11, 9).ok);
+  // 점령타워(50): 맞닿은 개척지에만, 내 땅·두 칸 밖·청크 경계 걸침은 불가, 도시 2레벨부터.
+  assert.ok(canPlaceFacility(world, frontier.tx, frontier.ty, 50, 9).ok, '타워는 맞닿은 청크');
+  assert.ok(!canPlaceFacility(world, own.tx, own.ty, 50, 9).ok, '타워는 내 땅에 안 됨');
+  assert.ok(!canPlaceFacility(world, far.tx, far.ty, 50, 9).ok, '타워는 두 칸 밖 안 됨');
+  const edge = (bx - 1) * CHUNK_SIZE + CHUNK_SIZE - 1;
+  const rr = canPlaceFacility(world, edge, frontier.ty, 50, 9);
+  assert.ok(!rr.ok, `청크 경계를 걸친 타워 불가: ${rr.reason}`);
+  assert.ok(!canPlaceFacility(world, frontier.tx, frontier.ty, 50, 1).ok, '도시 1레벨 불가');
 }
 console.log('  OK   지구는 내 땅·개척지, 공공 시설은 내 땅에만, 발전소는 어디든');
 
