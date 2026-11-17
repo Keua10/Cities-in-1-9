@@ -454,8 +454,10 @@ export class ContinentMap {
       const why = army.recruitBlock(type);
       b.disabled = !!why;
       b.title = why;
-      // 도시 레벨이 한참 모자란 병종은 숨겨서 목록을 짧게 둔다(다음 레벨 것까지만 보인다).
-      b.hidden = this.source.cityLevel !== undefined && this.source.cityLevel() + 1 < spec.unlock;
+      // 도시 레벨이 한참 모자란 병종은 숨겨서 목록을 짧게 둔다(기본 3종 + 다음 레벨 것까지).
+      b.hidden =
+        this.source.cityLevel !== undefined &&
+        Math.max(4, this.source.cityLevel() + 1) < spec.unlock;
       b.querySelector('small')!.textContent =
         `${formatMoney(spec.cost)} · 철 ${spec.iron}${spec.coal ? ` · 석탄 ${spec.coal}` : ''}${spec.oil ? ` · 석유 ${spec.oil}` : ''} · ${spec.men ? `${spec.men}명` : '기계'} · ${Math.round(spec.buildSec / 60)}분` +
         (why ? ` — ${why}` : '');
