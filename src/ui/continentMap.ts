@@ -6,6 +6,7 @@ import { loadOverview } from './startPicker';
 import { UNIT_SPECS, VISION_CHUNKS, type UnitType } from '../sim/config/military';
 import { unitPosition, type Unit } from '../sim/military/army';
 import type { ArmySystem } from '../sim/military/armySystem';
+import type { WarSession } from '../net/warSession';
 import { formatMoney } from './money';
 import './continentMap.css';
 
@@ -30,6 +31,10 @@ export interface ContinentMapSource {
   army: ArmySystem;
   /** 화면 위 알림(짧은 문장). */
   announce: (text: string) => void;
+  /** 전쟁 연결(로그인했을 때만). */
+  war: WarSession | null;
+  /** 다른 도시 영토를 새로 읽었을 때(자동 점령 막기). */
+  onForeign?: (owned: Set<string>) => void;
 }
 
 const UNIT_LETTER: Record<UnitType, string> = {
@@ -88,6 +93,8 @@ export class ContinentMap {
   private recruitEl: HTMLElement;
   private armyInfoEl: HTMLElement;
   private armyMsgEl: HTMLElement;
+  private warEl: HTMLElement;
+  private declareEl: HTMLElement;
 
   constructor(private source: ContinentMapSource) {
     this.root.id = 'continent-map';
@@ -96,6 +103,11 @@ export class ContinentMap {
       <header class="cm-head">
         <b>대륙 지도</b>
         <span class="cm-status" role="status"></span>
+        <div class="cm-war" hidden>
+          <span class="cm-war-text"></span>
+          <button type="button" class="cm-war-surrender">항복 신청</button>
+          <button type="button" class="cm-war-accept" hidden>항복 받아들이기</button>
+        </div>
         <button type="button" class="cm-close" aria-label="대륙 지도 닫기">×</button>
       </header>
       <div class="cm-body">
@@ -108,6 +120,13 @@ export class ContinentMap {
           <div class="cm-pane" data-pane="cities">
             <div class="cm-legend">금색 테두리 = 수도 · ● 접속 중 · 전쟁은 양쪽이 접속해 있어야 합니다</div>
             <ol class="cm-list"></ol>
+            <div class="cm-declare" hidden>
+              <div class="cm-declare-title"></div>
+              <button type="button" data-war="small">소규모 전쟁 선포 (준비 5분)</button>
+              <button type="button" data-war="surprise">기습 (준비 없이)</button>
+              <button type="button" data-war="large">대규모 전쟁 선포</button>
+              <div class="cm-declare-msg" role="status"></div>
+            </div>
           </div>
           <div class="cm-pane" data-pane="army" hidden>
             <div class="cm-army-info cm-legend"></div>
@@ -124,6 +143,22 @@ export class ContinentMap {
     this.recruitEl = this.root.querySelector('.cm-recruit')!;
     this.armyInfoEl = this.root.querySelector('.cm-army-info')!;
     this.armyMsgEl = this.root.querySelector('.cm-army-msg')!;
+    this.warEl = this.root.querySelector('.cm-war')!;
+    this.declareEl = this.root.querySelector('.cm-declare')!;
+    this.root.querySelector('.cm-war-surrender')!.addEventListener('click', () => {
+      const war = this.source.war;
+      if (!war) return;
+      if (war.status().surrenderPending) void war.withdrawSurrender();
+      else void war.offerSurrender();
+    });
+    this.root.querySelector('.cm-war-accept')!.addEventListener('click', () => {
+      void this.source.war?.acceptSurrender();
+    });
+    for (const b of this.declareEl.querySelectorAll<HTMLButtonElement>('button[data-war]'))
+      b.addEventListener(
+        'click',
+        () => void this.declare(b.dataset.war as 'small' | 'surprise' | 'large'),
+      );
     for (const b of this.root.querySelectorAll<HTMLButtonElement>('.cm-tabs button'))
       b.addEventListener('click', () => this.setTab(b.dataset.tab as 'cities' | 'army'));
     for (const type of ['infantry', 'engineer', 'artillery'] as UnitType[]) {
@@ -180,6 +215,7 @@ export class ContinentMap {
     const loop = () => {
       if (this.root.hidden) return;
       this.renderArmy(false);
+      this.renderWar();
       this.draw();
       this.frame = window.setTimeout(() => requestAnimationFrame(loop), 120);
     };
@@ -187,6 +223,60 @@ export class ContinentMap {
     await this.refresh();
     if (this.refreshTimer === null)
       this.refreshTimer = window.setInterval(() => void this.refresh(), 60_000);
+  }
+
+  /** 위쪽 전쟁 줄: 상대·단계·남은 시간·점수, 항복 버튼. */
+  private renderWar(): void {
+    const war = this.source.war;
+    const st = war?.status();
+    if (!war || !st || st.phase === 'none' || st.phase === 'ended') {
+      this.warEl.hidden = true;
+      return;
+    }
+    this.warEl.hidden = false;
+    const mmss = (ms: number) => {
+      const s = Math.ceil(ms / 1000);
+      return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+    };
+    const phase =
+      st.phase === 'prep'
+        ? `준비 ${mmss(st.prepLeftMs)} — 부대를 국경에 배치하세요`
+        : st.phase === 'paused'
+          ? '일시정지 — 상대가 접속을 끊었습니다(24시간 뒤 판정)'
+          : '전투 중';
+    this.warEl.querySelector('.cm-war-text')!.textContent =
+      `⚔ ${st.enemyName}와 ${st.war?.kind === 'large' ? '대규모' : '소규모'} 전쟁 · ${phase} · 점수 ${st.scoreMe.toLocaleString('ko-KR')} : ${st.scoreEnemy.toLocaleString('ko-KR')}`;
+    const surrender = this.warEl.querySelector<HTMLButtonElement>('.cm-war-surrender')!;
+    surrender.textContent = st.surrenderPending ? '항복 철회' : '항복 신청';
+    this.warEl.querySelector<HTMLButtonElement>('.cm-war-accept')!.hidden = !st.surrenderOffered;
+  }
+
+  /** 고른 다른 도시에 대한 선전포고 칸. */
+  private renderDeclare(): void {
+    const mine = this.source.mine();
+    const them = this.cities.find((c) => c.uid === this.selected);
+    if (!them || them.uid === mine.uid || !this.source.war) {
+      this.declareEl.hidden = true;
+      return;
+    }
+    this.declareEl.hidden = false;
+    this.declareEl.querySelector('.cm-declare-title')!.textContent = `${them.cityName}에 대해`;
+  }
+
+  private async declare(how: 'small' | 'surprise' | 'large'): Promise<void> {
+    const war = this.source.war;
+    const them = this.cities.find((c) => c.uid === this.selected);
+    if (!war || !them) return;
+    const msg = this.declareEl.querySelector('.cm-declare-msg')!;
+    msg.textContent = '보내는 중…';
+    const why = await war.declare(
+      them,
+      this.source.mine(),
+      how === 'large' ? 'large' : 'small',
+      how === 'surprise',
+    );
+    msg.textContent = why || '선전포고했습니다';
+    this.renderWar();
   }
 
   private setTab(tab: 'cities' | 'army'): void {
@@ -309,6 +399,7 @@ export class ContinentMap {
         const foreign = new Set<string>();
         for (const c of others) for (const k of c.owned) foreign.add(k);
         this.source.army.foreignOwned = foreign;
+        this.source.onForeign?.(foreign);
         const online = this.cities.filter((c) => c.online).length;
         const clock = sharedClockOffset();
         this.status.textContent =
@@ -343,6 +434,7 @@ export class ContinentMap {
         this.selected = c.uid;
         this.focus(c);
         this.renderList();
+        this.renderDeclare();
         this.draw();
       });
       this.list.append(li);

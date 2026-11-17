@@ -62,6 +62,8 @@ export interface ArmyState {
   nextId: number;
   /** 청크별로 군대에 가 있는 인원. 그만큼 그 청크 거주·일자리가 준다. */
   drafted: Record<string, number>;
+  /** 지금까지 잃은 병력의 가치(생산비 기준, 누적). 전쟁 점수 계산에 쓴다. */
+  lossValue?: number;
 }
 
 export function emptyArmy(): ArmyState {
@@ -83,6 +85,7 @@ export function normalizeArmy(raw: unknown): ArmyState {
     units,
     nextId: Math.max(1, Number(a.nextId) || 1),
     drafted: a.drafted && typeof a.drafted === 'object' ? { ...a.drafted } : {},
+    lossValue: Number(a.lossValue) || 0,
   };
 }
 
@@ -496,13 +499,19 @@ function loseMen(army: ArmyState, u: Unit, lost: number): void {
     if (army.drafted[key] < 0.5) delete army.drafted[key];
   }
   u.men = Math.max(0, u.men - lost);
+  const spec = UNIT_SPECS[u.type];
+  army.lossValue = (army.lossValue ?? 0) + (spec.cost * lost) / (spec.men || 1);
 }
 
 /** 부대를 없앤다. 해산(disband)이면 남은 인원이 인구로 돌아간다(drafted 에서 빠짐). */
 export function removeUnit(army: ArmyState, id: string, disband: boolean): void {
   const u = army.units.find((x) => x.id === id);
   if (!u) return;
-  void disband; // 전멸이든 해산이든 drafted 에서 빠진다. 전멸은 그 인원이 죽은 것이다.
+  // 전멸이든 해산이든 drafted 에서 빠진다. 전멸은 남은 인원까지 잃은 것이다.
+  if (!disband) {
+    const spec = UNIT_SPECS[u.type];
+    army.lossValue = (army.lossValue ?? 0) + (spec.cost * u.men) / (spec.men || 1);
+  }
   for (const [key, n] of Object.entries(u.source)) {
     army.drafted[key] = Math.max(0, (army.drafted[key] ?? 0) - n);
     if (army.drafted[key] < 0.5) delete army.drafted[key];

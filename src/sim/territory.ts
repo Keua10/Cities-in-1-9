@@ -69,6 +69,10 @@ export interface TerritoryState {
   move?: { to: string; doneAt: number };
   /** 마지막 수도 이전을 마친 실제 시각(쿨타임). */
   movedAt?: number;
+  /** 전쟁으로 빼앗긴 청크. 다시 자동 점령되지 않고, 그 청크 시민은 사라진다. */
+  ceded?: string[];
+  /** 전쟁으로 얻은 청크. 길 연결 규칙을 보지 않는다. */
+  annexed?: string[];
 }
 
 export interface ChunkPeople {
@@ -111,6 +115,8 @@ export class TerritorySystem {
   people = new Map<string, ChunkPeople>();
   /** 영토·수도가 바뀔 때마다 1씩 오른다. 화면이 테두리를 다시 그릴 때 쓴다. */
   revision = 0;
+  /** 다른 도시의 영토(대륙 지도·전쟁에서 채움). 다른 도시민이 있는 땅은 자동 점령하지 않는다. */
+  foreign = new Set<string>();
   /** 땅을 얻거나 잃었을 때(화면 알림용). */
   onChange: ((gained: string[], lost: string[]) => void) | null = null;
 
@@ -136,6 +142,8 @@ export class TerritorySystem {
     if (raw.cut && typeof raw.cut === 'object') out.cut = { ...raw.cut };
     if (raw.move && typeof raw.move.to === 'string') out.move = { ...raw.move };
     if (typeof raw.movedAt === 'number') out.movedAt = raw.movedAt;
+    if (Array.isArray(raw.ceded)) out.ceded = raw.ceded.filter((k) => typeof k === 'string');
+    if (Array.isArray(raw.annexed)) out.annexed = raw.annexed.filter((k) => typeof k === 'string');
     return out;
   }
 
@@ -234,8 +242,9 @@ export class TerritorySystem {
     const gained: string[] = [];
     const lost: string[] = [];
     // 1) 자동 점령
+    const ceded = new Set(this.state.ceded ?? []);
     for (const [key, p] of this.people) {
-      if (this.owned.has(key)) continue;
+      if (this.owned.has(key) || ceded.has(key) || this.foreign.has(key)) continue;
       if (p.residents < OCCUPY_RESIDENTS && p.floating < OCCUPY_FLOATING) continue;
       if (!this.connected.has(key)) continue;
       this.owned.add(key);
@@ -246,7 +255,12 @@ export class TerritorySystem {
     let cutChanged = false;
     for (const key of this.owned) {
       const { cx, cy } = parseChunkKey(key);
-      if (this.isCore(cx, cy) || this.isCapital(cx, cy) || this.connected.has(key)) {
+      if (
+        this.isCore(cx, cy) ||
+        this.isCapital(cx, cy) ||
+        this.connected.has(key) ||
+        this.state.annexed?.includes(key)
+      ) {
         if (cut[key] !== undefined) {
           delete cut[key];
           cutChanged = true;
@@ -503,6 +517,41 @@ export class TerritorySystem {
 
   get moveCooldownLeftMs(): number {
     return Math.max(0, (this.state.movedAt ?? -Infinity) + CAPITAL_MOVE_COOLDOWN_MS - Date.now());
+  }
+
+  isCeded(key: string): boolean {
+    return !!this.state.ceded?.includes(key);
+  }
+
+  /** 전쟁에서 진 땅을 내준다(수도는 소규모 전쟁에서 보호되므로 들어오지 않는다). */
+  cede(keys: readonly string[]): void {
+    if (!keys.length) return;
+    const ceded = new Set(this.state.ceded ?? []);
+    for (const k of keys) {
+      ceded.add(k);
+      this.owned.delete(k);
+      if (this.state.annexed) this.state.annexed = this.state.annexed.filter((x) => x !== k);
+    }
+    this.state.ceded = [...ceded];
+    this.state.owned = [...this.owned];
+    this.revision++;
+    this.changed();
+  }
+
+  /** 전쟁에서 얻은 땅을 영토에 더한다. */
+  annex(keys: readonly string[]): void {
+    if (!keys.length) return;
+    const annexed = new Set(this.state.annexed ?? []);
+    for (const k of keys) {
+      annexed.add(k);
+      this.owned.add(k);
+    }
+    if (this.state.ceded) this.state.ceded = this.state.ceded.filter((k) => !annexed.has(k));
+    this.state.annexed = [...annexed];
+    this.state.owned = [...this.owned];
+    this.exploreAround([...keys]);
+    this.revision++;
+    this.changed();
   }
 
   /** 관리자 초기화·점검용: 시작 상태로 되돌린다. */

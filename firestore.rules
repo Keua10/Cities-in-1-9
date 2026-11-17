@@ -76,7 +76,8 @@ service cloud.firestore {
       allow write: if signedIn()
                    && request.auth.uid == uid
                    && request.resource.data.keys().hasOnly(['cityIndex', 'cityName', 'origin',
-                        'owned', 'capital', 'capitalLevel', 'cityLevel', 'population', 'updatedAt'])
+                        'owned', 'capital', 'capitalLevel', 'cityLevel', 'population', 'updatedAt',
+                        'units'])
                    && request.resource.data.owned is list
                    && request.resource.data.owned.size() <= 3000
                    && request.resource.data.cityName is string
@@ -92,6 +93,26 @@ service cloud.firestore {
                    && request.resource.data.keys().hasOnly(['at', 'city'])
                    && request.resource.data.at == request.time;
       allow delete: if false;
+    }
+
+    // 전쟁(군사 4·5단계). 당사자 둘만 만들고 고친다. 당사자는 바꿀 수 없다.
+    match /wars/{warId} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+                    && request.resource.data.a == request.auth.uid
+                    && request.resource.data.parties == [request.resource.data.a, request.resource.data.b]
+                    && request.resource.data.a != request.resource.data.b;
+      allow update: if signedIn()
+                    && request.auth.uid in resource.data.parties
+                    && request.resource.data.a == resource.data.a
+                    && request.resource.data.b == resource.data.b
+                    && request.resource.data.parties == resource.data.parties;
+      allow delete: if false;
+      // 한쪽의 전장 스냅숏. 자기 것만 쓴다.
+      match /sides/{uid} {
+        allow read: if signedIn();
+        allow write: if signedIn() && request.auth.uid == uid;
+      }
     }
 
     match /cities/{cityId} {

@@ -50,6 +50,7 @@ const checks = {
   resources: 'tools/check/resourceCheck.ts',
   multiplayer: 'tools/check/multiplayerCheck.ts',
   military: 'tools/check/militaryCheck.ts',
+  war: 'tools/check/warCheck.ts',
 };
 mkdirSync('.check', { recursive: true });
 for (const name of process.argv.length > 2 ? process.argv.slice(2) : Object.keys(checks)) {

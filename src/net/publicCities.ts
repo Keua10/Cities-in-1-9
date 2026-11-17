@@ -24,6 +24,8 @@ export interface PublicProfile {
   cityLevel: number;
   population: number;
   updatedAt: number;
+  /** 부대 위치·인원(기습 조건 계산용, 훈련 중 제외). */
+  units?: Array<{ cx: number; cy: number; men: number }>;
 }
 
 export interface PublicCity extends PublicProfile {
@@ -47,6 +49,11 @@ export function readProfile(uid: string, raw: Record<string, unknown>): PublicPr
     cityLevel: Math.max(1, Math.min(9, Number(raw.cityLevel) || 1)),
     population: Math.max(0, Number(raw.population) || 0),
     updatedAt: Number(raw.updatedAt) || 0,
+    units: Array.isArray(raw.units)
+      ? (raw.units as Array<Record<string, unknown>>)
+          .map((u) => ({ cx: Number(u.cx) || 0, cy: Number(u.cy) || 0, men: Number(u.men) || 0 }))
+          .slice(0, 200)
+      : [],
   };
 }
 

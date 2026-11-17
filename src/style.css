@@ -1265,3 +1265,20 @@ body.clean-view #minimap-shell {
   flex: 1;
   accent-color: #6fb4e8;
 }
+
+#war-banner {
+  position: fixed;
+  top: 54px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 12;
+  padding: 6px 12px;
+  border-radius: 10px;
+  border: 1px solid #c8402f;
+  background: rgba(60, 14, 10, 0.9);
+  color: #ffd9cf;
+  font-size: 13px;
+}
+#war-banner[hidden] {
+  display: none;
+}

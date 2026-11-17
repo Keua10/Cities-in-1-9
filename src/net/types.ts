@@ -46,6 +46,10 @@ export interface MacroState {
   resources?: Record<string, number>;
   /** 청크별로 캔 양 "cx,cy" → 단위. 매장량 = 처음 매장량 - 이 값. */
   mined?: Record<string, number>;
+  /** 정산을 마친 전쟁 id → 시각(배상을 두 번 주고받지 않게). */
+  warsSettled?: Record<string, number>;
+  /** 마지막으로 기습한 시각(대가: 24시간 동맹 불가). */
+  surpriseAt?: number;
   /** 군대 (sim/military/army.ts ArmyState). */
   army?: import('../sim/military/army').ArmyState;
   /** 영토·수도 (sim/territory.ts). 없으면 시작 영토 4×4 로 만든다. */

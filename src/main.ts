@@ -27,9 +27,11 @@ import { CongestionMap } from './sim/congestion';
 import { MacroSim } from './sim/macro';
 import { remainingAt } from './sim/resources';
 import { Market } from './net/market';
+import { WAR_SPEED } from './sim/config/pace';
 import { Presence } from './net/presence';
 import { loadPublicCities, publishProfile, type PublicProfile } from './net/publicCities';
 import { ContinentMap } from './ui/continentMap';
+import { WarSession } from './net/warSession';
 import { CATCHUP_TICKS_PER_FRAME, START_MONEY } from './sim/simConstants';
 import { installPedestrianSystemPatch } from './sim/pedestrianSystemPatch';
 import { TrafficSim } from './sim/traffic/trafficSim';
@@ -286,13 +288,16 @@ async function boot(): Promise<void> {
     cityLevel: sim.cityLevel,
     population: Math.round(sim.stats.population),
     updatedAt: Date.now(),
+    units: sim.army.units
+      .filter((u) => u.state !== 'training')
+      .map((u) => ({ cx: u.cx, cy: u.cy, men: Math.round(u.men) })),
   });
   let lastPublished = '';
   const publish = (): void => {
     if (!online || !session) return;
     const p = myProfile();
     // 영토·레벨·인구(백 단위)가 그대로면 다시 쓰지 않는다(쓰기 아끼기).
-    const stamp = `${p.owned.length}|${p.capital}|${p.capitalLevel}|${p.cityLevel}|${Math.round(p.population / 100)}`;
+    const stamp = `${p.owned.length}|${p.capital}|${p.capitalLevel}|${p.cityLevel}|${Math.round(p.population / 100)}|${JSON.stringify(p.units)}`;
     if (stamp === lastPublished) return;
     lastPublished = stamp;
     publishProfile(session.uid, p).catch((err) => {
@@ -303,13 +308,47 @@ async function boot(): Promise<void> {
   saver.afterSave = publish;
   window.setTimeout(publish, 5_000);
   if (online && session && city) new Presence(session.uid, city.cityIndex).start();
+  // 전쟁 연결: 로그인한 학생만.
+  const warSession =
+    online && session && city ? new WarSession(session.uid, sim, city.cityName) : null;
+  warSession?.start();
+  // 부대가 움직이면 공개 정보(부대 위치)도 가끔 갱신한다.
+  window.setInterval(publish, 60_000);
   const continentMap = new ContinentMap({
     online,
     load: loadPublicCities,
     mine: () => ({ ...myProfile(), uid: myUid, online: true, lastSeen: Date.now() }),
     army: sim.army,
     announce: (text) => tools.announce(text),
+    war: warSession,
+    onForeign: (owned) => {
+      sim.territory.foreign = owned;
+    },
   });
+  if (warSession) warSession.onNotice = (text) => tools.announce(text);
+  // 전쟁 중이면 도시 화면 위에도 한 줄 띄운다(설계안: 도시 화면에서는 결과·피해만).
+  const warBanner = document.createElement('button');
+  warBanner.id = 'war-banner';
+  warBanner.hidden = true;
+  warBanner.addEventListener('click', () => void continentMap.open());
+  document.body.append(warBanner);
+  window.setInterval(() => {
+    const st = warSession?.status();
+    if (!st || st.phase === 'none' || st.phase === 'ended') {
+      warBanner.hidden = true;
+      return;
+    }
+    warBanner.hidden = false;
+    const left = Math.ceil(st.prepLeftMs / 1000);
+    warBanner.textContent =
+      `⚔ ${st.enemyName}와 전쟁 · ` +
+      (st.phase === 'prep'
+        ? `개전까지 ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`
+        : st.phase === 'paused'
+          ? '일시정지(상대 접속 끊김)'
+          : '전투 중') +
+      ` · 점수 ${st.scoreMe.toLocaleString('ko-KR')} : ${st.scoreEnemy.toLocaleString('ko-KR')} · 대륙 지도에서 지휘`;
+  }, 1000);
   sim.army.uid = myUid;
   sim.army.onEvent = (e) => {
     if (e.type === 'trained')
@@ -533,7 +572,7 @@ async function boot(): Promise<void> {
   let lastFrameAt = performance.now();
   app.ticker.add((ticker) => {
     const now = performance.now();
-    const gameDelta = Math.min(ticker.deltaMS, 100) * chrome.speed;
+    const gameDelta = Math.min(ticker.deltaMS, 100) * (sim.atWar ? WAR_SPEED : chrome.speed);
     // 스타트 버닝은 실제 플레이 시간으로 줄인다. 느린 기기(프레임 100ms 이상)에서도
     // 버닝이 덜 들어가지 않게 1초까지는 그대로 센다. 탭이 숨겨졌다 돌아온 큰 공백은 뺀다.
     // (Pixi 의 deltaMS 는 프레임당 100ms 로 잘리므로 실제 시계로 직접 잰다.)

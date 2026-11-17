@@ -318,6 +318,13 @@ export class MacroSim {
 
   /** 전쟁 같은 특수 상황에서 끈다(전쟁 단계에서 연결). */
   grantsEnabled = true;
+  /** 전쟁 중이면 1배속(공유 시계와 맞춘다). net/warSession.ts 가 켠다. */
+  atWar = false;
+
+  /** 저장되는 도시 상태(전쟁 정산 기록 등 다른 모듈이 읽고 쓴다). */
+  get state(): MacroState {
+    return this.macro;
+  }
 
   /** 상하수도·발전 시설의 연결망 사용률 0~1. 다른 시설은 null. */
   private utilityUse(kind: number): number | null {
@@ -796,7 +803,12 @@ export class MacroSim {
       people.set(p.key, here);
       const drafted = this.army.army.drafted[p.key] ?? 0;
       const prevRaw = this.territory.people.get(p.key)?.raw ?? 0;
-      const draftKeep = drafted > 0 && prevRaw > 0 ? Math.max(0, 1 - drafted / prevRaw) : 1;
+      // 전쟁으로 빼앗긴 청크의 시민은 사라진다(건물은 남는다).
+      const draftKeep = this.territory.isCeded(p.key)
+        ? 0
+        : drafted > 0 && prevRaw > 0
+          ? Math.max(0, 1 - drafted / prevRaw)
+          : 1;
 
       let occArr = this.occ.get(p.key);
       if (!occArr || occArr.length !== p.bld.length) {

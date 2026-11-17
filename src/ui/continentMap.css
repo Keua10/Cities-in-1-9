@@ -209,3 +209,41 @@
 .cm-empty {
   color: #9fb3bb;
 }
+
+.cm-war {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: rgba(200, 64, 47, 0.25);
+  border: 1px solid #c8402f;
+  font-size: 12px;
+}
+.cm-war[hidden] {
+  display: none;
+}
+.cm-war button {
+  font-size: 11px;
+  padding: 3px 6px;
+}
+.cm-declare {
+  display: grid;
+  gap: 4px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.cm-declare[hidden] {
+  display: none;
+}
+.cm-declare-title {
+  font-weight: 600;
+}
+.cm-declare button {
+  padding: 6px;
+  text-align: left;
+}
+.cm-declare-msg {
+  color: #ffd38a;
+  min-height: 1em;
+}

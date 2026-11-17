@@ -39,6 +39,8 @@ export interface WarLink {
   capitalProtected: boolean;
   /** 일시정지(한쪽 접속 끊김) 동안은 부대가 멈춘다. */
   paused: boolean;
+  /** 이번 걸음의 사건(점령 등)을 전쟁 연결이 받아 간다. */
+  onEvents?: (events: BattleEvent[]) => void;
 }
 
 /** 시가전으로 보는 청크: 거주+유동 인구가 이 이상. */
@@ -205,6 +207,7 @@ export class ArmySystem {
     }
     if (events.length) {
       for (const e of events) this.onEvent?.(e);
+      this.war?.onEvents?.(events);
       this.bump();
     }
     return events;
