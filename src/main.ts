@@ -361,6 +361,24 @@ async function boot(): Promise<void> {
       return set;
     },
   });
+  // 다른 도시 땅: 대륙 지도를 안 열어도 부팅 때·10분마다 읽어 둔다(평시 남의 땅에
+  // 들어가거나 자동 점령으로 남의 청크를 차지하지 않게).
+  const refreshForeign = async (): Promise<void> => {
+    if (!online) return;
+    try {
+      const list = await loadPublicCities();
+      const foreign = new Set<string>();
+      for (const c of list) if (c.uid !== myUid) for (const k of c.owned) foreign.add(k);
+      sim.territory.foreign = foreign;
+      sim.army.foreignOwned = foreign;
+    } catch (err) {
+      console.warn('다른 도시 영토를 읽지 못했습니다', err);
+    }
+  };
+  void refreshForeign();
+  window.setInterval(() => {
+    if (document.visibilityState === 'visible') void refreshForeign();
+  }, 10 * 60_000);
   if (warSession) warSession.onNotice = (text) => tools.announce(text);
   // 전쟁 중이면 도시 화면 위에도 한 줄 띄운다(설계안: 도시 화면에서는 결과·피해만).
   const warBanner = document.createElement('button');
@@ -601,8 +619,14 @@ async function boot(): Promise<void> {
       );
     } else if (order.kind === 'reset') {
       window.alert('선생님이 이 도시를 초기화했습니다. 빈 땅에서 다시 시작합니다.');
-      await resetCity('empty', order.id);
-      return;
+      try {
+        await resetCity('empty', order.id);
+        return;
+      } catch (err) {
+        // 저장이 막혀 초기화하지 못하면 게임은 그대로 열고, 다음 접속 때 다시 한다.
+        console.error('관리자 초기화 실패', err);
+        badge.set('error', '선생님 초기화를 저장하지 못했습니다 · 다음 접속 때 다시 합니다');
+      }
     }
   }
   // 공지(관리자 도구) — 새 공지면 한 번 보여 준다.

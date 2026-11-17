@@ -161,7 +161,7 @@ export class CityPanel {
     });
     // 소리는 도시 통계가 아니라 설정에서 찾는다. 통계 한가운데(수요와 서비스
     // 사이)에 있어서 "소리를 끄는 곳이 없다" 고 읽혔다. 설정 패널이 있으면
-    // 관리자 코드 버튼 위로 옮긴다.
+    // 관리자 도구 버튼 위로 옮긴다.
     const audioBlock = el.querySelector<HTMLElement>('.cp-audio');
     const settings = document.getElementById('toolbar');
     if (audioBlock && settings) {

@@ -57,6 +57,8 @@ export interface MacroState {
   warOutcome?: 'win' | 'lose' | 'draw';
   /** 부대가 가 본 청크(대륙 지도에서 선명하게 보인다). */
   scouted?: string[];
+  /** 내가 진영 대표로 항복을 신청한 전쟁 id(정산 확인용). */
+  surrenderSent?: string;
   /** 마지막으로 본 공지 시각. */
   noticeSeenAt?: number;
   /** 마지막으로 실행한 관리자 지시 id. */

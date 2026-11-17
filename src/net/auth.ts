@@ -56,13 +56,19 @@ async function toSession(user: User): Promise<Session> {
   };
 }
 
+/** 리다이렉트 로그인에서 막 돌아왔는가(그러면 로그인 화면을 건너뛴다). */
+export let justRedirected = false;
+
 /** 기기에 남은 로그인(있으면 Session). 리다이렉트 로그인에서 막 돌아온 경우도 받는다. */
 export async function restoreSession(): Promise<Session | null> {
   const fb = getFirebase();
   if (!fb) return null;
   try {
     const back = await getRedirectResult(fb.auth);
-    if (back?.user) return toSession(back.user);
+    if (back?.user) {
+      justRedirected = true;
+      return toSession(back.user);
+    }
   } catch (err) {
     console.warn('리다이렉트 로그인 결과 실패', err);
   }

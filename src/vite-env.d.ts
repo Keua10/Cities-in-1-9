@@ -11,8 +11,6 @@ interface ImportMetaEnv {
   readonly VITE_FIREBASE_AUTH_DOMAIN?: string;
   readonly VITE_FIREBASE_PROJECT_ID?: string;
   readonly VITE_FIREBASE_APP_ID?: string;
-  /** 학생 번호를 이메일로 바꿀 때 붙이는 도메인. 실제로 메일이 가지는 않는다. */
-  /** '1' 일 때만 로그인 화면에 계정 생성 버튼이 뜬다. 배포에는 절대 넣지 말 것. */
 }
 
 interface ImportMeta {

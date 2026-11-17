@@ -248,10 +248,33 @@ assert.ok(B.sim.territory.count < ownedB, 'B 영토 감소');
 assert.ok(A.sim.territory.isOwned(target.cx, target.cy), 'A 가 점령지를 얻음');
 assert.ok(!A.sim.atWar && A.sim.grantsEnabled, '전쟁이 끝나면 평시');
 const re = await sa.declare(profile(B) as any, profile(A) as any, 'small', false);
-assert.ok(re.includes('시간 뒤'), '패전국 재선포 48시간 금지');
+assert.ok(re.includes('보호'), `패전국 재선포 48시간 금지: ${re}`);
 console.log(
   `  OK   항복 → 승전 정산(배상 ${Math.round(moneyB * 0.25)}만 원, 영토 ${ownedB - B.sim.territory.count}청크)`,
 );
+// 위조된 종료(처음부터 "A 승" 으로 끝난 전쟁)는 배상하지 않는다.
+{
+  const { setDoc, doc } = await import('./fakeFirebase');
+  const before = B.sim.money;
+  clock += 49 * 3_600_000;
+  await setDoc(doc(null as never, 'wars', 'forged-1'), {
+    a: A.uid,
+    b: B.uid,
+    parties: [A.uid, B.uid],
+    names: {},
+    kind: 'small',
+    surprise: false,
+    state: 'ended',
+    result: 'winA',
+    declaredAt: clock,
+    startsAt: clock,
+    endedAt: clock,
+  });
+  await tickAll(2000);
+  assert.equal(B.sim.money, before, '위조된 승패로는 돈이 나가지 않음');
+  assert.ok(notes.some((n) => n.startsWith('B:') && n.includes('올바르지 않아')));
+}
+console.log('  OK   위조된 전쟁 종료 기록은 배상하지 않음');
 Date.now = realNow;
 console.log(
   'War session passed: declare, prep, battle, occupation, pause, surrender, reparations.',

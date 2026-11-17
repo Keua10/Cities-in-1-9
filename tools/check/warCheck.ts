@@ -68,10 +68,52 @@ assert.ok(
   base({ wars: [war({ state: 'ended', peaceUntil: now + 3_600_000 })] }).includes('시간 뒤'),
 );
 assert.equal(base({ wars: [war({ state: 'ended', peaceUntil: now - 1 })] }), '');
-console.log('  OK   선전포고 조건: 수도 레벨·접속·거리·다른 전쟁·재선포 금지');
+// 상대가 나 아닌 도시와 전쟁 중(상대 전쟁 기록에서)
+assert.ok(
+  base({ theirWars: [war({ id: 'x', a: 'b', b: 'c', parties: ['b', 'c'] })] }).includes(
+    '상대가 이미',
+  ),
+  '제3국: 상대가 다른 전쟁 중이면 불가',
+);
+// 패전국 보호: b 가 c 에게 졌으면 a 도 48시간 동안 b 에게 선포 불가
+assert.ok(
+  base({
+    theirWars: [
+      war({
+        id: 'y',
+        a: 'c',
+        b: 'b',
+        parties: ['c', 'b'],
+        state: 'ended',
+        result: 'winA',
+        endedAt: now - 3_600_000,
+      }),
+    ],
+  }).includes('보호'),
+  '패전국은 누구에게서든 48시간 보호',
+);
+assert.equal(
+  base({
+    theirWars: [
+      war({
+        id: 'y',
+        a: 'c',
+        b: 'b',
+        parties: ['c', 'b'],
+        state: 'ended',
+        result: 'winA',
+        endedAt: now - 49 * 3_600_000,
+      }),
+    ],
+  }),
+  '',
+);
+console.log(
+  '  OK   선전포고 조건: 수도 레벨·접속·거리·다른 전쟁·재선포 금지·제3국 전쟁·패전국 보호',
+);
 
 // 기습
-const sb = (mine: number, theirs: number, level = 5) =>
+const sb = (mine: number, theirs: number, level = 5, night = true) =>
   surpriseBlock({
     now,
     cityLevel: level,
@@ -80,11 +122,32 @@ const sb = (mine: number, theirs: number, level = 5) =>
     myUnits: [{ cx: 9, cy: 3, men: mine }],
     theirUnits: [{ cx: 20, cy: 3, men: theirs }],
     theirOwned: ring(11, 0, 8),
+    night,
   });
-assert.equal(sb(1500, 1000), '');
+assert.equal(sb(1500, 1000), '', '밤: 상대 시야 1청크라 2청크 떨어진 부대는 안 보임');
 assert.ok(sb(1400, 1000).includes('1.5배'));
 assert.ok(sb(1500, 1000, 4).includes('5레벨'));
-console.log('  OK   기습: 도시 5레벨, 국경 병력 1.5배');
+assert.ok(
+  sb(1500, 1000, 5, false).includes('보고 있습니다'),
+  '낮: 2청크면 보임(산이 가리지 않으면)',
+);
+// 산이 가리면 낮에도 숨는다
+{
+  const { chunkTerrain } = await import('../../src/sim/military/terrain');
+  const { seenBy } = await import('../../src/sim/military/warRules');
+  let found = false;
+  for (let y = -60; y < 60 && !found; y++)
+    for (let x = -100; x < 100 && !found; x++) {
+      if (chunkTerrain(x + 1, y).kind !== 'mountain') continue;
+      if (chunkTerrain(x, y).kind === 'mountain' || chunkTerrain(x + 2, y).kind === 'mountain')
+        continue;
+      assert.ok(!seenBy(x, y, [{ cx: x + 2, cy: y }], false), '산 너머는 안 보임');
+      assert.ok(seenBy(x + 1, y, [{ cx: x + 2, cy: y }], false), '바로 옆은 보임');
+      found = true;
+    }
+  assert.ok(found, '시험할 산 청크');
+}
+console.log('  OK   기습: 도시 5레벨, 국경 병력 1.5배, 상대 시야 밖(산 뒤·밤)');
 
 // 점령 주장 합치기
 const occ = mergeClaims(

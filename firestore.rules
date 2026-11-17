@@ -118,24 +118,41 @@ service cloud.firestore {
     // 전쟁(군사 4·5단계). 당사자 둘만 만들고 고친다. 당사자는 바꿀 수 없다.
     match /wars/{warId} {
       allow read: if signedIn();
+      // 선포한 쪽만 만든다. 처음부터 끝난 전쟁·결과·배상을 적을 수 없다.
       allow create: if signedIn()
                     && request.resource.data.a == request.auth.uid
                     && request.resource.data.parties == [request.resource.data.a, request.resource.data.b]
-                    && request.resource.data.a != request.resource.data.b;
+                    && request.resource.data.a != request.resource.data.b
+                    && request.resource.data.state in ['prep', 'active']
+                    && !('result' in request.resource.data)
+                    && !('paid' in request.resource.data)
+                    && !('endedAt' in request.resource.data)
+                    && !('joined' in request.resource.data);
       // 참가국은 상태를 고친다. 대규모 전쟁에는 다른 도시가 자기 uid 만 덧붙여 참가할 수 있다.
       // 관리자는 아무 전쟁이나 끝낼 수 있다(강제 휴전).
+      // 그 밖에: 선포·받은 쪽·종류·기습·개전 시각은 못 바꾸고, 끝난 전쟁은 되살릴 수 없고,
+      // 배상 기록(paid)과 참가 기록(joined)은 각자 자기 것만 적는다.
       allow update: if isAdmin()
                     || (signedIn()
                         && request.resource.data.a == resource.data.a
                         && request.resource.data.b == resource.data.b
+                        && request.resource.data.kind == resource.data.kind
+                        && request.resource.data.get('surprise', false) == resource.data.get('surprise', false)
+                        && request.resource.data.startsAt == resource.data.startsAt
+                        && (resource.data.state != 'ended' || request.resource.data.state == 'ended')
+                        && request.resource.data.get('paid', {}).diff(resource.data.get('paid', {}))
+                             .affectedKeys().hasOnly([request.auth.uid])
                         && ((request.auth.uid in resource.data.parties
-                             && request.resource.data.parties == resource.data.parties)
+                             && request.resource.data.parties == resource.data.parties
+                             && request.resource.data.get('joined', {}) == resource.data.get('joined', {}))
                             || (!(request.auth.uid in resource.data.parties)
                                 && resource.data.kind == 'large'
                                 && resource.data.state != 'ended'
                                 && request.resource.data.state == resource.data.state
                                 && request.resource.data.parties
-                                   == resource.data.parties.concat([request.auth.uid]))));
+                                   == resource.data.parties.concat([request.auth.uid])
+                                && request.resource.data.get('joined', {}).diff(resource.data.get('joined', {}))
+                                     .affectedKeys().hasOnly([request.auth.uid]))));
       allow delete: if false;
       // 한쪽의 전장 스냅숏. 자기 것만 쓴다.
       match /sides/{uid} {
@@ -145,6 +162,8 @@ service cloud.firestore {
     }
 
     // 동맹(군사 5단계). 두 당사자 모두 상태를 바꿀 수 있다. 당사자·신청자·보증금은 못 바꾼다.
+    // 끝난 동맹(거절·취소·해제·배신)은 그대로 두고, 수락은 받은 쪽만, 끝낸 사람(endedBy)은
+    // 자기 자신만 적을 수 있다(남을 배신자로 적어 보증금을 가져가지 못하게).
     match /alliances/{allianceId} {
       allow read: if signedIn();
       allow create: if signedIn()
@@ -161,7 +180,13 @@ service cloud.firestore {
                         && request.auth.uid in resource.data.parties
                         && request.resource.data.parties == resource.data.parties
                         && request.resource.data.from == resource.data.from
-                        && request.resource.data.deposit == resource.data.deposit);
+                        && request.resource.data.deposit == resource.data.deposit
+                        && (!(resource.data.state in ['declined', 'cancelled', 'ended', 'broken'])
+                            || request.resource.data.state == resource.data.state)
+                        && (!(resource.data.state == 'pending' && request.resource.data.state == 'active')
+                            || request.auth.uid != resource.data.from)
+                        && (request.resource.data.get('endedBy', '') == resource.data.get('endedBy', '')
+                            || request.resource.data.get('endedBy', '') == request.auth.uid));
       allow delete: if false;
     }
 

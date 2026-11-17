@@ -14,6 +14,7 @@ import { parseChunkKey } from '../core/iso';
 import {
   CEASEFIRE_PEACE_MS,
   DEFEAT_PEACE_MS,
+  WAR_JUDGE_AFTER_MS,
   WAR_PREP_MS,
   WAR_STALE_MS,
   WAR_SYNC_MS,
@@ -55,6 +56,7 @@ import { sharedNow } from '../sim/sharedClock';
 import { UNIT_SPECS } from '../sim/config/military';
 import type { AllianceSession } from './alliances';
 import { loadSettings } from './admin';
+import { isNight } from '../sim/military/weather';
 import { getFirebase } from './firebase';
 import type { PublicCity } from './publicCities';
 
@@ -405,7 +407,7 @@ export class WarSession {
     // 휴전 제안: 통과하면 휴전, 더 이상 통과할 수 없으면 거둔다.
     if (w.state !== 'ended' && w.ceasefireOffer) {
       if (ceasefireAccepted(w)) {
-        void this.end(w, 'ceasefire', now, true);
+        void this.end(w, 'ceasefire', now, 'agreed');
         return;
       }
       if (ceasefireDead(w)) void this.patch(w, { ceasefireOffer: deleteField() });
@@ -414,7 +416,7 @@ export class WarSession {
     // 항복이 받아들여졌으면 끝낸다(받는 진영 누구든 먼저 본 쪽이).
     if (w.state !== 'ended' && surrenderAccepted(w)) {
       const loser = sideOf(w, w.surrender!.by)!;
-      void this.end(w, loser === 'a' ? 'winB' : 'winA', now);
+      void this.end(w, loser === 'a' ? 'winB' : 'winA', now, 'surrender');
       return;
     }
 
@@ -424,9 +426,9 @@ export class WarSession {
       for (const d of this.sides.values()) last = Math.max(last, d.bigBattleAt ?? 0);
       if (judgeDue(w, now)) {
         const [me, them] = this.scores(w, this.occupation(w));
-        void this.end(w, mine === 'a' ? judge(me, them) : judge(them, me), now);
+        void this.end(w, mine === 'a' ? judge(me, them) : judge(them, me), now, 'judge');
       } else if (!stale && ceasefireDue(w, last, now)) {
-        void this.end(w, 'ceasefire', now);
+        void this.end(w, 'ceasefire', now, 'ceasefire');
       }
     }
   }
@@ -480,7 +482,7 @@ export class WarSession {
     w: WarDoc,
     result: WarDoc['result'],
     now: number,
-    agreed = false,
+    reason: NonNullable<WarDoc['endReason']>,
   ): Promise<void> {
     if (this.ending === w.id) return;
     this.ending = w.id;
@@ -504,7 +506,9 @@ export class WarSession {
       contrib: contributions(w, occupied, armyValue),
       surrender: deleteField(),
       ceasefireOffer: deleteField(),
-      ...(agreed ? { agreedCeasefire: true } : {}),
+      endReason: reason,
+      ...(reason === 'surrender' && w.surrender ? { surrenderBy: w.surrender.by } : {}),
+      ...(reason === 'agreed' ? { agreedCeasefire: true } : {}),
     });
   }
 
@@ -551,6 +555,23 @@ export class WarSession {
     if (mine !== winner) {
       if (w.paid?.[this.uid]) {
         settled[w.id] = now;
+        return;
+      }
+      // 배상은 정당하게 끝난 전쟁에서만 낸다: 우리 진영이 항복했거나(대표인 나는 내가 신청한
+      // 기록이 있어야), 끊긴 지 24시간이 지나 판정됐을 때. 그 밖의 "승패" 기록은 무시한다.
+      const legit =
+        (w.endReason === 'surrender' &&
+          !!w.surrenderBy &&
+          sideOf(w, w.surrenderBy) === mine &&
+          (w.surrenderBy !== this.uid || this.sim.state.surrenderSent === w.id)) ||
+        (w.endReason === 'judge' &&
+          w.pausedAt !== undefined &&
+          (w.endedAt ?? 0) - w.pausedAt >= WAR_JUDGE_AFTER_MS);
+      if (!legit) {
+        settled[w.id] = now;
+        st.warOutcome = 'draw';
+        this.onNotice?.('전쟁 종료 기록이 올바르지 않아 배상 없이 끝냅니다');
+        this.done();
         return;
       }
       // 마지막 스냅숏(모든 점령 주장)을 서버에서 읽는다 — 끊겼다 돌아와도 정산할 수 있게.
@@ -710,9 +731,21 @@ export class WarSession {
     const fb = getFirebase();
     if (!fb) return '서버에 연결되어 있지 않습니다';
     const now = sharedNow();
+    // 상대가 다른 도시와 전쟁 중인지·패전 보호 중인지는 상대 전쟁 기록을 한 번 읽어 본다.
+    let theirWars: WarDoc[] = [];
+    try {
+      const snap = await getDocs(
+        query(collection(fb.db, 'wars'), where('parties', 'array-contains', them.uid)),
+      );
+      theirWars = snap.docs.map((d) => ({ ...(d.data() as WarDoc), id: d.id }));
+    } catch (err) {
+      console.warn('상대 전쟁 기록을 읽지 못했습니다', err);
+      return '상대 정보를 읽지 못했습니다. 잠시 뒤 다시 해 주세요';
+    }
     const why = declareBlock({
       now,
       kind,
+      theirWars,
       me: {
         uid: this.uid,
         online: true,
@@ -741,6 +774,7 @@ export class WarSession {
           .map((u) => ({ cx: u.cx, cy: u.cy, men: u.men })),
         theirUnits: them.units ?? [],
         theirOwned: them.owned,
+        night: isNight(now),
       });
       if (s) return s;
     }
@@ -791,6 +825,9 @@ export class WarSession {
         [`joined.${this.uid}`]: { side, level: me.capitalLevel, at: sharedNow() },
         [`names.${this.uid}`]: this.myName,
       });
+      // 상대 진영에 동맹이 있으면 그 동맹은 배신이 된다(보증금이 상대에게).
+      for (const u of membersOf(w, otherSide(side)))
+        if (this.alliances?.isAllied(u)) await this.alliances.betray(u);
       return '';
     } catch (err) {
       console.warn('전쟁 참가 실패', err);
@@ -826,8 +863,11 @@ export class WarSession {
   async offerSurrender(): Promise<void> {
     const w = this.current();
     const mine = w && sideOf(w, this.uid);
-    if (w && mine && w[mine] === this.uid)
+    if (w && mine && w[mine] === this.uid) {
+      // 내가 실제로 항복을 신청했다는 기록(정산 때 위조된 "항복" 종료를 걸러낸다).
+      this.sim.state.surrenderSent = w.id;
       await this.patch(w, { surrender: { by: this.uid, at: sharedNow(), votes: {} } });
+    }
   }
 
   async withdrawSurrender(): Promise<void> {
@@ -846,7 +886,8 @@ export class WarSession {
       ...w,
       surrender: { ...w.surrender, votes: { ...(w.surrender.votes ?? {}), [this.uid]: true } },
     };
-    if (surrenderAccepted(next)) await this.end(next, mine === 'a' ? 'winA' : 'winB', sharedNow());
+    if (surrenderAccepted(next))
+      await this.end(next, mine === 'a' ? 'winA' : 'winB', sharedNow(), 'surrender');
   }
 }
 

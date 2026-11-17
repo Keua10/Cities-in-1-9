@@ -1,5 +1,7 @@
+import { chunkTerrain } from './terrain';
 import { parseChunkKey } from '../../core/iso';
 import {
+  DEFEAT_PEACE_MS,
   BIG_BATTLE_SHARE,
   CEASEFIRE_QUIET_MS,
   LARGE_WAR_CAPITAL,
@@ -58,6 +60,10 @@ export interface WarDoc {
   surrender?: { by: string; at: number; votes?: Record<string, boolean> };
   /** 휴전 제안. votes = 참가국별 찬성(true)·반대(false). 모든 진영 2/3 + 직접 참여국 둘 다 찬성이면 휴전. */
   ceasefireOffer?: { by: string; at: number; votes: Record<string, boolean> };
+  /** 끝난 까닭: 항복·판정(끊긴 지 24시간)·휴전(큰 전투 없이 1시간)·휴전 협정. */
+  endReason?: 'surrender' | 'judge' | 'ceasefire' | 'agreed';
+  /** 항복으로 끝났을 때 항복을 신청한 진영 대표. */
+  surrenderBy?: string;
   /** 관리자(선생님)가 강제로 끝낸 전쟁. */
   adminEnded?: boolean;
   /** 휴전 제안이 받아들여져 끝났다(큰 전투 없이 1시간 휴전과 구분). */
@@ -127,8 +133,17 @@ export interface DeclareInput {
   kind: WarKind;
   me: { uid: string; online: boolean; capitalLevel: number; cityLevel: number; owned: string[] };
   them: { uid: string; online: boolean; capitalLevel: number; owned: string[] };
-  /** 두 도시와 관련된 모든 전쟁(끝난 것 포함). */
+  /** 나와 관련된 모든 전쟁(끝난 것 포함). */
   wars: readonly WarDoc[];
+  /** 상대와 관련된 모든 전쟁(끝난 것 포함, 선포할 때 서버에서 읽는다). */
+  theirWars?: readonly WarDoc[];
+}
+
+/** 진 쪽 도시들(승패가 난 전쟁만). */
+export function losersOf(w: WarDoc): string[] {
+  if (w.result === 'winA') return membersOf(w, 'b');
+  if (w.result === 'winB') return membersOf(w, 'a');
+  return [];
 }
 
 /** 선전포고를 할 수 없는 이유. 빈 문자열이면 된다. */
@@ -139,11 +154,22 @@ export function declareBlock(x: DeclareInput): string {
   if (x.them.capitalLevel < need)
     return `상대 수도가 ${need}레벨이 안 되어 ${label} 전쟁을 걸 수 없습니다`;
   if (!x.them.online) return '상대가 접속해 있어야 전쟁을 시작할 수 있습니다';
-  for (const w of x.wars) {
+  const all = new Map<string, WarDoc>();
+  for (const w of [...x.wars, ...(x.theirWars ?? [])]) all.set(w.id, w);
+  for (const w of all.values()) {
     if (w.state !== 'ended' && (w.parties.includes(x.me.uid) || w.parties.includes(x.them.uid)))
       return w.parties.includes(x.me.uid)
         ? '이미 다른 전쟁 중입니다'
         : '상대가 이미 다른 전쟁 중입니다';
+    // 패전국 보호: 진 도시는 누구에게서든 48시간 동안 선전포고를 받지 않는다.
+    if (
+      w.state === 'ended' &&
+      losersOf(w).includes(x.them.uid) &&
+      (w.endedAt ?? 0) + DEFEAT_PEACE_MS > x.now
+    ) {
+      const h = Math.ceil(((w.endedAt ?? 0) + DEFEAT_PEACE_MS - x.now) / 3_600_000);
+      return `전쟁에 진 도시라 ${h}시간 동안 보호받습니다`;
+    }
     if (
       w.state === 'ended' &&
       w.parties.includes(x.me.uid) &&
@@ -170,6 +196,35 @@ export interface SurpriseInput {
   /** 상대가 공개한 부대 위치·인원(공개 문서). */
   theirUnits: ReadonlyArray<{ cx: number; cy: number; men: number }>;
   theirOwned: readonly string[];
+  /** 밤인가(밤에는 상대 시야가 1청크). */
+  night?: boolean;
+}
+
+/**
+ * 상대가 (cx,cy) 를 볼 수 있는가: 상대 영토나 부대에서 시야(낮 2·밤 1청크) 안이고,
+ * 사이에 산 청크가 가로막지 않을 때. 기습 조건 "상대가 내 부대를 보고 있지 않을 것".
+ */
+export function seenBy(
+  cx: number,
+  cy: number,
+  sources: ReadonlyArray<{ cx: number; cy: number }>,
+  night: boolean,
+): boolean {
+  const v = night ? 1 : 2;
+  for (const s of sources) {
+    const dx = cx - s.cx;
+    const dy = cy - s.cy;
+    const d = Math.max(Math.abs(dx), Math.abs(dy));
+    if (d > v) continue;
+    let blocked = false;
+    for (let i = 1; i < d && !blocked; i++) {
+      const x = s.cx + Math.round((dx * i) / d);
+      const y = s.cy + Math.round((dy * i) / d);
+      if (chunkTerrain(x, y).kind === 'mountain') blocked = true;
+    }
+    if (!blocked) return true;
+  }
+  return false;
 }
 
 /** 기습(준비 시간 없이 바로 개전)을 할 수 없는 이유. */
@@ -193,6 +248,10 @@ export function surpriseBlock(x: SurpriseInput): string {
   if (mine <= 0) return `국경 ${SURPRISE_BORDER_CHUNKS}청크 안에 부대를 먼저 배치하세요`;
   if (mine < theirsNear * SURPRISE_RATIO)
     return `국경 병력이 상대의 ${SURPRISE_RATIO}배 이상이어야 합니다 (내 ${mine}명 / 상대 ${theirsNear}명)`;
+  // 상대가 내 국경 부대를 보고 있으면 기습이 아니다(산 뒤에 숨기거나 밤을 노린다).
+  const sources = [...x.theirOwned.map(parseChunkKey), ...x.theirUnits];
+  if (x.myUnits.some((u) => nearBorder(u.cx, u.cy) && seenBy(u.cx, u.cy, sources, !!x.night)))
+    return '상대가 내 국경 부대를 보고 있습니다 · 산 뒤에 숨기거나 밤(시야 1청크)을 노리세요';
   return '';
 }
 

@@ -1315,6 +1315,15 @@ export class MacroSim {
     // 않은 도시" 이고, 대도시를 원하면 호출부가 이 뒤에 다시 적는다.
     delete this.macro.genSeed;
     delete this.macro.metropolisRequest;
+    // 군사: 부대·탐사 기록·폭격 기록·전쟁 피로/복구 상태를 비운다. 정산 기록(warsSettled·
+    // alliancesSettled)과 배신·기습 기록은 남긴다(같은 배상을 두 번 받거나 벌칙을 피하지 않게).
+    delete this.macro.scouted;
+    delete this.macro.warSince;
+    delete this.macro.warEndedAt;
+    delete this.macro.warOutcome;
+    this.army.army.strikes = [];
+    this.army.army.struckBy = {};
+    this.army.army.lossValue = 0;
     this.territory.reset();
     this.services.budget = 1;
     this.onMacroChange?.();

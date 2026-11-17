@@ -1,4 +1,11 @@
-import { AuthError, restoreSession, signInWithGoogle, signOut, type Session } from '../net/auth';
+import {
+  AuthError,
+  justRedirected,
+  restoreSession,
+  signInWithGoogle,
+  signOut,
+  type Session,
+} from '../net/auth';
 import { firebaseConfigured } from '../net/firebase';
 
 /**
@@ -12,6 +19,8 @@ import { firebaseConfigured } from '../net/firebase';
 export async function requireSession(): Promise<Session | null> {
   if (!firebaseConfigured) return showScreen(null, true);
   const existing = await restoreSession();
+  // 팝업이 막혀 구글 페이지로 다녀온 경우: 방금 고른 계정으로 바로 들어간다.
+  if (existing && justRedirected) return existing;
   return showScreen(existing, false);
 }
 
