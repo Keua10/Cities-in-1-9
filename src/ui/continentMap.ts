@@ -3,6 +3,10 @@ import { parseChunkKey } from '../core/iso';
 import type { PublicCity } from '../net/publicCities';
 import { sharedClockOffset, sharedNow } from '../sim/sharedClock';
 import { loadOverview } from './startPicker';
+import { UNIT_SPECS, VISION_CHUNKS, type UnitType } from '../sim/config/military';
+import { unitPosition, type Unit } from '../sim/military/army';
+import type { ArmySystem } from '../sim/military/armySystem';
+import { formatMoney } from './money';
 import './continentMap.css';
 
 /**
@@ -22,7 +26,30 @@ export interface ContinentMapSource {
   /** 내 도시(지금 상태). */
   mine: () => PublicCity;
   online: boolean;
+  /** 내 군대. */
+  army: ArmySystem;
+  /** 화면 위 알림(짧은 문장). */
+  announce: (text: string) => void;
 }
+
+const UNIT_LETTER: Record<UnitType, string> = {
+  infantry: '보',
+  engineer: '공',
+  artillery: '포',
+  armor: '기',
+  aa: '대',
+  fighter: '전',
+  bomber: '폭',
+  ship: '함',
+  missile: '미',
+};
+const STATE_TEXT: Record<Unit['state'], string> = {
+  training: '훈련 중',
+  idle: '대기',
+  moving: '이동',
+  fighting: '전투 중',
+  retreating: '후퇴',
+};
 
 function cityColor(index: number, alpha: number): string {
   const hue = (index * 137.508) % 360;
@@ -52,6 +79,15 @@ export class ContinentMap {
   private oy = 0;
   private refreshTimer: number | null = null;
   private selected: string | null = null;
+  /** 고른 내 부대 id. */
+  private selectedUnit: string | null = null;
+  private tab: 'cities' | 'army' = 'cities';
+  private frame = 0;
+  private lastArmyRevision = -1;
+  private unitsEl: HTMLElement;
+  private recruitEl: HTMLElement;
+  private armyInfoEl: HTMLElement;
+  private armyMsgEl: HTMLElement;
 
   constructor(private source: ContinentMapSource) {
     this.root.id = 'continent-map';
@@ -65,13 +101,46 @@ export class ContinentMap {
       <div class="cm-body">
         <div class="cm-map"></div>
         <aside class="cm-side">
-          <div class="cm-legend">금색 테두리 = 수도 · ● 접속 중 · 전쟁은 양쪽이 접속해 있어야 합니다</div>
-          <ol class="cm-list"></ol>
+          <div class="cm-tabs" role="tablist">
+            <button type="button" data-tab="cities" aria-pressed="true">도시</button>
+            <button type="button" data-tab="army" aria-pressed="false">군대</button>
+          </div>
+          <div class="cm-pane" data-pane="cities">
+            <div class="cm-legend">금색 테두리 = 수도 · ● 접속 중 · 전쟁은 양쪽이 접속해 있어야 합니다</div>
+            <ol class="cm-list"></ol>
+          </div>
+          <div class="cm-pane" data-pane="army" hidden>
+            <div class="cm-army-info cm-legend"></div>
+            <div class="cm-recruit"></div>
+            <div class="cm-army-msg" role="status"></div>
+            <ol class="cm-units"></ol>
+          </div>
         </aside>
       </div>`;
     this.root.querySelector('.cm-map')!.append(this.canvas);
     this.list = this.root.querySelector('.cm-list')!;
     this.status = this.root.querySelector('.cm-status')!;
+    this.unitsEl = this.root.querySelector('.cm-units')!;
+    this.recruitEl = this.root.querySelector('.cm-recruit')!;
+    this.armyInfoEl = this.root.querySelector('.cm-army-info')!;
+    this.armyMsgEl = this.root.querySelector('.cm-army-msg')!;
+    for (const b of this.root.querySelectorAll<HTMLButtonElement>('.cm-tabs button'))
+      b.addEventListener('click', () => this.setTab(b.dataset.tab as 'cities' | 'army'));
+    for (const type of ['infantry', 'engineer', 'artillery'] as UnitType[]) {
+      const spec = UNIT_SPECS[type];
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.dataset.unit = type;
+      b.innerHTML = `<b>${spec.name} 모집</b><small></small>`;
+      b.addEventListener('click', () => {
+        const why = this.source.army.recruit(type);
+        this.armyMsgEl.textContent = why
+          ? why
+          : `${spec.name} 모집 · 훈련 ${Math.round(spec.buildSec / 60)}분 뒤 출동 (병영)`;
+        this.renderArmy(true);
+      });
+      this.recruitEl.append(b);
+    }
     this.root.querySelector('.cm-close')!.addEventListener('click', () => this.close());
     this.root.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') this.close();
@@ -107,13 +176,121 @@ export class ContinentMap {
     this.focus(mine);
     this.renderList();
     this.draw();
+    this.renderArmy(true);
+    const loop = () => {
+      if (this.root.hidden) return;
+      this.renderArmy(false);
+      this.draw();
+      this.frame = window.setTimeout(() => requestAnimationFrame(loop), 120);
+    };
+    loop();
     await this.refresh();
     if (this.refreshTimer === null)
       this.refreshTimer = window.setInterval(() => void this.refresh(), 60_000);
   }
 
+  private setTab(tab: 'cities' | 'army'): void {
+    this.tab = tab;
+    for (const b of this.root.querySelectorAll<HTMLButtonElement>('.cm-tabs button'))
+      b.setAttribute('aria-pressed', String(b.dataset.tab === tab));
+    for (const p of this.root.querySelectorAll<HTMLElement>('.cm-pane'))
+      p.hidden = p.dataset.pane !== tab;
+    if (tab === 'army') this.renderArmy(true);
+  }
+
+  /** 군대 칸: 모집 버튼 상태, 부대 목록. */
+  private renderArmy(force: boolean): void {
+    const army = this.source.army;
+    if (!force && army.revision === this.lastArmyRevision && this.tab !== 'army') return;
+    const units = army.units;
+    const men = army.soldiers;
+    this.armyInfoEl.textContent =
+      `병영 ${army.barracks().length}곳 · 부대 ${units.length}개 · 병력 ${Math.round(men).toLocaleString('ko-KR')}명 · 더 뽑을 수 있는 인원 ${army.draftRoom().toLocaleString('ko-KR')}명` +
+      ` · 유지비 ${formatMoney(army.upkeepMoney)}/일` +
+      '\n부대를 누르고 지도에서 갈 곳을 누르세요. 적 부대가 없는 적 청크에 1분 머물면 점령합니다.';
+    for (const b of this.recruitEl.querySelectorAll<HTMLButtonElement>('button[data-unit]')) {
+      const type = b.dataset.unit as UnitType;
+      const spec = UNIT_SPECS[type];
+      const why = army.recruitBlock(type);
+      b.disabled = !!why;
+      b.title = why;
+      b.querySelector('small')!.textContent =
+        `${formatMoney(spec.cost)} · 철 ${spec.iron}${spec.coal ? ` · 석탄 ${spec.coal}` : ''} · ${spec.men}명 · ${Math.round(spec.buildSec / 60)}분` +
+        (why ? ` — ${why}` : '');
+    }
+    if (!force && army.revision === this.lastArmyRevision) {
+      // 진행 막대만 고친다.
+      for (const li of this.unitsEl.querySelectorAll<HTMLElement>('li[data-id]')) {
+        const u = units.find((x) => x.id === li.dataset.id);
+        if (u) this.fillUnitRow(li, u);
+      }
+      return;
+    }
+    this.lastArmyRevision = army.revision;
+    this.unitsEl.innerHTML = '';
+    if (!units.length) {
+      const li = document.createElement('li');
+      li.className = 'cm-empty';
+      li.textContent = '부대가 없습니다. 내 영토에 병영을 짓고 위에서 모집하세요.';
+      this.unitsEl.append(li);
+    }
+    for (const u of units) {
+      const li = document.createElement('li');
+      li.dataset.id = u.id;
+      li.className = 'cm-unit' + (u.id === this.selectedUnit ? ' selected' : '');
+      li.innerHTML = `<span class="cm-unit-badge"></span><span class="cm-unit-text"></span>
+        <span class="cm-bar"><i class="org"></i></span>
+        <button type="button" class="cm-disband" title="해산: 남은 인원이 인구로 돌아갑니다">해산</button>`;
+      li.addEventListener('click', (e) => {
+        if ((e.target as HTMLElement).closest('.cm-disband')) return;
+        this.selectedUnit = u.id === this.selectedUnit ? null : u.id;
+        if (this.selectedUnit) this.focusUnit(u);
+        this.lastArmyRevision = -1;
+        this.renderArmy(true);
+        this.draw();
+      });
+      li.querySelector('.cm-disband')!.addEventListener('click', () => {
+        if (u.state === 'fighting') {
+          this.armyMsgEl.textContent = '전투 중인 부대는 해산할 수 없습니다';
+          return;
+        }
+        army.disband(u.id);
+        if (this.selectedUnit === u.id) this.selectedUnit = null;
+        this.armyMsgEl.textContent = `${UNIT_SPECS[u.type].name} 부대를 해산했습니다 · 인원이 도시로 돌아갑니다`;
+        this.renderArmy(true);
+      });
+      this.fillUnitRow(li, u);
+      this.unitsEl.append(li);
+    }
+  }
+
+  private fillUnitRow(li: HTMLElement, u: Unit): void {
+    const spec = UNIT_SPECS[u.type];
+    li.querySelector('.cm-unit-badge')!.textContent = UNIT_LETTER[u.type];
+    const train =
+      u.state === 'training' && u.readyAt
+        ? ` ${Math.max(0, Math.ceil((u.readyAt - Date.now()) / 1000))}초`
+        : '';
+    li.querySelector('.cm-unit-text')!.textContent =
+      `${spec.name} ${u.id.slice(1)} · ${Math.round(u.men)}/${u.maxMen}명 · ${STATE_TEXT[u.state]}${train}` +
+      (u.path.length ? ` · ${u.path.length}청크 남음` : '');
+    (li.querySelector('.cm-bar i') as HTMLElement).style.width = `${Math.round(u.org)}%`;
+  }
+
+  private focusUnit(u: Unit): void {
+    const p = unitPosition(u);
+    const w = this.canvas.clientWidth || 640;
+    const h = this.canvas.clientHeight || 448;
+    this.scale = Math.max(this.scale, 5);
+    const s = this.scale * PX_PER_CHUNK;
+    this.ox = w / 2 - (p.x - CONTINENT_X0) * s;
+    this.oy = h / 2 - (p.y - CONTINENT_Y0) * s;
+    this.clampPan();
+  }
+
   close(): void {
     this.root.hidden = true;
+    clearTimeout(this.frame);
     if (this.refreshTimer !== null) clearInterval(this.refreshTimer);
     this.refreshTimer = null;
   }
@@ -128,6 +305,10 @@ export class ContinentMap {
       try {
         const others = (await this.source.load()).filter((c) => c.uid !== mine.uid);
         this.cities = [mine, ...others];
+        // 평시에는 남의 영토로 부대를 보낼 수 없다.
+        const foreign = new Set<string>();
+        for (const c of others) for (const k of c.owned) foreign.add(k);
+        this.source.army.foreignOwned = foreign;
         const online = this.cities.filter((c) => c.online).length;
         const clock = sharedClockOffset();
         this.status.textContent =
@@ -281,6 +462,126 @@ export class ContinentMap {
         ctx.fill();
       }
     }
+    this.drawUnits(X, Y, s);
+  }
+
+  private drawUnits(X: (cx: number) => number, Y: (cy: number) => number, s: number): void {
+    const ctx = this.ctx;
+    const army = this.source.army;
+    const war = army.war;
+    // 점령한/빼앗긴 청크
+    if (war) {
+      for (const [key, who] of war.occupied) {
+        const { cx, cy } = parseChunkKey(key);
+        ctx.fillStyle = who === army.uid ? 'rgba(111, 211, 184, 0.55)' : 'rgba(226, 87, 76, 0.55)';
+        ctx.fillRect(X(cx), Y(cy), s, s);
+        ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(X(cx), Y(cy) + s);
+        ctx.lineTo(X(cx) + s, Y(cy));
+        ctx.stroke();
+      }
+    }
+    const r = Math.max(7, Math.min(14, s * 0.45));
+    const drawUnit = (u: Unit, mine: boolean) => {
+      const p = unitPosition(u);
+      const x = X(p.x - 0.5) + s / 2;
+      const y = Y(p.y - 0.5) + s / 2;
+      if (mine && u.id === this.selectedUnit && u.path.length) {
+        ctx.strokeStyle = '#f2cf7a';
+        ctx.setLineDash([4, 3]);
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        for (const k of u.path) {
+          const c = parseChunkKey(k);
+          ctx.lineTo(X(c.cx) + s / 2, Y(c.cy) + s / 2);
+        }
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+      ctx.fillStyle = mine ? (u.state === 'training' ? '#5b6e78' : '#2f6fd0') : '#c8402f';
+      ctx.strokeStyle = mine && u.id === this.selectedUnit ? '#f2cf7a' : '#0d1418';
+      ctx.lineWidth = mine && u.id === this.selectedUnit ? 3 : 1.5;
+      ctx.beginPath();
+      ctx.rect(x - r, y - r * 0.75, r * 2, r * 1.5);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#fff';
+      ctx.font = `700 ${Math.round(r * 0.95)}px system-ui, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(UNIT_LETTER[u.type], x, y + 1);
+      // 조직력 막대 + 인원
+      ctx.fillStyle = '#0d1418';
+      ctx.fillRect(x - r, y + r * 0.75 + 2, r * 2, 3);
+      ctx.fillStyle = u.org > 40 ? '#6fe08a' : '#e2a44c';
+      ctx.fillRect(x - r, y + r * 0.75 + 2, (r * 2 * u.org) / 100, 3);
+      if (s >= 6) {
+        ctx.font = '600 10px system-ui, sans-serif';
+        ctx.fillStyle = '#f4f1e6';
+        ctx.fillText(`${Math.round(u.men)}`, x, y + r * 0.75 + 12);
+      }
+      ctx.textBaseline = 'alphabetic';
+    };
+    for (const u of army.units) drawUnit(u, true);
+    if (war) {
+      // 적 부대는 내 부대·영토에서 시야(2청크) 안에 있을 때만 보인다.
+      const seeing = (e: Unit) => {
+        for (const u of army.units)
+          if (
+            u.state !== 'training' &&
+            Math.max(Math.abs(u.cx - e.cx), Math.abs(u.cy - e.cy)) <= VISION_CHUNKS
+          )
+            return true;
+        for (let dy = -VISION_CHUNKS; dy <= VISION_CHUNKS; dy++)
+          for (let dx = -VISION_CHUNKS; dx <= VISION_CHUNKS; dx++)
+            if (this.source.army.mySide().owned.has(`${e.cx + dx},${e.cy + dy}`)) return true;
+        return false;
+      };
+      for (const e of war.enemy.units) if (e.state !== 'training' && seeing(e)) drawUnit(e, false);
+    }
+  }
+
+  /** 화면 좌표 근처의 내 부대. */
+  private unitAt(px: number, py: number): Unit | null {
+    const s = this.scale * PX_PER_CHUNK;
+    const r = Math.max(9, Math.min(16, s * 0.5));
+    let best: Unit | null = null;
+    let bd = Infinity;
+    for (const u of this.source.army.units) {
+      const p = unitPosition(u);
+      const x = this.ox + (p.x - CONTINENT_X0) * s;
+      const y = this.oy + (p.y - CONTINENT_Y0) * s;
+      const d = Math.hypot(px - x, py - y);
+      if (d < r && d < bd) {
+        bd = d;
+        best = u;
+      }
+    }
+    return best;
+  }
+
+  private tapAt(px: number, py: number): void {
+    const hit = this.unitAt(px, py);
+    if (hit) {
+      this.selectedUnit = hit.id === this.selectedUnit ? null : hit.id;
+      this.setTab('army');
+      this.lastArmyRevision = -1;
+      this.renderArmy(true);
+      this.draw();
+      return;
+    }
+    if (!this.selectedUnit) return;
+    const s = this.scale * PX_PER_CHUNK;
+    const cx = Math.floor(CONTINENT_X0 + (px - this.ox) / s);
+    const cy = Math.floor(CONTINENT_Y0 + (py - this.oy) / s);
+    const why = this.source.army.order(this.selectedUnit, cx, cy);
+    this.armyMsgEl.textContent = why || '이동 명령을 내렸습니다';
+    if (why) this.source.announce(why);
+    this.renderArmy(true);
+    this.draw();
   }
 
   /* ---------------- 입력 ---------------- */
@@ -289,6 +590,8 @@ export class ContinentMap {
     const c = this.canvas;
     const pointers = new Map<number, { x: number; y: number }>();
     let pinch = 0;
+    let downAt: { x: number; y: number } | null = null;
+    let dragged = false;
     const local = (e: PointerEvent | WheelEvent) => {
       const r = c.getBoundingClientRect();
       return { x: e.clientX - r.left, y: e.clientY - r.top };
@@ -296,7 +599,12 @@ export class ContinentMap {
     c.addEventListener('pointerdown', (e) => {
       c.setPointerCapture(e.pointerId);
       pointers.set(e.pointerId, local(e));
+      if (pointers.size === 1) {
+        downAt = local(e);
+        dragged = false;
+      }
       if (pointers.size === 2) {
+        dragged = true;
         const [a, b] = [...pointers.values()];
         pinch = Math.hypot(a.x - b.x, a.y - b.y);
       }
@@ -312,6 +620,8 @@ export class ContinentMap {
         if (pinch > 0) this.zoomAt(d / pinch, (a.x + b.x) / 2, (a.y + b.y) / 2);
         pinch = d;
       } else {
+        if (downAt && !dragged && Math.hypot(p.x - downAt.x, p.y - downAt.y) > 6) dragged = true;
+        if (!dragged) return;
         this.ox += p.x - prev.x;
         this.oy += p.y - prev.y;
         this.clampPan();
@@ -320,6 +630,11 @@ export class ContinentMap {
     });
     const up = (e: PointerEvent) => {
       pointers.delete(e.pointerId);
+      if (pointers.size === 0 && downAt && !dragged) {
+        const p = local(e);
+        this.tapAt(p.x, p.y);
+      }
+      if (pointers.size === 0) downAt = null;
       pinch = 0;
     };
     c.addEventListener('pointerup', up);
