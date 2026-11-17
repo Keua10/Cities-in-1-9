@@ -105,12 +105,48 @@ service cloud.firestore {
                    && request.auth.uid == uid
                    && request.resource.data.keys().hasOnly(['cityIndex', 'cityName', 'origin',
                         'owned', 'capital', 'capitalLevel', 'cityLevel', 'population', 'updatedAt',
-                        'units'])
+                        'units', 'pass'])
+                   && request.resource.data.get('pass', 'open') in ['open', 'notify', 'permit']
                    && request.resource.data.owned is list
                    && request.resource.data.owned.size() <= 3000
                    && request.resource.data.cityName is string
                    && request.resource.data.cityName.size() <= 40;
       allow delete: if false;
+    }
+
+    // 영해·영공 통과(피드백 1차). passes/{from}_{to}: from 이 신고·요청을 쓰고, to 만 허가·거절한다.
+    match /passes/{passId} {
+      allow read: if signedIn()
+                  && request.auth.uid in resource.data.parties;
+      allow create, update: if signedIn()
+                    && passId == request.resource.data.from + '_' + request.resource.data.to
+                    && request.resource.data.parties == [request.resource.data.from, request.resource.data.to]
+                    && request.resource.data.keys().hasOnly(['from', 'to', 'parties', 'state', 'at', 'until'])
+                    && (
+                      (request.resource.data.from == request.auth.uid
+                        && request.resource.data.state in ['notified', 'asked']
+                        && (request.resource.data.state == 'asked' || request.resource.data.until <= request.time.toMillis() + 21600000 + 60000))
+                      ||
+                      (resource != null
+                        && request.resource.data.to == request.auth.uid
+                        && resource.data.to == request.auth.uid
+                        && resource.data.from == request.resource.data.from
+                        && request.resource.data.state in ['granted', 'denied'])
+                    );
+      allow delete: if false;
+    }
+
+    // 무단 통과 부대 공격(피드백 1차). 쏜 쪽이 만들고 고칠 수 없다. 맞은 쪽 기기가 피해를 계산한다.
+    match /incidents/{id} {
+      allow read: if signedIn()
+                  && (resource.data.to == request.auth.uid || resource.data.from == request.auth.uid);
+      allow create: if signedIn()
+                    && request.resource.data.from == request.auth.uid
+                    && request.resource.data.to != request.auth.uid
+                    && request.resource.data.keys().hasOnly(['from', 'to', 'key', 'at', 'power'])
+                    && request.resource.data.power is number
+                    && request.resource.data.power <= 2000;
+      allow update, delete: if false;
     }
 
     // 접속 표시. 서버 시각(at)과 도시 번호만. 자기 것만 쓴다.

@@ -1,3 +1,13 @@
+import type { PassSession } from '../net/passes';
+import {
+  airspace,
+  bound,
+  INCIDENT_COOLDOWN_MS,
+  PASS_RULE_NAMES,
+  passValid,
+  territorialSea,
+  type PassRule,
+} from '../sim/military/waters';
 import { CONTINENT_H, CONTINENT_W, CONTINENT_X0, CONTINENT_Y0 } from '../world/continent';
 import { parseChunkKey } from '../core/iso';
 import type { PublicCity } from '../net/publicCities';
@@ -64,6 +74,11 @@ export interface ContinentMapSource {
   seeAll?: boolean;
   /** 다른 도시 영토를 새로 읽었을 때(자동 점령 막기). */
   onForeign?: (owned: Set<string>) => void;
+  /** 영해·영공 통과(로그인했을 때만). */
+  passes?: PassSession | null;
+  /** 내 영해·영공 규율. */
+  passRule?: () => PassRule;
+  setPassRule?: (r: PassRule) => void;
 }
 
 const UNIT_LETTER: Record<UnitType, string> = {
@@ -142,6 +157,10 @@ export class ContinentMap {
   private openWarsEl!: HTMLElement;
   private openWarsRev = -1;
   private allyRev = -1;
+  private passRev = -1;
+  private trespassEl!: HTMLElement;
+  private trespassSig = '';
+  private space = { sig: '', sea: new Set<string>(), air: new Set<string>() };
   /** 두 전선이면 위쪽 전쟁 줄에 보이는 전쟁. */
   private warFocus: string | null = null;
 
@@ -185,6 +204,10 @@ export class ContinentMap {
                 </div>
               </div>
               <div class="cm-declare-warn"></div>
+              <div class="cm-pass" hidden>
+                <span class="cm-pass-state"></span>
+                <button type="button" class="cm-pass-go"></button>
+              </div>
               <button type="button" data-war="small">소규모 전쟁 선포 (준비 5분)</button>
               <button type="button" data-war="surprise">기습 (준비 없이)</button>
               <button type="button" data-war="large">대규모 전쟁 선포</button>
@@ -192,6 +215,14 @@ export class ContinentMap {
             </div>
           </div>
           <div class="cm-pane" data-pane="army" hidden>
+            <label class="cm-pass-rule">영해·영공
+              <select>
+                <option value="open">자유 통과</option>
+                <option value="notify">신고 후 통과</option>
+                <option value="permit">허가 후 통과</option>
+              </select>
+            </label>
+            <div class="cm-trespass" hidden></div>
             <div class="cm-army-info cm-legend"></div>
             <div class="cm-recruit"></div>
             <div class="cm-army-msg" role="status"></div>
@@ -241,6 +272,23 @@ export class ContinentMap {
     this.warEl = this.root.querySelector('.cm-war')!;
     this.declareEl = this.root.querySelector('.cm-declare')!;
     this.incomingEl = this.root.querySelector('.cm-incoming')!;
+    this.trespassEl = this.root.querySelector('.cm-trespass')!;
+    const ruleSel = this.root.querySelector<HTMLSelectElement>('.cm-pass-rule select')!;
+    ruleSel.value = this.source.passRule?.() ?? 'open';
+    this.root.querySelector<HTMLElement>('.cm-pass-rule')!.hidden = !this.source.setPassRule;
+    ruleSel.addEventListener('change', () => {
+      this.source.setPassRule?.(ruleSel.value as PassRule);
+      this.source.announce(`영해·영공: ${PASS_RULE_NAMES[ruleSel.value as PassRule]}`);
+    });
+    this.root.querySelector('.cm-pass-go')!.addEventListener('click', async () => {
+      const them = this.cities.find((c) => c.uid === this.selected);
+      const ps = this.source.passes;
+      if (!them || !ps) return;
+      const why = await ps.request(them.uid, them.pass ?? 'open');
+      this.source.announce(
+        why || (them.pass === 'permit' ? '통과 허가를 요청했습니다' : '통과를 신고했습니다'),
+      );
+    });
     this.openWarsEl = this.root.querySelector('.cm-open-wars')!;
     const deposit = this.root.querySelector<HTMLSelectElement>('.cm-ally-deposit')!;
     for (const d of ALLIANCE_DEPOSITS) {
@@ -344,6 +392,12 @@ export class ContinentMap {
         this.openWarsRev = this.source.war.revision;
         this.renderOpenWars();
       }
+      if (this.source.passes && this.source.passes.revision !== this.passRev) {
+        this.passRev = this.source.passes.revision;
+        this.renderIncoming();
+        this.renderDeclare();
+      }
+      this.renderTrespass();
       if (this.source.alliances && this.source.alliances.revision !== this.allyRev) {
         this.allyRev = this.source.alliances.revision;
         this.renderIncoming();
@@ -444,6 +498,29 @@ export class ContinentMap {
     const warn = this.declareEl.querySelector<HTMLElement>('.cm-declare-warn')!;
     allyEl.hidden = !al;
     warn.textContent = '';
+    const passEl = this.declareEl.querySelector<HTMLElement>('.cm-pass')!;
+    const ps = this.source.passes;
+    const rule = them.pass ?? 'open';
+    passEl.hidden = !ps;
+    if (ps) {
+      const p = ps.pass(mine.uid, them.uid);
+      const ok = passValid(rule, p, Date.now());
+      const st =
+        rule === 'open'
+          ? ''
+          : ok
+            ? ' · 통과 가능'
+            : p?.state === 'asked'
+              ? ' · 허가 기다리는 중'
+              : p?.state === 'denied'
+                ? ' · 거절됨'
+                : '';
+      passEl.querySelector('.cm-pass-state')!.textContent =
+        `영해·영공: ${PASS_RULE_NAMES[rule]}${st}`;
+      const go = passEl.querySelector<HTMLButtonElement>('.cm-pass-go')!;
+      go.hidden = rule === 'open' || ok || p?.state === 'asked';
+      go.textContent = rule === 'permit' ? '통과 허가 요청' : '통과 신고';
+    }
     if (!al) return;
     const open = al.openWith(them.uid);
     const stateEl = allyEl.querySelector<HTMLElement>('.cm-ally-state')!;
@@ -509,11 +586,81 @@ export class ContinentMap {
   }
 
   /** 받은 동맹 신청(수락·거절). */
+  /** 내 영해·영공에 규율을 어기고 들어온 다른 나라 군함·군용기(전쟁 없이 공격 가능). */
+  private renderTrespass(): void {
+    const ps = this.source.passes;
+    const mine = this.source.mine();
+    if (!ps || !this.source.passRule) {
+      this.trespassEl.hidden = true;
+      return;
+    }
+    const rule = this.source.passRule();
+    const spaceSig = `${mine.owned.length}|${mine.owned[0] ?? ''}|${mine.owned.at(-1) ?? ''}`;
+    if (this.space.sig !== spaceSig) {
+      const sea = territorialSea(mine.owned);
+      this.space = { sig: spaceSig, sea, air: airspace(mine.owned, sea) };
+    }
+    const { sea, air } = this.space;
+    const now = Date.now();
+    const found: Array<{ uid: string; name: string; cx: number; cy: number; t: UnitType }> = [];
+    for (const c of this.cities) {
+      if (c.uid === mine.uid || this.source.war?.atWarWith(c.uid)) continue;
+      const pass = ps.pass(c.uid, mine.uid);
+      for (const u of c.units ?? []) {
+        if (!u.t || !bound(u.t)) continue;
+        const key = `${u.cx},${u.cy}`;
+        const inside = UNIT_SPECS[u.t].domain === 'sea' ? sea.has(key) : air.has(key);
+        if (inside && !passValid(rule, pass, now))
+          found.push({ uid: c.uid, name: c.cityName, cx: u.cx, cy: u.cy, t: u.t });
+      }
+    }
+    const sig = found.map((f) => `${f.uid}|${f.cx},${f.cy}|${f.t}`).join(';');
+    if (sig === this.trespassSig) return;
+    this.trespassSig = sig;
+    this.trespassEl.hidden = !found.length;
+    this.trespassEl.innerHTML = '';
+    for (const f of found) {
+      const row = document.createElement('div');
+      row.className = 'cm-incoming-row';
+      const text = document.createElement('span');
+      text.textContent = `⚠ ${f.name} ${UNIT_SPECS[f.t].name} 무단 진입 (${f.cx},${f.cy})`;
+      const hit = document.createElement('button');
+      hit.type = 'button';
+      hit.textContent = '공격';
+      hit.addEventListener('click', async () => {
+        const power = this.source.army.incidentPower(f.cx, f.cy);
+        const why = await ps.attack(f.uid, `${f.cx},${f.cy}`, power, INCIDENT_COOLDOWN_MS);
+        this.armyMsgEl.textContent = why || '공격했습니다';
+      });
+      row.append(text, hit);
+      this.trespassEl.append(row);
+    }
+  }
+
   private renderIncoming(): void {
     const al = this.source.alliances;
     const list = al?.incoming() ?? [];
-    this.incomingEl.hidden = !list.length;
+    const ps = this.source.passes;
+    const me = this.source.mine().uid;
+    const asks = (ps?.passes ?? []).filter((p) => p.to === me && p.state === 'asked');
+    this.incomingEl.hidden = !list.length && !asks.length;
     this.incomingEl.innerHTML = '';
+    for (const p of asks) {
+      const row = document.createElement('div');
+      row.className = 'cm-incoming-row';
+      const text = document.createElement('span');
+      text.textContent = `🛂 ${this.cities.find((c) => c.uid === p.from)?.cityName ?? '다른 도시'} 통과 요청`;
+      const yes = document.createElement('button');
+      yes.type = 'button';
+      yes.textContent = '허가';
+      const no = document.createElement('button');
+      no.type = 'button';
+      no.textContent = '거절';
+      yes.addEventListener('click', () => void ps!.answer(p.from, true));
+      no.addEventListener('click', () => void ps!.answer(p.from, false));
+      row.append(text, yes, no);
+      this.incomingEl.append(row);
+    }
     for (const a of list) {
       const row = document.createElement('div');
       row.className = 'cm-incoming-row';

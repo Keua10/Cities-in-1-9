@@ -1,3 +1,5 @@
+import { PassSession } from './net/passes';
+import { airspace, passValid, territorialSea, trespassing } from './sim/military/waters';
 import { ConstructionPanel } from './ui/constructionPanel';
 import { NatureLayer } from './render/natureLayer';
 import { AlertPanel } from './ui/alertPanel';
@@ -29,7 +31,13 @@ import { remainingAt } from './sim/resources';
 import { Market } from './net/market';
 import { WAR_SPEED } from './sim/config/pace';
 import { Presence } from './net/presence';
-import { loadPublicCities, publishProfile, type PublicProfile } from './net/publicCities';
+import {
+  loadPublicCities,
+  publishProfile,
+  type PublicCity,
+  type PublicProfile,
+} from './net/publicCities';
+import { sharedNow } from './sim/sharedClock';
 import { ContinentMap } from './ui/continentMap';
 import { WarSession } from './net/warSession';
 import { AllianceSession } from './net/alliances';
@@ -298,14 +306,15 @@ async function boot(): Promise<void> {
     updatedAt: Date.now(),
     units: sim.army.units
       .filter((u) => u.state !== 'training')
-      .map((u) => ({ cx: u.cx, cy: u.cy, men: Math.round(u.men) })),
+      .map((u) => ({ cx: u.cx, cy: u.cy, men: Math.round(u.men), t: u.type })),
+    pass: macro.passRule ?? 'open',
   });
   let lastPublished = '';
   const publish = (): void => {
     if (!online || !session) return;
     const p = myProfile();
     // 영토·레벨·인구(백 단위)가 그대로면 다시 쓰지 않는다(쓰기 아끼기).
-    const stamp = `${p.owned.length}|${p.capital}|${p.capitalLevel}|${p.cityLevel}|${Math.round(p.population / 100)}|${JSON.stringify(p.units)}`;
+    const stamp = `${p.owned.length}|${p.capital}|${p.capitalLevel}|${p.cityLevel}|${Math.round(p.population / 100)}|${JSON.stringify(p.units)}|${p.pass}`;
     if (stamp === lastPublished) return;
     lastPublished = stamp;
     publishProfile(session.uid, p).catch((err) => {
@@ -328,6 +337,52 @@ async function boot(): Promise<void> {
     alliances.start();
   }
   if (warSession) warSession.alliances = alliances;
+  // 영해·영공 통과(피드백 1차): 신고·허가와 무단 통과 부대 공격.
+  let publicCache: PublicCity[] = [];
+  const passes =
+    online && session && city
+      ? new PassSession(session.uid, () => {
+          const out: Record<string, string> = {};
+          for (const c of publicCache) out[c.uid] = c.cityName;
+          return out;
+        })
+      : null;
+  if (passes) {
+    passes.onNotice = (text) => tools.announce(text);
+    passes.onIncident = (i) => {
+      const c = publicCache.find((x) => x.uid === i.from);
+      if (!c) return;
+      const sea = territorialSea(c.owned);
+      const ok = passValid(c.pass ?? 'open', passes.pass(session!.uid, i.from), sharedNow());
+      const lost = sim.army.takeIncident(i.key, i.power, { sea, air: airspace(c.owned, sea) }, ok);
+      if (lost > 0)
+        tools.announce(`⚠ ${c.cityName} 영해·영공에서 공격받음 · ${Math.round(lost)} 손실`);
+    };
+    passes.start();
+    // 내 군함·군용기가 규율을 어기고 남의 영해·영공에 있으면 알려 준다(나라마다 5분에 한 번).
+    const spaces = new Map<string, { sig: number; sea: Set<string>; air: Set<string> }>();
+    const warned = new Map<string, number>();
+    window.setInterval(() => {
+      const now = sharedNow();
+      for (const c of publicCache) {
+        if (c.uid === session!.uid || warSession?.atWarWith(c.uid)) continue;
+        let sp = spaces.get(c.uid);
+        if (!sp || sp.sig !== c.owned.length) {
+          const sea = territorialSea(c.owned);
+          sp = { sig: c.owned.length, sea, air: airspace(c.owned, sea) };
+          spaces.set(c.uid, sp);
+        }
+        const pass = passes.pass(session!.uid, c.uid);
+        const bad = sim.army.units.some(
+          (u) => u.state !== 'training' && trespassing(u, sp!, c.pass ?? 'open', pass, now),
+        );
+        if (bad && now - (warned.get(c.uid) ?? 0) > 5 * 60_000) {
+          warned.set(c.uid, now);
+          tools.announce(`⚠ ${c.cityName} 영해·영공 무단 진입`);
+        }
+      }
+    }, 10_000);
+  }
   // 부대가 움직이면 공개 정보(부대 위치)도 가끔 갱신한다.
   window.setInterval(publish, 60_000);
   // 대륙 지도의 "아는 땅" 캐시(개척·영토·탐사가 바뀔 때만 다시 만든다).
@@ -343,6 +398,12 @@ async function boot(): Promise<void> {
     announce: (text) => tools.announce(text),
     war: warSession,
     alliances,
+    passes,
+    passRule: () => macro.passRule ?? 'open',
+    setPassRule: (r) => {
+      macro.passRule = r;
+      publish();
+    },
     onForeign: (owned) => {
       sim.territory.foreign = owned;
     },
@@ -368,6 +429,7 @@ async function boot(): Promise<void> {
     try {
       const list = await loadPublicCities();
       const foreign = new Set<string>();
+      publicCache = list;
       for (const c of list) if (c.uid !== myUid) for (const k of c.owned) foreign.add(k);
       sim.territory.foreign = foreign;
       sim.army.foreignOwned = foreign;

@@ -277,7 +277,13 @@ export function findPath(
   const start = chunkKey(from.cx, from.cy);
   if (goal === start) return [];
   const pass = (key: string, cx: number, cy: number): number => {
-    if (bf.foreign(key) && !bf.me.owned.has(key) && !(bf.enemy && bf.enemy.owned.has(key)))
+    // 평시 남의 땅: 땅 부대는 못 들어간다. 군용기는 남의 영공을 지날 수 있다(영공 규율은 waters.ts).
+    if (
+      spec.domain === 'ground' &&
+      bf.foreign(key) &&
+      !bf.me.owned.has(key) &&
+      !(bf.enemy && bf.enemy.owned.has(key))
+    )
       return 0;
     return passFactor(bf, type, key, cx, cy);
   };

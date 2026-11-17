@@ -18,6 +18,7 @@ import {
   FAC_NAVAL_BASE,
   FAC_RADAR,
   AMMO_PER_MIN,
+  expMul,
   FAC_SCOUT_TOWER,
   FAC_TRENCH,
   MISSILE_DEFENSE_INTERCEPT,
@@ -38,6 +39,7 @@ import {
 import { FACILITY_SPECS } from '../facilities';
 import { chunkTerrain } from './terrain';
 import { visionAt } from './weather';
+import { bound as boundType, INCIDENT_LOSS_PER_10, INCIDENT_RANGE_CHUNKS } from './waters';
 import { RESOURCE_NAMES } from '../config/resources';
 import type { ResourceSystem } from '../resources';
 import type { FacilityRecord } from '../services';
@@ -246,6 +248,48 @@ export class ArmySystem {
   disband(id: string): void {
     removeUnit(this.army, id, true);
     this.bump();
+  }
+
+  /**
+   * 무단 통과한 내 군함·군용기가 공격받았다(전쟁 없이, 피드백 1차). 그 나라의 영해·영공 안에서
+   * 규율을 어긴 부대만 다친다. 잃은 인원을 돌려준다.
+   */
+  takeIncident(
+    key: string,
+    power: number,
+    space: { sea: Set<string>; air: Set<string> },
+    passOk: boolean,
+  ): number {
+    if (passOk || !(power > 0)) return 0;
+    let lost = 0;
+    for (const u of [...this.army.units]) {
+      if (u.state === 'training' || u.airlift || !boundType(u.type)) continue;
+      if (chunkKey(u.cx, u.cy) !== key) continue;
+      const sea = UNIT_SPECS[u.type].domain === 'sea';
+      if (!(sea ? space.sea : space.air).has(key)) continue;
+      const def = Math.max(0.2, UNIT_SPECS[u.type].defense / 10);
+      const frac = Math.min(0.5, (INCIDENT_LOSS_PER_10 * power) / 10 / def);
+      const n = u.men * frac;
+      loseMen(this.army, u, n);
+      lost += n;
+    }
+    if (lost > 0) {
+      this.effects.push({ kind: 'boom', key, at: performance.now() });
+      this.bump();
+    }
+    return lost;
+  }
+
+  /** (cx,cy) 의 무단 통과 부대를 칠 수 있는 내 힘: 2청크 안 대공·전투기·군함의 공격력 합. */
+  incidentPower(cx: number, cy: number): number {
+    let p = 0;
+    for (const u of this.army.units) {
+      if (u.state === 'training' || u.airlift) continue;
+      if (u.type !== 'aa' && u.type !== 'fighter' && u.type !== 'ship') continue;
+      if (Math.max(Math.abs(u.cx - cx), Math.abs(u.cy - cy)) > INCIDENT_RANGE_CHUNKS) continue;
+      p += UNIT_SPECS[u.type].attack * (u.men / unitStrength(u.type)) * expMul(u.exp);
+    }
+    return p;
   }
 
   /** 같은 병종·같은 청크 부대를 합친다. 막히면 이유. */

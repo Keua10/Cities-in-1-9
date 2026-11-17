@@ -141,6 +141,92 @@ const bf = (me: Side, enemy: Side | null, now = 0): Battlefield => ({
   console.log('  OK   부대 합치기(같은 병종·같은 청크, 경험·조직력 인원 비율)·나누기(반씩)');
 }
 
+// 0-3. 영해(영토에서 2청크 바다)·영공·통과 규율·무단 통과 공격
+{
+  const W = await import('../../src/sim/military/waters');
+  // 해안 땅 청크 찾기: 동쪽 1칸이 바다, 동쪽 3칸도 바다.
+  const coast = find(
+    (cx, cy) =>
+      chunkTerrain(cx, cy).kind !== 'sea' &&
+      chunkTerrain(cx + 1, cy).kind === 'sea' &&
+      chunkTerrain(cx + 2, cy).kind === 'sea' &&
+      chunkTerrain(cx + 3, cy).kind === 'sea',
+  );
+  const land = [chunkKey(coast.cx, coast.cy)];
+  const sea = W.territorialSea(land);
+  assert.ok(sea.has(chunkKey(coast.cx + 2, coast.cy)), '2청크 바다 = 영해');
+  assert.ok(!sea.has(chunkKey(coast.cx + 3, coast.cy)), '3청크 = 공해');
+  const air = W.airspace(land, sea);
+  assert.ok(air.has(land[0]) && air.has(chunkKey(coast.cx + 1, coast.cy)), '영공 = 영토 + 영해');
+  const now = 1_000_000;
+  const p = (state: 'notified' | 'asked' | 'granted', until = now + 1000) =>
+    ({ from: 'x', to: 'y', state, at: now, until }) as const;
+  assert.ok(W.passValid('open', undefined, now));
+  assert.ok(!W.passValid('notify', undefined, now));
+  assert.ok(W.passValid('notify', p('notified'), now));
+  assert.ok(!W.passValid('notify', p('notified', now - 1), now), '신고 기한 지남');
+  assert.ok(!W.passValid('permit', p('notified'), now), '허가 규율은 신고로 안 됨');
+  assert.ok(!W.passValid('permit', p('asked'), now));
+  assert.ok(W.passValid('permit', p('granted'), now));
+  const space = { sea, air };
+  const ship = { type: 'ship' as const, cx: coast.cx + 2, cy: coast.cy };
+  assert.ok(W.trespassing(ship, space, 'permit', undefined, now), '허가 없는 군함 = 무단');
+  assert.ok(!W.trespassing(ship, space, 'permit', p('granted'), now));
+  assert.ok(!W.trespassing({ ...ship, cx: coast.cx + 3 }, space, 'permit', undefined, now), '공해');
+  assert.ok(
+    !W.trespassing(
+      { type: 'infantry', cx: coast.cx, cy: coast.cy },
+      space,
+      'permit',
+      undefined,
+      now,
+    ),
+    '땅 부대는 영공 규율 대상 아님',
+  );
+  // 맞는 쪽: 무단 통과한 군함만 다친다.
+  const origin = { cx: base.cx, cy: base.cy - 1 };
+  const world = new World(origin);
+  const sim = new MacroSim(world, { money: 0, population: 0, tick: 0, tickedAt: 0 } as never);
+  const sys = new ArmySystem(
+    sim.state,
+    sim.territory,
+    sim.resources,
+    () => [],
+    () => 9,
+    () => {},
+  );
+  const boat = newUnit(sys.army, 'ship', { cx: coast.cx + 2, cy: coast.cy }, {}, 0);
+  boat.state = 'idle';
+  const before = boat.men;
+  assert.equal(
+    sys.takeIncident(chunkKey(boat.cx, boat.cy), 30, space, true),
+    0,
+    '통과 허가면 무사',
+  );
+  assert.ok(sys.takeIncident(chunkKey(boat.cx, boat.cy), 30, space, false) > 0);
+  assert.ok(boat.men < before, '무단 통과 군함 피해');
+  // 평시 군용기는 남의 영공(땅 위)을 지날 수 있고, 땅 부대는 못 간다.
+  const a = emptyArmy();
+  const f = mk(a, 'fighter', 2);
+  const foreign = new Set(keys(4, 6));
+  const peace: Battlefield = {
+    ...bf(side('a', a.units, keys(0, 3)), null),
+    foreign: (k) => foreign.has(k),
+  };
+  assert.ok(
+    findPath(f, { cx: base.cx + 5, cy: base.cy }, 'fighter', peace).length > 0,
+    '군용기 남의 영공 통과',
+  );
+  assert.equal(
+    findPath(f, { cx: base.cx + 5, cy: base.cy }, 'infantry', peace).length,
+    0,
+    '땅 부대는 불가',
+  );
+  console.log(
+    '  OK   영해 2청크·영공·통과 규율(자유·신고·허가)·무단 통과 부대만 공격, 군용기 남의 영공 통과',
+  );
+}
+
 // 1. 기계 부대 전력, 땅·하늘·바다 이동
 {
   const a = emptyArmy();

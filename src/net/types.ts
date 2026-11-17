@@ -59,6 +59,8 @@ export interface MacroState {
   scouted?: string[];
   /** 내가 진영 대표로 항복을 신청한 전쟁 id(정산 확인용). */
   surrenderSent?: string;
+  /** 영해·영공 통과 규율(피드백 1차). */
+  passRule?: 'open' | 'notify' | 'permit';
   /** 마지막으로 본 공지 시각. */
   noticeSeenAt?: number;
   /** 마지막으로 실행한 관리자 지시 id. */

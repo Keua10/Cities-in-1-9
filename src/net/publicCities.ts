@@ -1,3 +1,5 @@
+import { UNIT_SPECS, type UnitType } from '../sim/config/military';
+import type { PassRule } from '../sim/military/waters';
 import { collection, doc, getDocs, setDoc, Timestamp } from 'firebase/firestore';
 import { sharedNow } from '../sim/sharedClock';
 import { getFirebase } from './firebase';
@@ -24,8 +26,10 @@ export interface PublicProfile {
   cityLevel: number;
   population: number;
   updatedAt: number;
-  /** 부대 위치·인원(기습 조건 계산용, 훈련 중 제외). */
-  units?: Array<{ cx: number; cy: number; men: number }>;
+  /** 부대 위치·인원·병종(기습 조건, 영해·영공 무단 통과 계산용, 훈련 중 제외). */
+  units?: Array<{ cx: number; cy: number; men: number; t?: UnitType }>;
+  /** 영해·영공 통과 규율(없으면 자유 통과). */
+  pass?: PassRule;
 }
 
 export interface PublicCity extends PublicProfile {
@@ -51,9 +55,15 @@ export function readProfile(uid: string, raw: Record<string, unknown>): PublicPr
     updatedAt: Number(raw.updatedAt) || 0,
     units: Array.isArray(raw.units)
       ? (raw.units as Array<Record<string, unknown>>)
-          .map((u) => ({ cx: Number(u.cx) || 0, cy: Number(u.cy) || 0, men: Number(u.men) || 0 }))
+          .map((u) => ({
+            cx: Number(u.cx) || 0,
+            cy: Number(u.cy) || 0,
+            men: Number(u.men) || 0,
+            ...(typeof u.t === 'string' && u.t in UNIT_SPECS ? { t: u.t as UnitType } : {}),
+          }))
           .slice(0, 200)
       : [],
+    pass: raw.pass === 'notify' || raw.pass === 'permit' ? raw.pass : 'open',
   };
 }
 

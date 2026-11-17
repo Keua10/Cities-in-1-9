@@ -343,3 +343,20 @@
 .cm-pick[hidden] {
   display: none;
 }
+
+.cm-pass-rule {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 12px;
+}
+.cm-pass {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 12px;
+}
+.cm-pass[hidden],
+.cm-trespass[hidden] {
+  display: none;
+}
