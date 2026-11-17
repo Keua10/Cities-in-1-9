@@ -53,3 +53,17 @@ export const ALLIANCE_DEPOSITS = [0, 1_000, 5_000, 20_000] as const;
 export const MAX_ALLIANCES = 3;
 /** 배신(동맹에게 선전포고)한 도시는 이 시간 동안 새 동맹을 맺지 못한다. */
 export const BETRAYAL_LOCK_MS = 24 * HOUR;
+
+/* ---------------- 전시 경제 (설계안 Ⅸ) ---------------- */
+
+/** 전쟁 중 식량 수입 가격 배율. */
+export const WAR_FOOD_IMPORT_MUL = 1.5;
+/** 전쟁 피로: 전쟁이 길어질수록 만족도가 시간당 이만큼 떨어진다(최대 WAR_FATIGUE_MAX). */
+export const WAR_FATIGUE_PER_HOUR = 0.02;
+export const WAR_FATIGUE_MAX = 0.15;
+/** 승전 뒤 이 시간 동안 만족도 +VICTORY_MOOD. */
+export const VICTORY_MOOD = 0.05;
+export const POSTWAR_MS = 6 * HOUR;
+/** 전후 복구: 종전 뒤 6시간 공사 속도(패전국 3배, 나머지 2배). */
+export const REBUILD_MUL = 2;
+export const REBUILD_MUL_LOSER = 3;

@@ -83,6 +83,8 @@ export function emptyFoodSummary(): FoodSummary {
 
 export class FoodSystem {
   summary: FoodSummary = emptyFoodSummary();
+  /** 수입 가격 배율(전쟁 중 1.5). */
+  importPriceMul = 1;
   private farms = new Map<string, FarmStatus>();
   /** 앵커별 비옥도(땅 성질이라 시설이 서 있는 동안 바뀌지 않는다). */
   private fertilityCache = new Map<string, number>();
@@ -151,7 +153,7 @@ export class FoodSystem {
     const net = s.production - s.consumption;
     s.importPerDay = net < 0 && s.stock <= 0 ? -net : 0;
     s.exportPerDay = net > 0 && s.stock >= s.capacity ? net : 0;
-    s.importCost = s.importPerDay * FOOD_IMPORT_PRICE;
+    s.importCost = s.importPerDay * FOOD_IMPORT_PRICE * this.importPriceMul;
     s.exportIncome = s.exportPerDay * FOOD_EXPORT_PRICE;
   }
 

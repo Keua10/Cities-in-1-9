@@ -50,6 +50,11 @@ export interface MacroState {
   warsSettled?: Record<string, number>;
   /** 마지막으로 기습한 시각(대가: 24시간 동맹 불가). */
   surpriseAt?: number;
+  /** 전쟁이 시작된 시각(전쟁 피로). 평시에는 없음. */
+  warSince?: number;
+  /** 마지막 전쟁이 끝난 시각과 결과(전후 복구·승전 기분). */
+  warEndedAt?: number;
+  warOutcome?: 'win' | 'lose' | 'draw';
   /** 마지막으로 동맹을 배신한 시각(24시간 새 동맹 불가). */
   betrayedAt?: number;
   /** 정산을 마친 동맹 id → 시각(보증금을 두 번 주고받지 않게). */

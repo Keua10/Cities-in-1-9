@@ -118,13 +118,15 @@ export class ConstructionSystem {
    * 실제 시각 now 까지 공사를 진행시킨다.
    * boostedMs: 이번 구간 중 스타트 버닝이 켜져 있던 실제 ms(그만큼 추가로 진행).
    */
-  update(now = Date.now(), boostedMs = 0): void {
+  update(now = Date.now(), boostedMs = 0, rebuildMul = 1): void {
     const last = this.macro.constructionAt;
     this.macro.constructionAt = now;
     const jobs = this.jobs;
     if (!jobs.length) return;
     const dt = last === undefined ? 0 : Math.max(0, now - last);
-    const extra = Math.min(dt, Math.max(0, boostedMs)) * (START_BOOST_BUILD - 1);
+    const extra =
+      Math.min(dt, Math.max(0, boostedMs)) * (START_BOOST_BUILD - 1) +
+      dt * Math.max(0, rebuildMul - 1);
     for (const job of jobs) job.doneMs! += dt + extra;
     for (const job of [...jobs]) {
       if (job.doneMs! < job.workMs!) continue;

@@ -21,6 +21,8 @@ import {
   MISSILE_UNIT_LOSS,
   MUNITIONS_SPEEDUP,
   RADAR_VISION_CHUNKS,
+  COMM_TOWER_VISION,
+  HOSPITAL_RANGE_CHUNKS,
   UNIT_SPECS,
   unitStrength,
   type UnitType,
@@ -239,7 +241,28 @@ export class ArmySystem {
     for (const [key, p] of this.territory.people)
       if (p.residents + p.floating >= URBAN_PEOPLE) urban.add(key);
     const canSail = this.producers(FAC_NAVAL_BASE).length > 0;
-    return { uid: this.uid, units: this.army.units, owned, capital, trenches, urban, canSail };
+    const hospitals = new Set<string>();
+    const police = new Set<string>();
+    for (const f of this.facilities()) {
+      const cx = chunkIndexOf(f.tx);
+      const cy = chunkIndexOf(f.ty);
+      if (f.kind === FAC_HOSPITAL_KIND)
+        for (let dy = -HOSPITAL_RANGE_CHUNKS; dy <= HOSPITAL_RANGE_CHUNKS; dy++)
+          for (let dx = -HOSPITAL_RANGE_CHUNKS; dx <= HOSPITAL_RANGE_CHUNKS; dx++)
+            hospitals.add(chunkKey(cx + dx, cy + dy));
+      else if (f.kind === FAC_POLICE_KIND) police.add(chunkKey(cx, cy));
+    }
+    return {
+      uid: this.uid,
+      units: this.army.units,
+      owned,
+      capital,
+      trenches,
+      urban,
+      canSail,
+      hospitals,
+      police,
+    };
   }
 
   battlefield(now: number): Battlefield {
@@ -401,6 +424,9 @@ export class ArmySystem {
     const out: Array<{ cx: number; cy: number; r: number }> = [];
     for (const r of this.producers(FAC_RADAR))
       out.push({ cx: chunkIndexOf(r.tx), cy: chunkIndexOf(r.ty), r: RADAR_VISION_CHUNKS });
+    for (const t of this.facilities())
+      if (t.kind === FAC_COMM_TOWER_KIND)
+        out.push({ cx: chunkIndexOf(t.tx), cy: chunkIndexOf(t.ty), r: COMM_TOWER_VISION });
     return out;
   }
 
@@ -409,6 +435,11 @@ export class ArmySystem {
     this.changed();
   }
 }
+
+/** 민간 시설 kind: 경찰서 1, 병원 2, 통신탑 17. */
+const FAC_POLICE_KIND = 1;
+const FAC_HOSPITAL_KIND = 2;
+const FAC_COMM_TOWER_KIND = 17;
 
 /** (cx,cy) 둘레 3청크 안 가장 가까운 바다 청크. */
 function nearestSea(cx: number, cy: number): { cx: number; cy: number } | null {

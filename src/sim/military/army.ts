@@ -14,6 +14,8 @@ import {
   UNSUPPLIED_ORG_DECAY,
   AIR_RANGE_CHUNKS,
   BOMB_INTERVAL_MS,
+  HOSPITAL_REGEN_MUL,
+  POLICE_URBAN_DEFENSE,
   DESTROYED_SHARE,
   EMBARKED_MOVE,
   FIGHTER_VS_SURFACE,
@@ -132,6 +134,10 @@ export interface Side {
   urban: Set<string>;
   /** 해군 기지가 있어 땅 부대가 배로 바다를 건널 수 있다. */
   canSail?: boolean;
+  /** 병원 둘레(2청크): 부대 회복 2배. */
+  hospitals?: Set<string>;
+  /** 경찰서가 있는 청크: 시가전 방어 +10%. */
+  police?: Set<string>;
 }
 
 export interface Battlefield {
@@ -476,6 +482,7 @@ export function stepArmy(army: ArmyState, bf: Battlefield, dtMs: number): Battle
         const share = Math.max(1, u.men / unitStrength(u.type)) / total;
         const def =
           (us.defense / 10) *
+          (urban && bf.me.police?.has(key) ? 1 + POLICE_URBAN_DEFENSE : 1) *
           (dom === 'ground'
             ? defenseFactor(
                 t,
@@ -532,7 +539,8 @@ export function stepArmy(army: ArmyState, bf: Battlefield, dtMs: number): Battle
     const supplied = isSupplied(u, bf);
     const resting = dom === 'sea' ? supplied && !blockersAt(u, key).length : owner === bf.me.uid;
     if (resting && u.state !== 'fighting') {
-      u.org = Math.min(ORG_MAX, u.org + ORG_REGEN_PER_SEC * dt);
+      const heal = bf.me.hospitals?.has(key) ? HOSPITAL_REGEN_MUL : 1;
+      u.org = Math.min(ORG_MAX, u.org + ORG_REGEN_PER_SEC * heal * dt);
       u.morale = Math.min(1, u.morale + 0.01 * dt);
     } else if (!supplied) {
       u.org = Math.max(0, u.org - UNSUPPLIED_ORG_DECAY * dt);

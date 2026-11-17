@@ -298,9 +298,11 @@ export class WarSession {
       army.war = null;
       this.sim.atWar = false;
       this.sim.grantsEnabled = true;
+      delete this.sim.state.warSince;
       return;
     }
     this.sim.atWar = true;
+    this.sim.state.warSince ??= w.startsAt;
     this.sim.grantsEnabled = false;
     const mine = sideOf(w, this.uid)!;
     const enemies = membersOf(w, otherSide(mine));
@@ -481,6 +483,12 @@ export class WarSession {
     const settled = (this.sim.state.warsSettled ??= {});
     const mine = sideOf(w, this.uid);
     const winner: WarSide | null = w.result === 'winA' ? 'a' : w.result === 'winB' ? 'b' : null;
+    // 전후: 복구 속도(6시간 ×2, 패전 ×3), 승전 기분.
+    const st = this.sim.state;
+    if ((st.warEndedAt ?? 0) < (w.endedAt ?? now)) {
+      st.warEndedAt = w.endedAt ?? now;
+      st.warOutcome = !winner || !mine ? 'draw' : winner === mine ? 'win' : 'lose';
+    }
     if (!mine || !winner) {
       settled[w.id] = now;
       this.onNotice?.(

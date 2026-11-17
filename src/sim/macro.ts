@@ -12,6 +12,15 @@ import { Build } from '../world/build';
 import { JunctionIndex } from './traffic/junctions';
 import { chunkIndexOf, chunkKey, localIndexOf } from '../core/iso';
 import { FAC_OCC_TOWER } from './config/military';
+import {
+  POSTWAR_MS,
+  REBUILD_MUL,
+  REBUILD_MUL_LOSER,
+  VICTORY_MOOD,
+  WAR_FATIGUE_MAX,
+  WAR_FATIGUE_PER_HOUR,
+  WAR_FOOD_IMPORT_MUL,
+} from './config/war';
 import type { MacroState } from '../net/types';
 import type { Parcel, World } from '../world/world';
 import { AssignmentTable } from './assignment';
@@ -324,6 +333,26 @@ export class MacroSim {
   /** 전쟁 중이면 1배속(공유 시계와 맞춘다). net/warSession.ts 가 켠다. */
   atWar = false;
 
+  /** 전후 복구: 종전 뒤 6시간 공사 속도 ×2(패전국 ×3). */
+  rebuildMul(now = Date.now()): number {
+    const end = this.macro.warEndedAt;
+    if (this.atWar || end === undefined || now - end >= POSTWAR_MS) return 1;
+    return this.macro.warOutcome === 'lose' ? REBUILD_MUL_LOSER : REBUILD_MUL;
+  }
+
+  /** 전쟁이 만족도에 주는 값: 전쟁 피로(−, 길수록 커짐), 승전 뒤 6시간 +. */
+  warMood(now = Date.now()): number {
+    if (this.atWar && this.macro.warSince !== undefined)
+      return -Math.min(
+        WAR_FATIGUE_MAX,
+        (Math.max(0, now - this.macro.warSince) / 3_600_000) * WAR_FATIGUE_PER_HOUR,
+      );
+    const end = this.macro.warEndedAt;
+    if (this.macro.warOutcome === 'win' && end !== undefined && now - end < POSTWAR_MS)
+      return VICTORY_MOOD;
+    return 0;
+  }
+
   /** 저장되는 도시 상태(전쟁 정산 기록 등 다른 모듈이 읽고 쓴다). */
   get state(): MacroState {
     return this.macro;
@@ -613,7 +642,7 @@ export class MacroSim {
    */
   advanceLifeClock(deltaMs: number, boostedMs = 0): void {
     this.macro.lifeElapsedMs = this.lifeElapsedMs + Math.max(0, deltaMs);
-    this.construction.update(Date.now(), boostedMs);
+    this.construction.update(Date.now(), boostedMs, this.rebuildMul());
     this.nature.update();
   }
 
@@ -634,6 +663,7 @@ export class MacroSim {
     this.advanceLifeClock(deltaMs, boosted);
     this.territory.update();
     this.updateTowers();
+    this.food.importPriceMul = this.atWar ? WAR_FOOD_IMPORT_MUL : 1;
     this.army.update();
     this.power.ensure(this.world);
     this.water.ensure(this.world);
@@ -785,6 +815,7 @@ export class MacroSim {
       funeralDemand = 0;
     const policies = this.policies;
     const essentialGateNow = this.essentialGateFactor;
+    const warMood = this.warMood();
     const sanitationAge =
       (this.tick - (this.macro.sanitationStartTick ?? this.tick)) / TICKS_PER_DAY;
     const sanitationRamp = Math.max(0, Math.min(1, (sanitationAge - 30) / 30));
@@ -942,7 +973,8 @@ export class MacroSim {
                   0,
                   Math.min(
                     1,
-                    satisfaction(zone, dist, nui, congestion, needsGap, amenityBonus) -
+                    satisfaction(zone, dist, nui, congestion, needsGap, amenityBonus) +
+                      warMood -
                       incidentPenalty -
                       taxSatisfactionPenalty(policies, zone),
                   ),

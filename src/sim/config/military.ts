@@ -360,3 +360,13 @@ export const SHORE_BOMBARD = 0.7;
 export const FIGHTER_VS_SURFACE = 0.5;
 /** 해군 기지가 있으면 땅 부대가 배를 타고 바다를 건넌다(이동 배율). 바다 위에서는 싸우지 못한다. */
 export const EMBARKED_MOVE = 0.3;
+
+/* ---------------- 민간 시설의 군사 역할 (설계안 Ⅶ) ---------------- */
+
+/** 병원 둘레 2청크에서 쉬면 조직력 회복 2배. */
+export const HOSPITAL_REGEN_MUL = 2;
+export const HOSPITAL_RANGE_CHUNKS = 2;
+/** 경찰서가 있는 청크의 시가전 방어 +10%. */
+export const POLICE_URBAN_DEFENSE = 0.1;
+/** 통신탑 둘레 시야(부대 시야 2 + 1). */
+export const COMM_TOWER_VISION = 3;

@@ -260,5 +260,42 @@ console.log('  OK   폭격기: 적 땅 위 1분마다 타격');
 }
 console.log('  OK   공장별 생산·군수 공장 −30%·미사일 발사·요격 60%·시설 파괴(점수)');
 
+// 6. 민간 시설 역할·전시 경제
+{
+  const mine = emptyArmy();
+  const a1 = mk(mine, 'infantry', 1);
+  const a2 = mk(mine, 'infantry', 2);
+  a1.org = 10;
+  a2.org = 10;
+  const me = side('a', mine.units, keys(0, 4), {
+    hospitals: new Set([chunkKey(base.cx + 1, base.cy)]),
+  });
+  for (let t = 1; t <= 10; t++) stepArmy(mine, bf(me, null, t * 1000), 1000);
+  assert.ok(Math.abs(a1.org - 20) < 0.01 && Math.abs(a2.org - 15) < 0.01, '병원 둘레 회복 2배');
+
+  const world = new World({ cx: base.cx, cy: base.cy });
+  const sim = new MacroSim(world, { money: 0, population: 0, tick: 0, tickedAt: 0 } as never);
+  const now = 50_000_000;
+  assert.equal(sim.warMood(now), 0);
+  sim.atWar = true;
+  sim.state.warSince = now - 2 * 3_600_000;
+  assert.ok(Math.abs(sim.warMood(now) + 0.04) < 1e-9, '전쟁 2시간: 만족도 −4%');
+  sim.state.warSince = now - 100 * 3_600_000;
+  assert.equal(sim.warMood(now), -0.15, '전쟁 피로 최대 15%');
+  assert.equal(sim.rebuildMul(now), 1, '전쟁 중엔 복구 가속 없음');
+  sim.atWar = false;
+  sim.state.warEndedAt = now - 3_600_000;
+  sim.state.warOutcome = 'lose';
+  assert.equal(sim.rebuildMul(now), 3, '패전국 6시간 공사 ×3');
+  sim.state.warOutcome = 'win';
+  assert.equal(sim.rebuildMul(now), 2);
+  assert.equal(sim.warMood(now), 0.05, '승전 기분');
+  assert.equal(sim.rebuildMul(now + 6 * 3_600_000), 1, '6시간 뒤 끝');
+  sim.atWar = true;
+  sim.update(1, 0);
+  assert.equal(sim.food.importPriceMul, 1.5, '전쟁 중 식량 수입 1.5배');
+}
+console.log('  OK   병원 회복 2배·전쟁 피로·승전 기분·전후 복구(×2·×3)·식량 수입 1.5배');
+
 void BOMB_INTERVAL_MS;
 console.log('Military stage 6 passed: machines, air/sea domains, matchups, bombing, missiles.');
