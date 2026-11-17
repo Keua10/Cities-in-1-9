@@ -50,6 +50,10 @@ export interface MacroState {
   warsSettled?: Record<string, number>;
   /** 마지막으로 기습한 시각(대가: 24시간 동맹 불가). */
   surpriseAt?: number;
+  /** 마지막으로 동맹을 배신한 시각(24시간 새 동맹 불가). */
+  betrayedAt?: number;
+  /** 정산을 마친 동맹 id → 시각(보증금을 두 번 주고받지 않게). */
+  alliancesSettled?: Record<string, number>;
   /** 군대 (sim/military/army.ts ArmyState). */
   army?: import('../sim/military/army').ArmyState;
   /** 영토·수도 (sim/territory.ts). 없으면 시작 영토 4×4 로 만든다. */

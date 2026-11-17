@@ -7,6 +7,8 @@ import { UNIT_SPECS, VISION_CHUNKS, type UnitType } from '../sim/config/military
 import { unitPosition, type Unit } from '../sim/military/army';
 import type { ArmySystem } from '../sim/military/armySystem';
 import type { WarSession } from '../net/warSession';
+import type { AllianceSession } from '../net/alliances';
+import { ALLIANCE_DEPOSITS, BETRAYAL_LOCK_MS } from '../sim/config/war';
 import { formatMoney } from './money';
 import './continentMap.css';
 
@@ -33,6 +35,8 @@ export interface ContinentMapSource {
   announce: (text: string) => void;
   /** 전쟁 연결(로그인했을 때만). */
   war: WarSession | null;
+  /** 동맹 연결(로그인했을 때만). */
+  alliances?: AllianceSession | null;
   /** 다른 도시 영토를 새로 읽었을 때(자동 점령 막기). */
   onForeign?: (owned: Set<string>) => void;
 }
@@ -95,6 +99,8 @@ export class ContinentMap {
   private armyMsgEl: HTMLElement;
   private warEl: HTMLElement;
   private declareEl: HTMLElement;
+  private incomingEl!: HTMLElement;
+  private allyRev = -1;
 
   constructor(private source: ContinentMapSource) {
     this.root.id = 'continent-map';
@@ -119,9 +125,18 @@ export class ContinentMap {
           </div>
           <div class="cm-pane" data-pane="cities">
             <div class="cm-legend">금색 테두리 = 수도 · ● 접속 중 · 전쟁은 양쪽이 접속해 있어야 합니다</div>
+            <div class="cm-incoming" hidden></div>
             <ol class="cm-list"></ol>
             <div class="cm-declare" hidden>
               <div class="cm-declare-title"></div>
+              <div class="cm-ally">
+                <div class="cm-ally-state"></div>
+                <div class="cm-ally-row">
+                  <select class="cm-ally-deposit" aria-label="동맹 보증금"></select>
+                  <button type="button" class="cm-ally-go">동맹 신청</button>
+                </div>
+              </div>
+              <div class="cm-declare-warn"></div>
               <button type="button" data-war="small">소규모 전쟁 선포 (준비 5분)</button>
               <button type="button" data-war="surprise">기습 (준비 없이)</button>
               <button type="button" data-war="large">대규모 전쟁 선포</button>
@@ -145,6 +160,15 @@ export class ContinentMap {
     this.armyMsgEl = this.root.querySelector('.cm-army-msg')!;
     this.warEl = this.root.querySelector('.cm-war')!;
     this.declareEl = this.root.querySelector('.cm-declare')!;
+    this.incomingEl = this.root.querySelector('.cm-incoming')!;
+    const deposit = this.root.querySelector<HTMLSelectElement>('.cm-ally-deposit')!;
+    for (const d of ALLIANCE_DEPOSITS) {
+      const o = document.createElement('option');
+      o.value = String(d);
+      o.textContent = d ? `보증금 ${formatMoney(d)}` : '보증금 없음';
+      deposit.append(o);
+    }
+    this.root.querySelector('.cm-ally-go')!.addEventListener('click', () => void this.allyAction());
     this.root.querySelector('.cm-war-surrender')!.addEventListener('click', () => {
       const war = this.source.war;
       if (!war) return;
@@ -216,6 +240,12 @@ export class ContinentMap {
       if (this.root.hidden) return;
       this.renderArmy(false);
       this.renderWar();
+      if (this.source.alliances && this.source.alliances.revision !== this.allyRev) {
+        this.allyRev = this.source.alliances.revision;
+        this.renderIncoming();
+        this.renderDeclare();
+        this.renderList();
+      }
       this.draw();
       this.frame = window.setTimeout(() => requestAnimationFrame(loop), 120);
     };
@@ -261,6 +291,75 @@ export class ContinentMap {
     }
     this.declareEl.hidden = false;
     this.declareEl.querySelector('.cm-declare-title')!.textContent = `${them.cityName}에 대해`;
+    const al = this.source.alliances;
+    const allyEl = this.declareEl.querySelector<HTMLElement>('.cm-ally')!;
+    const warn = this.declareEl.querySelector<HTMLElement>('.cm-declare-warn')!;
+    allyEl.hidden = !al;
+    warn.textContent = '';
+    if (!al) return;
+    const open = al.openWith(them.uid);
+    const stateEl = allyEl.querySelector<HTMLElement>('.cm-ally-state')!;
+    const go = allyEl.querySelector<HTMLButtonElement>('.cm-ally-go')!;
+    const select = allyEl.querySelector<HTMLSelectElement>('.cm-ally-deposit')!;
+    select.hidden = !!open;
+    if (!open) {
+      stateEl.textContent = '동맹 아님 · 보증금은 양쪽이 같은 금액을 겁니다(배신하면 상대에게)';
+      go.textContent = '동맹 신청';
+    } else if (open.state === 'active') {
+      stateEl.textContent = `🤝 동맹${open.deposit ? ` · 보증금 각 ${formatMoney(open.deposit)}` : ''}`;
+      go.textContent = '동맹 해제(보증금 돌려받음)';
+      warn.textContent = `⚠ 선전포고하면 배신입니다 — ${open.deposit ? `보증금 ${formatMoney(open.deposit)}이 상대에게 가고, ` : ''}${Math.round(BETRAYAL_LOCK_MS / 3_600_000)}시간 동안 새 동맹을 맺을 수 없습니다`;
+    } else if (open.from === mine.uid) {
+      stateEl.textContent = '동맹 신청을 보냈습니다 · 답을 기다리는 중';
+      go.textContent = '신청 취소(보증금 돌려받음)';
+    } else {
+      stateEl.textContent = '이 도시가 동맹을 신청했습니다 · 위 알림에서 답하세요';
+      go.textContent = '거절';
+    }
+  }
+
+  /** 받은 동맹 신청(수락·거절). */
+  private renderIncoming(): void {
+    const al = this.source.alliances;
+    const list = al?.incoming() ?? [];
+    this.incomingEl.hidden = !list.length;
+    this.incomingEl.innerHTML = '';
+    for (const a of list) {
+      const row = document.createElement('div');
+      row.className = 'cm-incoming-row';
+      const text = document.createElement('span');
+      text.textContent = `🤝 ${a.names[a.from] ?? '다른 도시'}의 동맹 신청${a.deposit ? ` · 보증금 ${formatMoney(a.deposit)}` : ''}`;
+      const yes = document.createElement('button');
+      yes.type = 'button';
+      yes.textContent = '수락';
+      const no = document.createElement('button');
+      no.type = 'button';
+      no.textContent = '거절';
+      yes.addEventListener('click', async () => {
+        const why = await al!.accept(a.id);
+        this.source.announce(why || '동맹을 맺었습니다');
+      });
+      no.addEventListener('click', () => void al!.close(a.id));
+      row.append(text, yes, no);
+      this.incomingEl.append(row);
+    }
+  }
+
+  private async allyAction(): Promise<void> {
+    const al = this.source.alliances;
+    const them = this.cities.find((c) => c.uid === this.selected);
+    if (!al || !them) return;
+    const msg = this.declareEl.querySelector('.cm-declare-msg')!;
+    const open = al.openWith(them.uid);
+    if (open) {
+      const why = await al.close(open.id);
+      msg.textContent = why || (open.state === 'active' ? '동맹을 해제했습니다' : '처리했습니다');
+      return;
+    }
+    const deposit = Number(this.root.querySelector<HTMLSelectElement>('.cm-ally-deposit')!.value);
+    msg.textContent = '보내는 중…';
+    const why = await al.request(them.uid, them.cityName, deposit);
+    msg.textContent = why || '동맹을 신청했습니다';
   }
 
   private async declare(how: 'small' | 'surprise' | 'large'): Promise<void> {
@@ -427,7 +526,7 @@ export class ContinentMap {
         <span class="cm-name"></span>
         <span class="cm-meta"></span>`;
       li.querySelector('.cm-name')!.textContent =
-        `${c.cityName}${c.uid === mineUid ? ' (내 도시)' : ''}`;
+        `${c.cityName}${c.uid === mineUid ? ' (내 도시)' : ''}${this.source.alliances?.isAllied(c.uid) ? ' 🤝' : ''}`;
       li.querySelector('.cm-meta')!.textContent =
         `${dot} ${c.uid === mineUid ? '접속 중' : c.online ? '접속 중' : ago(c.lastSeen)} · Lv.${c.cityLevel} · 인구 ${Math.round(c.population).toLocaleString('ko-KR')} · 영토 ${c.owned.length}청크 · 수도 Lv.${c.capitalLevel}`;
       li.addEventListener('click', () => {

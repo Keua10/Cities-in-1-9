@@ -115,6 +115,26 @@ service cloud.firestore {
       }
     }
 
+    // 동맹(군사 5단계). 두 당사자 모두 상태를 바꿀 수 있다. 당사자·신청자·보증금은 못 바꾼다.
+    match /alliances/{allianceId} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+                    && request.resource.data.from == request.auth.uid
+                    && request.resource.data.parties is list
+                    && request.resource.data.parties.size() == 2
+                    && request.auth.uid in request.resource.data.parties
+                    && request.resource.data.parties[0] != request.resource.data.parties[1]
+                    && request.resource.data.state == 'pending'
+                    && request.resource.data.deposit is number
+                    && request.resource.data.deposit >= 0;
+      allow update: if signedIn()
+                    && request.auth.uid in resource.data.parties
+                    && request.resource.data.parties == resource.data.parties
+                    && request.resource.data.from == resource.data.from
+                    && request.resource.data.deposit == resource.data.deposit;
+      allow delete: if false;
+    }
+
     match /cities/{cityId} {
       allow read: if signedIn();
 

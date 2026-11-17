@@ -22,6 +22,8 @@ const { CONTINENT_H, CONTINENT_W, CONTINENT_X0, CONTINENT_Y0 } = await import(
   '../../src/world/continent'
 );
 const { WAR_PREP_MS } = await import('../../src/sim/config/war');
+const { AllianceSession } = await import('../../src/net/alliances');
+const { settleDelta } = await import('../../src/sim/military/allianceRules');
 void CHUNK_SIZE;
 
 // 넓은 평지(가로 20청크 × 세로 6청크)
@@ -104,7 +106,56 @@ const tickAll = async (ms: number) => {
   }
 };
 
-// 1. 선전포고
+// 0. 동맹: 신청(보증금 먼저) → 수락 → 거절·취소·해제 환불(규칙) → 배신은 선전포고에서
+const la = new AllianceSession(A.uid, A.sim, '앨리스시');
+const lb = new AllianceSession(B.uid, B.sim, '밥시');
+la.onNotice = (t) => notes.push(`A: ${t}`);
+lb.onNotice = (t) => notes.push(`B: ${t}`);
+la.start();
+lb.start();
+sa.alliances = la;
+sb.alliances = lb;
+const settle = async () => {
+  for (let i = 0; i < 4; i++) await new Promise((r) => setImmediate(r));
+};
+const m0a = A.sim.money;
+const m0b = B.sim.money;
+assert.equal(await la.request(B.uid, '밥시', 5_000), '');
+await settle();
+assert.equal(A.sim.money, m0a - 5_000, '신청한 쪽이 보증금을 먼저 낸다');
+assert.ok(
+  notes.some((n) => n.startsWith('B: 🤝')),
+  '받은 쪽 알림',
+);
+assert.equal(lb.incoming().length, 1);
+assert.ok((await la.request(B.uid, '밥시', 5_000)).includes('이미'));
+assert.equal(await lb.accept(lb.incoming()[0].id), '');
+await settle();
+assert.equal(B.sim.money, m0b - 5_000);
+assert.ok(la.isAllied(B.uid) && lb.isAllied(A.uid));
+{
+  const base = {
+    id: 'x',
+    parties: ['a', 'b'] as [string, string],
+    from: 'a',
+    names: {},
+    deposit: 100,
+    createdAt: 0,
+  };
+  assert.equal(settleDelta({ ...base, state: 'pending' }, 'a'), null);
+  assert.equal(settleDelta({ ...base, state: 'cancelled' }, 'a'), 100, '취소: 신청자 환불');
+  assert.equal(settleDelta({ ...base, state: 'declined' }, 'b'), 0, '거절: 받은 쪽은 낸 적 없음');
+  assert.equal(
+    settleDelta({ ...base, state: 'ended', acceptedAt: 1 }, 'b'),
+    100,
+    '해제: 각자 환불',
+  );
+  assert.equal(settleDelta({ ...base, state: 'broken', acceptedAt: 1, endedBy: 'a' }, 'a'), 0);
+  assert.equal(settleDelta({ ...base, state: 'broken', acceptedAt: 1, endedBy: 'a' }, 'b'), 200);
+}
+console.log('  OK   동맹 신청·수락·보증금(환불 규칙)');
+
+// 1. 선전포고(동맹에게 = 배신)
 const why = await sa.declare(profile(B) as any, profile(A) as any, 'small', false);
 assert.equal(why, '', why);
 await tickAll(1000);
@@ -115,11 +166,21 @@ assert.ok(
   '상대에게 선전포고 알림',
 );
 assert.ok(A.sim.atWar && !A.sim.grantsEnabled, '전쟁 중: 1배속, 지원금 끊김');
+await settle();
+assert.ok(!la.isAllied(B.uid), '선전포고하면 동맹이 깨진다');
+assert.equal(B.sim.money, m0b - 5_000 + 10_000, '배신당한 쪽이 보증금 두 몫');
+assert.equal(A.sim.money, m0a - 5_000, '배신한 쪽은 보증금을 잃는다');
+assert.ok(notes.some((n) => n.startsWith('B: ⚠') && n.includes('동맹을 깨고')));
+assert.ok(la.requestWhy('carol', 0).includes('배신'), '배신 후 24시간 새 동맹 불가');
+lb.atWarWith = (u) => u === A.uid;
+assert.ok(lb.requestWhy(A.uid, 0).includes('전쟁 중'));
+B.sim.adjustMoney(-5_000); // 아래 배상 계산을 보증금과 섞지 않게 원래대로
+
 const again = await sa.declare(profile(B) as any, profile(A) as any, 'small', false);
 assert.ok(again.includes('이미'), '전쟁 중 또 선포 불가');
 await tickAll(WAR_PREP_MS);
 assert.equal(sa.status().phase, 'active');
-console.log('  OK   선전포고 → 준비 5분 → 개전');
+console.log('  OK   선전포고(동맹 배신: 보증금 이동·24시간 잠금) → 준비 5분 → 개전');
 
 // 2. A 가 B 국경 청크로 진격
 const target = { cx: B.origin.cx, cy: B.origin.cy + 1 };

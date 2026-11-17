@@ -247,3 +247,49 @@
   color: #ffd38a;
   min-height: 1em;
 }
+
+.cm-ally {
+  display: grid;
+  gap: 4px;
+}
+.cm-ally[hidden] {
+  display: none;
+}
+.cm-ally-state {
+  color: #cfd8e3;
+}
+.cm-ally-row {
+  display: flex;
+  gap: 4px;
+}
+.cm-ally-row select {
+  flex: 0 0 auto;
+}
+.cm-ally-row button {
+  flex: 1;
+}
+.cm-declare-warn {
+  color: #ff9a8a;
+}
+.cm-declare-warn:empty {
+  display: none;
+}
+.cm-incoming {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+.cm-incoming[hidden] {
+  display: none;
+}
+.cm-incoming-row {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  padding: 4px 6px;
+  border-radius: 6px;
+  background: rgba(120, 200, 140, 0.15);
+}
+.cm-incoming-row span {
+  flex: 1;
+}

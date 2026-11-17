@@ -37,6 +37,7 @@ import {
   type WarKind,
 } from '../sim/military/warRules';
 import { sharedNow } from '../sim/sharedClock';
+import type { AllianceSession } from './alliances';
 import { getFirebase } from './firebase';
 import type { PublicCity } from './publicCities';
 
@@ -101,6 +102,8 @@ function expand(c: CompactUnit): Unit {
 }
 
 export class WarSession {
+  /** 동맹 연결. 동맹에게 선전포고하면 배신(보증금이 상대에게). */
+  alliances: AllianceSession | null = null;
   /** 나와 관련된 전쟁 전부(끝난 것 포함). */
   wars: WarDoc[] = [];
   private unsubWars: Unsubscribe | null = null;
@@ -532,6 +535,7 @@ export class WarSession {
     try {
       await setDoc(doc(fb.db, 'wars', id), war);
       if (surprise) this.sim.state.surpriseAt = now;
+      await this.alliances?.betray(them.uid);
       return '';
     } catch (err) {
       console.warn('선전포고 실패', err);

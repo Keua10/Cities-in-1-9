@@ -32,6 +32,7 @@ import { Presence } from './net/presence';
 import { loadPublicCities, publishProfile, type PublicProfile } from './net/publicCities';
 import { ContinentMap } from './ui/continentMap';
 import { WarSession } from './net/warSession';
+import { AllianceSession } from './net/alliances';
 import { CATCHUP_TICKS_PER_FRAME, START_MONEY } from './sim/simConstants';
 import { installPedestrianSystemPatch } from './sim/pedestrianSystemPatch';
 import { TrafficSim } from './sim/traffic/trafficSim';
@@ -312,6 +313,17 @@ async function boot(): Promise<void> {
   const warSession =
     online && session && city ? new WarSession(session.uid, sim, city.cityName) : null;
   warSession?.start();
+  const alliances =
+    online && session && city ? new AllianceSession(session.uid, sim, city.cityName) : null;
+  if (alliances) {
+    alliances.atWarWith = (uid) => {
+      const w = warSession?.current();
+      return !!w && (w.a === uid || w.b === uid);
+    };
+    alliances.onNotice = (text) => tools.announce(text);
+    alliances.start();
+  }
+  if (warSession) warSession.alliances = alliances;
   // 부대가 움직이면 공개 정보(부대 위치)도 가끔 갱신한다.
   window.setInterval(publish, 60_000);
   const continentMap = new ContinentMap({
@@ -321,6 +333,7 @@ async function boot(): Promise<void> {
     army: sim.army,
     announce: (text) => tools.announce(text),
     war: warSession,
+    alliances,
     onForeign: (owned) => {
       sim.territory.foreign = owned;
     },

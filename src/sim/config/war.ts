@@ -44,3 +44,12 @@ export const SURPRISE_BORDER_CHUNKS = 2;
 export const SURPRISE_RATIO = 1.5;
 /** 기습한 도시의 대가: 이 시간 동안 동맹 신청 불가. */
 export const SURPRISE_PENALTY_MS = 24 * HOUR;
+
+/* ---------------- 동맹 (군사 5단계) ---------------- */
+
+/** 동맹 보증금 선택지(만 원). 양쪽이 같은 금액을 건다. */
+export const ALLIANCE_DEPOSITS = [0, 1_000, 5_000, 20_000] as const;
+/** 동시에 맺을 수 있는 동맹(신청 중 포함). */
+export const MAX_ALLIANCES = 3;
+/** 배신(동맹에게 선전포고)한 도시는 이 시간 동안 새 동맹을 맺지 못한다. */
+export const BETRAYAL_LOCK_MS = 24 * HOUR;
