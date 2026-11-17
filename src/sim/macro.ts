@@ -1,5 +1,5 @@
 import { sharedNow } from './sharedClock';
-import { cityDaytimeAt, type DaytimeSnapshot } from './time';
+import { worldDaytimeAt, type DaytimeSnapshot } from './time';
 import { FoodSystem } from './food';
 import { mineSiteProblem, ResourceSystem } from './resources';
 import { ArmySystem } from './military/armySystem';
@@ -162,9 +162,9 @@ export class MacroSim {
   readonly nature: NatureSystem;
   /** 영토·수도 (군사 1단계). 도시 레벨이 영토 청크 수를 본다. */
   readonly territory: TerritorySystem;
-  /** 이 도시의 지금 시각(배속 반영, 전쟁 중이면 대륙 공통 시계). */
+  /** 지금 시각(대륙 공통 시계, 모든 도시가 같다). */
   daytime(now = sharedNow()): DaytimeSnapshot {
-    return cityDaytimeAt(now, this.macro.clockOffsetMs ?? 0);
+    return worldDaytimeAt(now);
   }
 
   get lifeElapsedMs(): number {
@@ -641,12 +641,9 @@ export class MacroSim {
   }
 
   /** 일시정지 중에는 접속 시각과 공급망만 갱신하고 시간은 진행하지 않는다. */
-  holdClock(now = Date.now(), frameMs = 0): void {
+  holdClock(now = Date.now()): void {
     // A live pause must not become offline catch-up time after saving and reopening.
     this.macro.tickedAt = now;
-    // 멈춰 있는 동안 도시 시계도 멈춘다(공통 시계는 흐르므로 그만큼 뒤로 뺀다). 전쟁 중엔 못 멈춘다.
-    if (frameMs > 0 && !this.atWar)
-      this.macro.clockOffsetMs = (this.macro.clockOffsetMs ?? 0) - frameMs;
     this.power.ensure(this.world);
     this.water.ensure(this.world);
     this.territory.update(now);
@@ -688,13 +685,8 @@ export class MacroSim {
    * 실시간 프레임에서 부른다. deltaMs 는 게임 시간(배속 적용), boostedMs 는 이번 프레임에
    * 스타트 버닝이 켜져 있던 실제 ms. 공사는 배속과 상관없이 실제 시계로 진행된다.
    */
-  advanceLifeClock(deltaMs: number, boostedMs = 0, frameMs = deltaMs): void {
+  advanceLifeClock(deltaMs: number, boostedMs = 0): void {
     this.macro.lifeElapsedMs = this.lifeElapsedMs + Math.max(0, deltaMs);
-    // 도시 시계: 배속으로 앞선 만큼(게임 시간 − 실제 프레임 시간)을 쌓는다. 전쟁 중에는
-    // 공통 시계에 맞춘다(1배속, 상대와 같은 낮·밤).
-    if (this.atWar) delete this.macro.clockOffsetMs;
-    else if (deltaMs !== frameMs)
-      this.macro.clockOffsetMs = (this.macro.clockOffsetMs ?? 0) + (deltaMs - frameMs);
     this.construction.update(Date.now(), boostedMs, this.rebuildMul());
     this.nature.update();
   }
@@ -711,9 +703,9 @@ export class MacroSim {
    * deltaMs: 게임 시간(배속 적용). realMs: 실제로 흐른 플레이 시간(버닝을 여기서 쓴다).
    * realMs 를 주지 않으면 deltaMs 와 같다고 본다(점검 도구).
    */
-  update(deltaMs: number, budget: number, realMs = deltaMs, frameMs = deltaMs): void {
+  update(deltaMs: number, budget: number, realMs = deltaMs): void {
     const boosted = this.consumeBoost(realMs);
-    this.advanceLifeClock(deltaMs, boosted, frameMs);
+    this.advanceLifeClock(deltaMs, boosted);
     this.territory.update();
     this.updateTowers();
     this.food.importPriceMul = this.atWar ? WAR_FOOD_IMPORT_MUL : 1;

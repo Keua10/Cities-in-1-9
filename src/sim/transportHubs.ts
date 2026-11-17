@@ -2,18 +2,8 @@ import { CHUNK_SIZE } from '../core/constants';
 import type { MacroState, HarborAllocation } from '../net/types';
 import { Build, DIRS } from '../world/build';
 import type { World } from '../world/world';
-import {
-  FACILITY_SPECS,
-  touchesRoadTiles,
-  touchesWater,
-} from './facilities';
-import {
-  facilityKindOfCode,
-  isFacilityAnchor,
-  ZONE_C,
-  ZONE_I,
-  ZONE_R,
-} from './buildings';
+import { FACILITY_SPECS, touchesRoadTiles, touchesWater } from './facilities';
+import { facilityKindOfCode, isFacilityAnchor, ZONE_C, ZONE_I, ZONE_R } from './buildings';
 import type { MacroSim } from './macro';
 import { normalizeProsperity } from './progression';
 import {
@@ -27,11 +17,7 @@ import {
   PASSENGER_REVENUE_PER_SHIP,
   PASSENGER_VISITORS_PER_SHIP,
 } from './config/transport';
-import {
-  isAirportFacility,
-  isHarborFacility,
-  isHybridHarbor,
-} from './config/special';
+import { isAirportFacility, isHarborFacility, isHybridHarbor } from './config/special';
 
 export interface AirfieldStatus {
   taxiwayConnected: boolean;
@@ -136,7 +122,11 @@ export class TransportSystem {
 
   statusAt(tx: number, ty: number): TransportHubStatus | null {
     const info = this.world.buildingCovering(tx, ty);
-    if (!info || info.kind === null || (!isAirportFacility(info.kind) && !isHarborFacility(info.kind)))
+    if (
+      !info ||
+      info.kind === null ||
+      (!isAirportFacility(info.kind) && !isHarborFacility(info.kind))
+    )
       return null;
     return this.statusFor(info.tx, info.ty, info.kind, info.span);
   }
@@ -280,7 +270,8 @@ export class TransportSystem {
   private applyDemandFloor(summary: TransportSummary): void {
     // Airport visitors support shops; cargo ships support industry; passenger ships also make
     // waterfront commuting useful. Floors are idempotent and do not stack every frame.
-    const commerce = clamp01(summary.visitorsPerDay / 5_000 + summary.localPassengerTripsPerDay / 12_000) * 0.35;
+    const commerce =
+      clamp01(summary.visitorsPerDay / 5_000 + summary.localPassengerTripsPerDay / 12_000) * 0.35;
     const industry = clamp01(summary.cargoExportDemand / 2_500) * 0.45;
     const housing = clamp01(summary.localPassengerTripsPerDay / 18_000) * 0.12;
 
@@ -302,14 +293,17 @@ export class TransportSystem {
   }
 
   private applyDailyEffects(summary: TransportSummary, days: number): void {
-    if (summary.dailyRevenue <= 0 && summary.visitorsPerDay <= 0 && summary.cargoExportDemand <= 0) return;
+    if (summary.dailyRevenue <= 0 && summary.visitorsPerDay <= 0 && summary.cargoExportDemand <= 0)
+      return;
     this.macro.money = Math.round((this.macro.money + summary.dailyRevenue * days) * 100) / 100;
     const prosperityPerDay = Math.round(
       summary.visitorsPerDay / 250 +
         summary.cargoExportDemand / 500 +
         summary.localPassengerTripsPerDay / 800,
     );
-    this.macro.prosperity = normalizeProsperity((this.macro.prosperity ?? 0) + prosperityPerDay * days);
+    this.macro.prosperity = normalizeProsperity(
+      (this.macro.prosperity ?? 0) + prosperityPerDay * days,
+    );
     this.onChange?.();
   }
 }

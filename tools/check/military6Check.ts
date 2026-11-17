@@ -527,32 +527,25 @@ console.log('  OK   병원 회복 2배·전쟁 피로·승전 기분·전후 복
   // 도시 화면 낮·밤 = 전쟁 낮·밤(대륙 공통 시계).
   const { worldDaytimeAt } = await import('../../src/sim/time');
   for (let t = 0; t < 2 * DAY; t += 7_000) assert.equal(W.isNight(t), !worldDaytimeAt(t).isDay);
-  // 도시 시계: 배속을 올리면 낮·밤·출퇴근도 빨라지고, 전쟁 중에는 공통 시계에 맞춘다.
+  // 대륙 공통 시계: 평시 2배속이면 낮·밤도 2배로, 배속이 바뀌어도 시각은 이어진다.
   {
-    const realNow2 = Date.now;
-    let t = 5 * DAY;
-    Date.now = () => t;
-    const w2 = new World({ cx: base.cx, cy: base.cy });
-    const s2 = new MacroSim(w2, { money: 0, population: 0, tick: 0, tickedAt: 0 } as never);
-    const m0 = s2.daytime().minuteOfDay;
-    // 3배속으로 실제 25초(= 공통 시계 1시간): 도시 시계는 3시간 간다.
-    for (let i = 0; i < 250; i++) {
-      t += 100;
-      s2.advanceLifeClock(300, 0, 100);
-    }
-    assert.equal((s2.daytime().minuteOfDay - m0 + 1440) % 1440, 180, '3배속이면 3시간');
-    // 멈추면 도시 시계도 멈춘다.
-    const m1 = s2.daytime().minuteOfDay;
-    for (let i = 0; i < 100; i++) {
-      t += 100;
-      s2.holdClock(t, 100);
-    }
-    assert.equal(s2.daytime().minuteOfDay, m1, '일시정지 중 시계 멈춤');
-    // 전쟁이 나면 공통 시계(전쟁 낮·밤)에 맞춘다.
-    s2.atWar = true;
-    s2.advanceLifeClock(100, 0, 100);
-    assert.equal(s2.daytime().isDay, !W.isNight(t), '전쟁 중 도시 낮·밤 = 전쟁 낮·밤');
-    Date.now = realNow2;
+    const C = await import('../../src/sim/worldClock');
+    const { worldDaytimeAt } = await import('../../src/sim/time');
+    const t0 = 5 * DAY;
+    C.setWorldClock({ anchorReal: t0, anchorWorld: t0, rate: 2 });
+    const m0 = worldDaytimeAt(t0).minuteOfDay;
+    assert.equal(
+      (worldDaytimeAt(t0 + 25_000).minuteOfDay - m0 + 1440) % 1440,
+      120,
+      '2배속: 실제 25초 = 2시간',
+    );
+    const t1 = t0 + 100_000;
+    const before = C.worldAt(t1);
+    C.setWorldClock(C.rebase(t1, 1));
+    assert.equal(C.worldAt(t1), before, '배속이 바뀌어도 시각이 이어짐');
+    assert.equal(C.worldAt(t1 + 1000) - before, 1000, '전쟁 중 1배속');
+    for (let t = t1; t < t1 + DAY; t += 7_000) assert.equal(W.isNight(t), !worldDaytimeAt(t).isDay);
+    C.setWorldClock({ anchorReal: 0, anchorWorld: 0, rate: 1 });
   }
   // 도시 화면 날씨 = 전쟁 날씨(같은 시각·같은 자리).
   const origin = { cx: base.cx + 3, cy: base.cy };

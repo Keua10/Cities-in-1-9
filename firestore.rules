@@ -39,6 +39,27 @@ service cloud.firestore {
                    && request.resource.data.notice.size() <= 120;
     }
 
+    // 대륙 공통 시계(피드백 1차). 세계 시각 기준점과 배속(1 또는 평시 2). 누구나 옮길 수 있지만
+    // 기준점은 "지금"이어야 하고, 세계 시각은 이전 기준에서 이어져야 한다(되돌리기·건너뛰기 금지).
+    match /meta/clock {
+      allow read: if signedIn();
+      allow create: if signedIn()
+                    && request.resource.data.keys().hasOnly(['anchorReal', 'anchorWorld', 'rate'])
+                    && request.resource.data.rate in [1, 2]
+                    && math.abs(request.resource.data.anchorReal - request.time.toMillis()) < 15000
+                    && math.abs(request.resource.data.anchorWorld - request.resource.data.anchorReal) < 15000;
+      allow update: if isAdmin()
+                    || (signedIn()
+                        && request.resource.data.keys().hasOnly(['anchorReal', 'anchorWorld', 'rate'])
+                        && request.resource.data.rate in [1, 2]
+                        && math.abs(request.resource.data.anchorReal - request.time.toMillis()) < 15000
+                        && math.abs(request.resource.data.anchorWorld
+                             - (resource.data.anchorWorld
+                                + (request.resource.data.anchorReal - resource.data.anchorReal) * resource.data.rate))
+                           < 30000);
+      allow delete: if false;
+    }
+
     // 도시 번호 발급기. 문서 하나에 nextIndex 하나만 들어 있다.
     // 아무나 쓸 수 있지만 "정확히 1 증가" 외의 값은 거부한다.
     match /meta/registry {

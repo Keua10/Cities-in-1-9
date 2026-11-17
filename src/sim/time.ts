@@ -5,6 +5,7 @@ import {
   LIFE_SLOT_MINUTES,
   SEASON_DAYS,
 } from './simConstants';
+import { worldAt } from './worldClock';
 
 /** 실제 60초 = 게임 1일(config/macro.ts GAMETIME_DAY_MS 와 같다). */
 const WORLD_GAMEDAY_MS = 60_000;
@@ -92,26 +93,18 @@ export function daytimeAt(epochMs: number, gameDay: number): DaytimeSnapshot {
   };
 }
 
-/** 대륙 공통 달력의 날(공유 시계 기준, 실제 60초 = 1일). 도시 배속과 상관없다. */
-export function worldGameDay(now: number): number {
-  return Math.floor(now / WORLD_GAMEDAY_MS);
+/** 대륙 공통 달력의 날. worldMs = 세계 시각(worldClock.ts, 실제 60초 = 1일 × 배속). */
+export function worldGameDay(worldMs: number): number {
+  return Math.floor(worldMs / WORLD_GAMEDAY_MS);
 }
 
 /**
- * 대륙 공통 시계(피드백 1차). 모든 도시와 전쟁이 같은 시각·같은 낮밤·같은 계절을 본다.
- * now = 공유 시계(sharedNow). 하루 = 실제 10분, 배속과 상관없이 흐른다.
+ * 대륙 공통 시각(피드백 1차). 모든 도시와 전쟁이 같은 시각·같은 낮밤·같은 계절을 본다.
+ * now = 공유 시계(sharedNow). 전쟁이 없으면 평시 배속으로, 있으면 1배속으로 흐른다.
  */
 export function worldDaytimeAt(now: number): DaytimeSnapshot {
-  return daytimeAt(now, worldGameDay(now));
-}
-
-/**
- * 도시 시계: 대륙 공통 시계에 이 도시가 배속으로 앞서 간 만큼(offsetMs, 멈춘 동안은 뒤로)을
- * 더한 시각. 배속을 올리면 낮·밤·출퇴근이 그만큼 빨라진다. 전쟁 중에는 1배속이고 offset 을 0 으로
- * 맞추므로 전쟁 상대와 같은 낮·밤을 본다. 계절(날)은 대륙 공통.
- */
-export function cityDaytimeAt(now: number, offsetMs: number): DaytimeSnapshot {
-  return daytimeAt(now + (Number(offsetMs) || 0), worldGameDay(now));
+  const w = worldAt(now);
+  return daytimeAt(w, worldGameDay(w));
 }
 
 /**

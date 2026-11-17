@@ -2,11 +2,13 @@ import { DAYTIME_DAY_MS, GAMETIME_DAYS_PER_YEAR, SEASON_DAYS } from '../config/m
 import { CONTINENT_Y0, CONTINENT_H } from '../../world/continent';
 import { chunkTerrain } from './terrain';
 import { worldDaytimeAt, worldGameDay } from '../time';
+import { worldAt } from '../worldClock';
 
 /**
  * 전쟁용 밤·날씨 (설계안 Ⅵ: 밤에는 시야 절반, 비·눈에는 이동 −20%, 바람이 강하면 공군 정확도 감소).
  *
- * 모든 도시가 같은 날씨를 보도록 **공유 시계 시각과 청크 위치만으로** 정한다(저장·통신 없음).
+ * 모든 도시가 같은 날씨를 보도록 **세계 시각(worldClock.ts)과 청크 위치만으로** 정한다.
+ * 함수들은 공유 시계 시각(now)을 받아 세계 시각으로 바꿔 쓴다(평시엔 배속만큼 빨리 흐른다).
  * 도시 화면 날씨(sim/nature.ts)도 이 값을 쓴다 — 전쟁 날씨가 따로 있지 않다.
  *   - 계절은 대륙 전체가 같다: 실제 60초 = 1일, 90일 = 한 계절(1배속 도시 달력과 같은 빠르기).
  *   - 하루 = 실제 10분(전시 1배속의 생활 하루). 20시~5시가 밤.
@@ -40,7 +42,8 @@ function hash3(a: number, b: number, c: number): number {
 }
 
 /** 지금 시각(실제 ms) 기준 생활 시각 0~24. */
-export function hourAt(now: number): number {
+export function hourAt(real: number): number {
+  const now = worldAt(real);
   const f = (((now % DAYTIME_DAY_MS) + DAYTIME_DAY_MS) % DAYTIME_DAY_MS) / DAYTIME_DAY_MS;
   return f * 24;
 }
@@ -56,7 +59,7 @@ export { worldGameDay };
 /** 대륙 공통 계절 0 봄 · 1 여름 · 2 가을 · 3 겨울. */
 export function worldSeason(now: number): 0 | 1 | 2 | 3 {
   const d =
-    ((worldGameDay(now) % GAMETIME_DAYS_PER_YEAR) + GAMETIME_DAYS_PER_YEAR) %
+    ((worldGameDay(worldAt(now)) % GAMETIME_DAYS_PER_YEAR) + GAMETIME_DAYS_PER_YEAR) %
     GAMETIME_DAYS_PER_YEAR;
   return Math.floor(d / SEASON_DAYS) as 0 | 1 | 2 | 3;
 }
@@ -77,7 +80,7 @@ function northern(cy: number): boolean {
 export function weatherAt(now: number, cx: number, cy: number): Weather {
   const rx = Math.floor(cx / WEATHER_REGION);
   const ry = Math.floor(cy / WEATHER_REGION);
-  const period = Math.floor(now / WEATHER_PERIOD_MS);
+  const period = Math.floor(worldAt(now) / WEATHER_PERIOD_MS);
   const r = hash3(rx, ry, period);
   const season = worldSeason(now);
   const [clear, wet] = SEASON_ODDS[season];
@@ -95,13 +98,13 @@ export function weatherAt(now: number, cx: number, cy: number): Weather {
 export function weatherIntensity(now: number, cx: number, cy: number): number {
   const rx = Math.floor(cx / WEATHER_REGION);
   const ry = Math.floor(cy / WEATHER_REGION);
-  return 0.3 + 0.7 * hash3(rx + 7, ry - 3, Math.floor(now / WEATHER_PERIOD_MS));
+  return 0.3 + 0.7 * hash3(rx + 7, ry - 3, Math.floor(worldAt(now) / WEATHER_PERIOD_MS));
 }
 
 /** 기온(°C): 계절(대륙 공통) + 위도(북쪽이 춥다) + 하루 중 시각. */
 export function temperatureAt(now: number, cy: number): number {
   const d =
-    ((worldGameDay(now) % GAMETIME_DAYS_PER_YEAR) + GAMETIME_DAYS_PER_YEAR) %
+    ((worldGameDay(worldAt(now)) % GAMETIME_DAYS_PER_YEAR) + GAMETIME_DAYS_PER_YEAR) %
     GAMETIME_DAYS_PER_YEAR;
   const lat = (cy - CONTINENT_Y0) / CONTINENT_H; // 0 북 ~ 1 남
   return (
