@@ -318,3 +318,13 @@
   flex: 1;
   font-size: 11px;
 }
+.cm-war-fronts {
+  display: inline-flex;
+  gap: 4px;
+}
+.cm-war-fronts:empty {
+  display: none;
+}
+.cm-war-fronts button.on {
+  outline: 2px solid #f0c060;
+}

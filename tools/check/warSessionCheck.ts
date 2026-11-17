@@ -200,7 +200,7 @@ assert.ok(
 );
 const st = sa.status();
 assert.ok(st.scoreMe > 0, `A 점수 ${st.scoreMe}`);
-const occupiedByA = [...((sa as any).claims ? Object.keys((sa as any).claims) : [])];
+const occupiedByA = [...(sa as any).fronts.values()].flatMap((f: any) => Object.keys(f.claims));
 assert.ok(occupiedByA.includes(chunkKey(target.cx, target.cy)), 'A 가 B 국경 청크를 점령');
 assert.ok(!occupiedByA.includes(chunkKey(B.origin.cx + 2, B.origin.cy)), '수도는 점령 못 함');
 console.log(

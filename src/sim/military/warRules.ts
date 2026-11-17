@@ -14,7 +14,7 @@ import {
   SURPRISE_QUIET_MS,
   SURPRISE_RATIO,
   WAR_JUDGE_AFTER_MS,
-  WAR_RANGE_CHUNKS,
+  MAX_WAR_CITIES,
   WIN_RATIO,
 } from '../config/war';
 import { unitStrength, UNIT_SPECS, type UnitType } from '../config/military';
@@ -137,6 +137,8 @@ export interface DeclareInput {
   wars: readonly WarDoc[];
   /** 상대와 관련된 모든 전쟁(끝난 것 포함, 선포할 때 서버에서 읽는다). */
   theirWars?: readonly WarDoc[];
+  /** 나·상대와 싸우는 도시들의 다른 전쟁(동시 전쟁 3곳 제한 계산). */
+  otherWars?: readonly WarDoc[];
 }
 
 /** 진 쪽 도시들(승패가 난 전쟁만). */
@@ -157,10 +159,10 @@ export function declareBlock(x: DeclareInput): string {
   const all = new Map<string, WarDoc>();
   for (const w of [...x.wars, ...(x.theirWars ?? [])]) all.set(w.id, w);
   for (const w of all.values()) {
-    if (w.state !== 'ended' && (w.parties.includes(x.me.uid) || w.parties.includes(x.them.uid)))
-      return w.parties.includes(x.me.uid)
-        ? '이미 다른 전쟁 중입니다'
-        : '상대가 이미 다른 전쟁 중입니다';
+    if (w.state !== 'ended' && w.parties.includes(x.me.uid) && w.parties.includes(x.them.uid))
+      return sideOf(w, x.me.uid) === sideOf(w, x.them.uid)
+        ? '같은 전쟁에서 같은 편인 도시입니다'
+        : '이미 이 도시와 전쟁 중입니다';
     // 패전국 보호: 진 도시는 누구에게서든 48시간 동안 선전포고를 받지 않는다.
     if (
       w.state === 'ended' &&
@@ -180,10 +182,41 @@ export function declareBlock(x: DeclareInput): string {
       return `이 도시와는 ${h}시간 뒤에 다시 전쟁할 수 있습니다`;
     }
   }
-  const d = territoryDistance(x.me.owned, x.them.owned);
-  if (d > WAR_RANGE_CHUNKS)
-    return `상대 영토가 ${WAR_RANGE_CHUNKS}청크 안에 있어야 합니다 (지금 ${d}청크)`;
+  // 동시 전쟁: 직접 싸우는 관계로 이어진 도시가 3곳을 넘으면 안 된다.
+  const group = warCluster([...all.values(), ...(x.otherWars ?? [])], [x.me.uid, x.them.uid]);
+  if (group.size > MAX_WAR_CITIES)
+    return `동시에 전쟁할 수 있는 도시는 ${MAX_WAR_CITIES}곳까지입니다`;
   return '';
+}
+
+/**
+ * 진행 중인 전쟁의 직접 교전 관계(선포한 쪽–받은 쪽)로 이어진 도시들. start 를 모두 잇는다고
+ * 보고 계산한다(새 선전포고를 더한 뒤의 묶음). 동맹으로 참가한 도시는 세지 않는다.
+ */
+export function warCluster(wars: readonly WarDoc[], start: readonly string[]): Set<string> {
+  const adj = new Map<string, Set<string>>();
+  const link = (p: string, q: string): void => {
+    if (!adj.has(p)) adj.set(p, new Set());
+    if (!adj.has(q)) adj.set(q, new Set());
+    adj.get(p)!.add(q);
+    adj.get(q)!.add(p);
+  };
+  const seen = new Set<string>();
+  for (const w of wars) {
+    if (w.state === 'ended' || seen.has(w.id)) continue;
+    seen.add(w.id);
+    link(w.a, w.b);
+  }
+  for (let i = 1; i < start.length; i++) link(start[0], start[i]);
+  const out = new Set<string>();
+  const stack = [...start];
+  while (stack.length) {
+    const u = stack.pop()!;
+    if (out.has(u)) continue;
+    out.add(u);
+    for (const v of adj.get(u) ?? []) if (!out.has(v)) stack.push(v);
+  }
+  return out;
 }
 
 export interface SurpriseInput {

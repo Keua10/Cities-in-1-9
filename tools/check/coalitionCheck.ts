@@ -154,7 +154,7 @@ console.log('  OK   대규모 전쟁 선포(수도 3레벨) → 동맹 C 가 A �
 const target = { cx: B.origin.cx, cy: B.origin.cy + 1 };
 for (const u of A.sim.army.units) assert.equal(A.sim.army.order(u.id, target.cx, target.cy), '');
 await tickAll(7 * 60_000);
-const occ = Object.keys((A.war as any).claims);
+const occ = [...(A.war as any).fronts.values()].flatMap((f: any) => Object.keys(f.claims));
 assert.ok(occ.includes(chunkKey(target.cx, target.cy)), `A 가 B 수도 청크 점령 (${occ})`);
 const st = C.war.status();
 assert.ok(st.scoreMe > st.scoreEnemy, `C 가 보는 진영 점수 ${st.scoreMe} : ${st.scoreEnemy}`);

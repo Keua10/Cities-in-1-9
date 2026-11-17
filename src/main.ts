@@ -387,22 +387,29 @@ async function boot(): Promise<void> {
   warBanner.addEventListener('click', () => void continentMap.open());
   document.body.append(warBanner);
   window.setInterval(() => {
-    const st = warSession?.status();
-    if (!st || st.phase === 'none' || st.phase === 'ended') {
+    const list = (warSession?.statuses() ?? []).filter(
+      (x) => x.phase !== 'none' && x.phase !== 'ended',
+    );
+    if (!list.length) {
       warBanner.hidden = true;
       return;
     }
     warBanner.hidden = false;
-    const left = Math.ceil(st.prepLeftMs / 1000);
     warBanner.textContent =
-      `⚔ ${st.enemyName}와 전쟁 · ` +
-      (st.phase === 'prep'
-        ? `개전까지 ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`
-        : st.phase === 'paused'
-          ? '일시정지(상대 접속 끊김)'
-          : '전투 중') +
-      ` · 점수 ${st.scoreMe.toLocaleString('ko-KR')} : ${st.scoreEnemy.toLocaleString('ko-KR')} · 대륙 지도에서 지휘` +
-      (sim.blockaded ? ' · 🚫 식량 봉쇄' : '');
+      list
+        .map((st) => {
+          const left = Math.ceil(st.prepLeftMs / 1000);
+          return (
+            `⚔ ${st.enemyName} · ` +
+            (st.phase === 'prep'
+              ? `개전 ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`
+              : st.phase === 'paused'
+                ? '일시정지'
+                : '전투 중') +
+            ` · ${st.scoreMe.toLocaleString('ko-KR')} : ${st.scoreEnemy.toLocaleString('ko-KR')}`
+          );
+        })
+        .join('  |  ') + (sim.blockaded ? ' · 🚫 식량 봉쇄' : '');
   }, 1000);
   sim.army.uid = myUid;
   sim.army.onEvent = (e) => {

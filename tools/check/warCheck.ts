@@ -12,7 +12,7 @@ import {
   warScore,
   type WarDoc,
 } from '../../src/sim/military/warRules';
-import { CEASEFIRE_QUIET_MS, WAR_JUDGE_AFTER_MS, WAR_RANGE_CHUNKS } from '../../src/sim/config/war';
+import { CEASEFIRE_QUIET_MS, WAR_JUDGE_AFTER_MS } from '../../src/sim/config/war';
 import { World } from '../../src/world/world';
 
 /**
@@ -45,10 +45,10 @@ assert.ok(
 );
 assert.ok(base({ them: { uid: 'b', online: false, capitalLevel: 2, owned: B } }).includes('접속'));
 assert.ok(base({ kind: 'large' }).includes('3레벨'));
-assert.ok(
-  base({ them: { uid: 'b', online: true, capitalLevel: 2, owned: ring(40, 0, 4) } }).includes(
-    `${WAR_RANGE_CHUNKS}청크`,
-  ),
+// 거리 제한 없음: 아주 먼 도시에도 선포할 수 있다.
+assert.equal(
+  base({ them: { uid: 'b', online: true, capitalLevel: 2, owned: ring(400, 0, 4) } }),
+  '',
 );
 const war = (over: Partial<WarDoc>): WarDoc => ({
   id: 'w',
@@ -63,17 +63,38 @@ const war = (over: Partial<WarDoc>): WarDoc => ({
   startsAt: now - 1000,
   ...over,
 });
-assert.ok(base({ wars: [war({ a: 'b', b: 'c', parties: ['b', 'c'] })] }).includes('상대가 이미'));
+// 동시 전쟁: 상대가 C 와 싸우는 중이어도 나(A)는 선포할 수 있다(3곳).
+assert.equal(base({ wars: [war({ a: 'b', b: 'c', parties: ['b', 'c'] })] }), '');
+// 나·상대와 이미 같은 전쟁 중이면 불가.
+assert.ok(base({ wars: [war({})] }).includes('이미 이 도시와'));
 assert.ok(
   base({ wars: [war({ state: 'ended', peaceUntil: now + 3_600_000 })] }).includes('시간 뒤'),
 );
 assert.equal(base({ wars: [war({ state: 'ended', peaceUntil: now - 1 })] }), '');
-// 상대가 나 아닌 도시와 전쟁 중(상대 전쟁 기록에서)
+// 상대가 나 아닌 도시와 전쟁 중(상대 전쟁 기록에서): 3곳이면 된다.
+assert.equal(base({ theirWars: [war({ id: 'x', a: 'b', b: 'c', parties: ['b', 'c'] })] }), '');
+// 세 나라가 서로: b–c, a–c 전쟁 중에 a 가 b 에게 → 3곳 그대로라 된다.
+assert.equal(
+  base({
+    wars: [war({ id: 'ac', a: 'a', b: 'c', parties: ['a', 'c'] })],
+    theirWars: [war({ id: 'bc', a: 'b', b: 'c', parties: ['b', 'c'] })],
+  }),
+  '',
+);
+// 4곳째: b–c, c–d 전쟁 중인데 a 가 b 에게 → 4곳이라 불가.
 assert.ok(
-  base({ theirWars: [war({ id: 'x', a: 'b', b: 'c', parties: ['b', 'c'] })] }).includes(
-    '상대가 이미',
-  ),
-  '제3국: 상대가 다른 전쟁 중이면 불가',
+  base({
+    theirWars: [war({ id: 'bc', a: 'b', b: 'c', parties: ['b', 'c'] })],
+    otherWars: [war({ id: 'cd', a: 'c', b: 'd', parties: ['c', 'd'] })],
+  }).includes('3곳까지'),
+  '동시 전쟁 3곳 제한',
+);
+// 대규모 전쟁에 동맹으로 참가한 도시는 세지 않는다.
+assert.equal(
+  base({
+    theirWars: [war({ id: 'bc', a: 'b', b: 'c', parties: ['b', 'c', 'e', 'f'], kind: 'large' })],
+  }),
+  '',
 );
 // 패전국 보호: b 가 c 에게 졌으면 a 도 48시간 동안 b 에게 선포 불가
 assert.ok(
@@ -109,7 +130,7 @@ assert.equal(
   '',
 );
 console.log(
-  '  OK   선전포고 조건: 수도 레벨·접속·거리·다른 전쟁·재선포 금지·제3국 전쟁·패전국 보호',
+  '  OK   선전포고 조건: 수도 레벨·접속·거리 제한 없음·동시 전쟁 3곳·재선포 금지·패전국 보호',
 );
 
 // 기습
@@ -175,7 +196,7 @@ assert.deepEqual(reparations(10_000, { iron: 100, coal: 10, oil: 0 }), {
   coal: 3,
   oil: 0,
 });
-console.log('  OK   판정 1.5배, 휴전 1시간, 끊김 24시간 판정, 배상 25%·30%');
+console.log('  OK   판정 1.5배, 휴전 20분, 끊김 24시간 판정, 배상 25%·30%');
 
 // 영토 내주기·얻기
 {

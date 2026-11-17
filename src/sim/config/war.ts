@@ -8,8 +8,8 @@ const HOUR = 60 * MIN;
 
 /** 선전포고 뒤 준비 시간. 양쪽 모두 부대를 배치할 수 있다. */
 export const WAR_PREP_MS = 5 * MIN;
-/** 선전포고 거리: 상대 영토가 내 영토에서 이 청크 안. */
-export const WAR_RANGE_CHUNKS = 24;
+/** 직접 교전 관계로 이어진 도시는 최대 이만큼(한 나라가 두 나라와, 또는 세 나라가 서로). */
+export const MAX_WAR_CITIES = 3;
 /** 소규모 전쟁 최소 수도 레벨. 대규모는 3. */
 export const SMALL_WAR_CAPITAL = 2;
 export const LARGE_WAR_CAPITAL = 3;
@@ -20,7 +20,7 @@ export const WAR_STALE_MS = 20_000;
 /** 끊긴 채로 이만큼 지나면 피해 정도로 판정한다(확정). */
 export const WAR_JUDGE_AFTER_MS = 24 * HOUR;
 /** 양쪽 병력의 10% 이상이 붙은 전투가 이만큼 없으면 휴전. */
-export const CEASEFIRE_QUIET_MS = 1 * HOUR;
+export const CEASEFIRE_QUIET_MS = 20 * MIN;
 export const BIG_BATTLE_SHARE = 0.1;
 /** 휴전 뒤 전쟁 금지(확정). */
 export const CEASEFIRE_PEACE_MS = 12 * HOUR;

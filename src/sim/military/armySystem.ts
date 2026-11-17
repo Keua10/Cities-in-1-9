@@ -79,6 +79,8 @@ export interface WarLink {
   enemyStrikes?: Strike[];
   /** 같은 진영 도시들의 땅(지나가고 쉬고 보급받을 수 있다). */
   allyOwned?: Set<string>;
+  /** 소규모 전쟁 상대의 땅: 미사일을 쓸 수 없다. */
+  noMissile?: Set<string>;
 }
 
 /** 시가전으로 보는 청크: 거주+유동 인구가 이 이상. */
@@ -378,6 +380,7 @@ export class ArmySystem {
     const bf = this.battlefield(now);
     const key = chunkKey(cx, cy);
     if (ownerOf(bf, key) !== war.enemy.uid) return '적 땅에만 쏠 수 있습니다';
+    if (war.noMissile?.has(key)) return '소규모 전쟁에서는 미사일을 쓸 수 없습니다';
     if (war.capitalProtected && war.enemy.capital.has(key))
       return '소규모 전쟁에서는 수도를 칠 수 없습니다';
     if (Math.max(Math.abs(u.cx - cx), Math.abs(u.cy - cy)) > MISSILE_RANGE_CHUNKS)

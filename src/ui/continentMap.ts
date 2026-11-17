@@ -138,6 +138,8 @@ export class ContinentMap {
   private openWarsEl!: HTMLElement;
   private openWarsRev = -1;
   private allyRev = -1;
+  /** 두 전선이면 위쪽 전쟁 줄에 보이는 전쟁. */
+  private warFocus: string | null = null;
 
   constructor(private source: ContinentMapSource) {
     this.root.id = 'continent-map';
@@ -147,6 +149,7 @@ export class ContinentMap {
         <b>대륙 지도</b>
         <span class="cm-status" role="status"></span>
         <div class="cm-war" hidden>
+          <span class="cm-war-fronts"></span>
           <span class="cm-war-text"></span>
           <button type="button" class="cm-war-surrender">항복 신청</button>
           <button type="button" class="cm-war-accept" hidden>항복 받아들이기</button>
@@ -214,28 +217,30 @@ export class ContinentMap {
     this.root.querySelector('.cm-war-surrender')!.addEventListener('click', () => {
       const war = this.source.war;
       if (!war) return;
-      if (war.status().surrenderPending) void war.withdrawSurrender();
-      else void war.offerSurrender();
+      const id = this.warFocus ?? undefined;
+      if (war.status(id).surrenderPending) void war.withdrawSurrender(id);
+      else void war.offerSurrender(id);
     });
     this.root.querySelector('.cm-war-accept')!.addEventListener('click', () => {
-      void this.source.war?.acceptSurrender();
+      void this.source.war?.acceptSurrender(this.warFocus ?? undefined);
     });
     this.root.querySelector('.cm-war-truce')!.addEventListener('click', async () => {
       const war = this.source.war;
       if (!war) return;
-      if (war.status().ceasefire?.byMe) await war.withdrawCeasefire();
+      const id = this.warFocus ?? undefined;
+      if (war.status(id).ceasefire?.byMe) await war.withdrawCeasefire(id);
       else {
-        const why = await war.offerCeasefire();
+        const why = await war.offerCeasefire(id);
         this.source.announce(
           why || '휴전을 제안했습니다 · 참가국 2/3(직접 참여국 둘 다 포함)가 찬성하면 휴전',
         );
       }
     });
     this.root.querySelector('.cm-war-truce-yes')!.addEventListener('click', () => {
-      void this.source.war?.voteCeasefire(true);
+      void this.source.war?.voteCeasefire(true, this.warFocus ?? undefined);
     });
     this.root.querySelector('.cm-war-truce-no')!.addEventListener('click', () => {
-      void this.source.war?.voteCeasefire(false);
+      void this.source.war?.voteCeasefire(false, this.warFocus ?? undefined);
     });
     for (const b of this.declareEl.querySelectorAll<HTMLButtonElement>('button[data-war]'))
       b.addEventListener(
@@ -322,12 +327,34 @@ export class ContinentMap {
   /** 위쪽 전쟁 줄: 상대·단계·남은 시간·점수, 항복 버튼. */
   private renderWar(): void {
     const war = this.source.war;
-    const st = war?.status();
+    const fronts = war?.currentWars() ?? [];
+    if (!fronts.some((w) => w.id === this.warFocus)) this.warFocus = fronts[0]?.id ?? null;
+    const st = war?.status(this.warFocus ?? undefined);
     if (!war || !st || st.phase === 'none' || st.phase === 'ended') {
       this.warEl.hidden = true;
       return;
     }
     this.warEl.hidden = false;
+    // 두 나라와 동시에 싸우면 전선을 골라 본다.
+    const frontsEl = this.warEl.querySelector<HTMLElement>('.cm-war-fronts')!;
+    const sig = fronts.map((w) => w.id).join('|') + '#' + this.warFocus;
+    if (frontsEl.dataset.sig !== sig) {
+      frontsEl.dataset.sig = sig;
+      frontsEl.innerHTML = '';
+      if (fronts.length > 1)
+        for (const w of fronts) {
+          const b = document.createElement('button');
+          b.type = 'button';
+          const s2 = war.status(w.id);
+          b.textContent = s2.enemyName;
+          b.classList.toggle('on', w.id === this.warFocus);
+          b.addEventListener('click', () => {
+            this.warFocus = w.id;
+            this.renderWar();
+          });
+          frontsEl.append(b);
+        }
+    }
     const mmss = (ms: number) => {
       const s = Math.ceil(ms / 1000);
       return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
@@ -676,8 +703,7 @@ export class ContinentMap {
   private discovered(c: PublicCity): boolean {
     if (c.uid === this.source.mine().uid || this.source.seeAll) return true;
     if (this.source.alliances?.openWith(c.uid)) return true;
-    const w = this.source.war?.current();
-    if (w?.parties.includes(c.uid)) return true;
+    if (this.source.war?.currentWars().some((w) => w.parties.includes(c.uid))) return true;
     const known = this.knownSet();
     if (!known) return true;
     return c.owned.some((k) => known.has(k));
@@ -829,11 +855,7 @@ export class ContinentMap {
     for (const c of this.cities) {
       // 다른 도시는 내가 아는 땅에 걸친 부분만 보인다.
       // 동맹(맺은 것)과 지금 같은 전쟁의 도시는 영토 전체를 안다.
-      const full =
-        !known ||
-        c.uid === mineUid ||
-        !!this.source.alliances?.isAllied(c.uid) ||
-        !!this.source.war?.current()?.parties.includes(c.uid);
+      const full = !known || c.uid === mineUid || !!this.source.war?.atWarWith(c.uid);
       const owned = new Set(full ? c.owned : c.owned.filter((k) => known.has(k)));
       if (!owned.size) continue;
       const capKnown = full || owned.has(c.capital);
