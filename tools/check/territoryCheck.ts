@@ -31,7 +31,7 @@ import { World } from '../../src/world/world';
 
 // 1. 레벨
 assert.equal(CITY_LEVELS.length, 9);
-assert.equal(FACILITY_UNLOCK_LEVEL.length, 48);
+assert.equal(FACILITY_UNLOCK_LEVEL.length, 50);
 assert.equal(cityLevelFor(0, 16), 1);
 assert.equal(cityLevelFor(100, 16), 1, '영토 20청크 전에는 2레벨이 안 된다');
 assert.equal(cityLevelFor(100, 20), 2);
@@ -91,16 +91,16 @@ const west = chunkKey(bx - 1, by + 1);
 const north = chunkKey(bx + 1, by - 1);
 let now = 1_000_000;
 t.people = new Map([
-  [west, { residents: OCCUPY_RESIDENTS, floating: 0 }],
-  [north, { residents: 0, floating: OCCUPY_FLOATING + 10 }],
+  [west, { residents: OCCUPY_RESIDENTS, floating: 0, raw: OCCUPY_RESIDENTS }],
+  [north, { residents: 0, floating: OCCUPY_FLOATING + 10, raw: 0 }],
 ]);
 t.update(now, true);
 assert.ok(t.isOwned(bx - 1, by + 1), '도로로 이어진 청크는 거주 100명이면 점령');
 assert.ok(!t.isOwned(bx + 1, by - 1), '길이 없으면 유동인구가 많아도 점령 안 됨');
 assert.equal(t.count, 17);
 assert.ok(world.isExplored(bx - 3, by + 1), '새 땅 둘레가 탐사된다');
-t.people = new Map([[west, { residents: OCCUPY_RESIDENTS - 1, floating: OCCUPY_FLOATING - 1 }]]);
-t.people.set(chunkKey(bx - 2, by + 1), { residents: 500, floating: 0 });
+t.people = new Map([[west, { residents: OCCUPY_RESIDENTS - 1, floating: OCCUPY_FLOATING - 1, raw: 0 }]]);
+t.people.set(chunkKey(bx - 2, by + 1), { residents: 500, floating: 0, raw: 500 });
 t.update(now + 2000, true);
 assert.ok(t.isOwned(bx - 1, by + 1), '한 번 얻은 땅은 인구가 줄어도 안 잃는다');
 assert.ok(!t.isOwned(bx - 2, by + 1), '도로가 안 닿은 청크는 점령 안 됨');

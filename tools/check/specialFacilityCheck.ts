@@ -23,7 +23,7 @@ import { Build } from '../../src/world/build';
 import { Terrain } from '../../src/world/terrain';
 import { World } from '../../src/world/world';
 
-assert.equal(FACILITY_COUNT, 48); // 지하철역(26), 식량 시설(27~35), 자원 시설(36~47)까지 포함한다
+assert.equal(FACILITY_COUNT, 50); // 지하철역(26), 식량(27~35), 자원(36~47), 군사(48~49)
 assert.deepEqual(
   [FAC_COMM_TOWER, FAC_AIRPORT, FAC_HARBOR, FAC_PRISON],
   [17, 18, 19, 20],

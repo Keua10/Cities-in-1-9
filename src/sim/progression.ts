@@ -29,7 +29,7 @@ export const CITY_LEVELS = [
     territory: 28,
     name: '소도시',
     maxBuildingTier: 2,
-    unlock: '가스 발전 · 화장시설 · 통신탑 · 양계장 · 어업 기지',
+    unlock: '병영·참호(군사 시설) · 가스 발전 · 화장시설 · 통신탑 · 양계장 · 어업 기지',
   },
   {
     points: 500,
@@ -88,6 +88,8 @@ export const FACILITY_UNLOCK_LEVEL: readonly number[] = [
   1, 1, 2, 2, 3, 4, 3, 1, 5,
   // 자원: 철광산·탄광·유정 1단계, 2단계, 3단계, 제철소, 정유소, 석탄 화력
   2, 2, 2, 5, 5, 5, 8, 8, 8, 5, 5, 4,
+  // 군사: 병영, 참호·벙커
+  3, 3,
 ];
 
 export function normalizeProsperity(value: unknown): number {

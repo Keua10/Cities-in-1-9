@@ -1,5 +1,6 @@
 import { FoodSystem } from './food';
 import { mineSiteProblem, ResourceSystem } from './resources';
+import { ArmySystem } from './military/armySystem';
 import { CONSUMER_SPECS, isMineKind, REFINERY_GAS_DISCOUNT } from './config/resources';
 import { NatureSystem } from './nature';
 import { ConstructionSystem } from './construction';
@@ -178,6 +179,8 @@ export class MacroSim {
   readonly food: FoodSystem;
   /** 자원 채굴·가공 (군사 2단계). 비축은 macro.resources, 캔 양은 macro.mined. */
   readonly resources: ResourceSystem;
+  /** 군대 (군사 4단계). 저장은 macro.army. */
+  readonly army: ArmySystem;
   readonly disasters: DisasterSim;
   private assignment: AssignmentTable | null = null;
   private congestion: CongestionMap | null = null;
@@ -228,6 +231,14 @@ export class MacroSim {
     this.services.kindUpkeepMul = (kind) =>
       kind === FAC_GAS && this.resources.summary.gasDiscount ? 1 - REFINERY_GAS_DISCOUNT : 1;
     world.mineRule = (kind, tx, ty) => mineSiteProblem(kind, tx, ty, this.macro);
+    this.army = new ArmySystem(
+      macro,
+      this.territory,
+      this.resources,
+      () => this.services.facilityList(),
+      () => this.cityLevel,
+      () => this.onMacroChange?.(),
+    );
     this.water.power = this.power;
     this.services.power = this.power;
     this.macro.policies = normalizePolicies(macro.policies);
@@ -295,7 +306,8 @@ export class MacroSim {
       this.services.operatingUpkeep((kind) => this.utilityUse(kind)) +
       this.water.upkeep +
       this.power.upkeep +
-      food.importCost;
+      food.importCost +
+      this.army.upkeepMoney;
     const earned = taxes + food.exportIncome;
     // 중앙정부 지원금: 모자란 만큼 메워 준다. 단, 한도가 있어 터무니없이 과하게 지으면 적자.
     const grant = this.grantsEnabled
@@ -603,6 +615,7 @@ export class MacroSim {
     const boosted = this.consumeBoost(realMs);
     this.advanceLifeClock(deltaMs, boosted);
     this.territory.update();
+    this.army.update();
     this.power.ensure(this.world);
     this.water.ensure(this.world);
     if (this.catchupLeft > 0) {
@@ -779,8 +792,11 @@ export class MacroSim {
     for (const p of parcels) {
       roads += p.roadCount;
       if (!p.bld) continue;
-      const here: ChunkPeople = { residents: 0, floating: 0 };
+      const here: ChunkPeople = { residents: 0, floating: 0, raw: 0 };
       people.set(p.key, here);
+      const drafted = this.army.army.drafted[p.key] ?? 0;
+      const prevRaw = this.territory.people.get(p.key)?.raw ?? 0;
+      const draftKeep = drafted > 0 && prevRaw > 0 ? Math.max(0, 1 - drafted / prevRaw) : 1;
 
       let occArr = this.occ.get(p.key);
       if (!occArr || occArr.length !== p.bld.length) {
@@ -933,7 +949,9 @@ export class MacroSim {
             funeralServed += cap * this.services.qualityAt(tx, ty, level, FAC_CREMATORIUM);
           }
           this.services.accrueSanitation(tx, ty, level, cap, zone === ZONE_R);
-          const filled = cap * (occArr[i] / 255);
+          if (zone === ZONE_R) here.raw += cap * (occArr[i] / 255);
+          // 징병: 군대에 간 인원만큼 이 청크의 거주·일자리가 준다(직전 평가 기준 비율).
+          const filled = cap * (occArr[i] / 255) * draftKeep;
           // 입주율이 확정된 뒤 이번 부하를 적립한다. **다음 평가가 쓸 값** 이다.
           this.services.accrueLoad(tx, ty, level, filled);
           tiers[zone][level - 1].capacity += cap;
@@ -984,7 +1002,12 @@ export class MacroSim {
       amenityFulfilled: homesCounted === 0 ? 0 : homesFulfilled / homesCounted,
     };
     this.macro.population = Math.round(population);
-    this.food.refresh(this.services.facilityList(), population, this.macro.food ?? 0);
+    // 군인도 먹는다(1명 = 시민 1명분).
+    this.food.refresh(
+      this.services.facilityList(),
+      population + this.army.soldiers,
+      this.macro.food ?? 0,
+    );
     this.resources.refresh(this.services.facilityList());
 
     if (updateDemand) this.updateDemand(tiers, population, this.stats.occupancy);
@@ -1179,6 +1202,8 @@ export class MacroSim {
     delete this.macro.disasters;
     delete this.macro.food;
     this.resources.reset();
+    this.army.army.units = [];
+    this.army.army.drafted = {};
     delete this.macro.prosperity;
     delete this.macro.waterStartTick;
     delete this.macro.powerStartTick;

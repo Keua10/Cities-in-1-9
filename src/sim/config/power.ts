@@ -44,5 +44,7 @@ export function facilityPowerDemand(kind: number): number {
   // 자원 36~46: 광산 1·2·3단계, 제철소, 정유소.
   const res = [150, 150, 150, 260, 260, 260, 420, 420, 420, 900, 700][kind - 36];
   if (res !== undefined) return res;
+  if (kind === 48) return 150;
+  if (kind === 49) return 0;
   return 100;
 }

@@ -12,10 +12,10 @@ import { isMineKind } from './config/resources';
 import { mineSiteProblem } from './resources';
 
 /**
- * 공공 서비스·행정 시설(소방·경찰·병원·학교·소공원·공원·체육·교도소). 내 영토에만 짓는다.
+ * 공공 서비스·행정 시설(소방·경찰·병원·학교·소공원·공원·체육·교도소)과 군사 시설. 내 영토에만 짓는다.
  * 발전·상하수도·위생·농장·교통 시설은 탐사한 땅이면 어디든 지을 수 있다(보호는 안 됨).
  */
-export const OWNED_ONLY_FACILITIES: ReadonlySet<number> = new Set([0, 1, 2, 3, 4, 5, 6, 20]);
+export const OWNED_ONLY_FACILITIES: ReadonlySet<number> = new Set([0, 1, 2, 3, 4, 5, 6, 20, 48, 49]);
 import {
   FACILITY_CAPACITY,
   FACILITY_CAPACITY_IS_BUILDINGS,

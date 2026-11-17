@@ -7,7 +7,7 @@ import { World } from '../../src/world/world';
 import type { MacroState } from '../../src/net/types';
 
 // The shallow catalog must expose every existing tool and facility, without duplicates.
-assert.equal(BUILD_CATEGORIES.length, 9); // 자원(군사 2단계) 포함
+assert.equal(BUILD_CATEGORIES.length, 10); // 자원·군사 포함
 assert.equal(new Set(BUILD_ITEMS.map((x) => x.id)).size, BUILD_ITEMS.length);
 assert.equal(BUILD_ITEMS.length, FACILITY_SPECS.length + 18); // 지형 높이기·낮추기 포함
 for (const category of BUILD_CATEGORIES)

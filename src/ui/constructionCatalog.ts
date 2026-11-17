@@ -7,6 +7,7 @@ import { PIPE_COST, WATER_SPECS } from '../sim/config/water';
 import { POWER_SPECS, WIRE_COST } from '../sim/config/power';
 import { RUNWAY_COST, TAXIWAY_COST } from '../sim/config/transport';
 import { FOOD_SPECS } from '../sim/config/food';
+import { FAC_BARRACKS, FAC_TRENCH, TRENCH_DEFENSE } from '../sim/config/military';
 import {
   CONSUMER_SPECS,
   DIFFICULTY_NAMES,
@@ -43,6 +44,7 @@ export const BUILD_CATEGORIES = [
     color: '#c8956a',
     hint: '광산 · 탄광 · 유정 · 제철 · 정유',
   },
+  { id: 'military', name: '군사', icon: 'shield', color: '#b9a0a0', hint: '병영 · 참호' },
 ] as const;
 export type BuildCategory = (typeof BUILD_CATEGORIES)[number]['id'];
 export interface BuildItem {
@@ -143,6 +145,24 @@ for (const spec of FACILITY_SPECS) {
     const entry = items.find((i) => i.tool === 'metroStation')!;
     entry.kind = k;
     entry.unlock = 1;
+    continue;
+  }
+  if (k === FAC_BARRACKS || k === FAC_TRENCH) {
+    items.push({
+      id: `facility-${k}`,
+      category: 'military',
+      tool: 'facility',
+      kind: k,
+      name: spec.name,
+      cost: spec.cost,
+      unlock: spec.unlockLevel,
+      icon: 'shield',
+      detail:
+        `${spec.span}×${spec.span} · 유지 ${formatMoney(spec.upkeepPerDay)}/일 · ` +
+        (k === FAC_BARRACKS
+          ? '보병·공병·포병을 뽑고 훈련 · 대륙 지도 → 군대에서 징병 · 도로 필요 · 내 영토에만'
+          : `그 청크 방어 +${Math.round(TRENCH_DEFENSE * 100)}% · 내 영토에만`),
+    });
     continue;
   }
   const mine = MINE_SPECS[k];

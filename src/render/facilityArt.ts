@@ -401,11 +401,60 @@ function resourceArt(a: PixelArt, kind: number, n: number): void {
     conveyor(a, 3.5, 3.4, 18, 2.6, 2.7, 16);
   }
 }
+
+/* ---------------- 군사 시설 (48~) ---------------- */
+
+function militaryArt(a: PixelArt, kind: number, n: number): void {
+  if (kind === 48) {
+    // 병영: 막사 두 동, 연병장, 깃대, 감시탑, 담장
+    a.slab(0.12, 0.12, n - 0.24, n - 0.24, 0, 'grassDark', 'shadow');
+    a.slab(1.6, 1.7, 2.6, 2.0, 0, 'paving', 'pavingDark');
+    for (let t = 1.75; t < 4.1; t += 0.45) a.line(a.p(t, 1.8), a.p(t, 3.6), 'pavingDark');
+    longShed(a, 0.3, 0.3, 3.0, 0.9, M.teal);
+    longShed(a, 0.3, 1.6, 1.0, 2.8, M.teal);
+    office(a, 3.6, 0.35, 1.0, 0.9, 16, M.cream);
+    // 깃대
+    a.line(a.p(2.9, 2.7, 0), a.p(2.9, 2.7, 34), 'stoneDark');
+    const flag = a.p(2.9, 2.7, 34);
+    a.rect(flag[0] + 1, flag[1], 8, 5, 'red');
+    a.rect(flag[0] + 1, flag[1] + 2, 8, 1, 'white');
+    // 감시탑
+    a.box(4.2, 4.2, 0.35, 0.35, 22, M.wood);
+    a.box(4.12, 4.12, 0.5, 0.5, 4, M.roof, 22);
+    // 담장
+    for (const z of [3, 6]) {
+      a.line(a.p(0.15, n - 0.15, z), a.p(n - 0.15, n - 0.15, z), 'stone');
+      a.line(a.p(n - 0.15, 0.15, z), a.p(n - 0.15, n - 0.15, z), 'stone');
+    }
+    a.vehicle(2.0, 4.3, M.teal);
+    a.vehicle(2.7, 4.3, M.teal);
+    return;
+  }
+  // 참호·벙커: 모래주머니 고리 + 낮은 콘크리트 벙커
+  a.slab(0.08, 0.08, 0.84, 0.84, 0, 'soil', 'shadow');
+  for (const [u, v] of [
+    [0.12, 0.12],
+    [0.42, 0.1],
+    [0.7, 0.14],
+    [0.1, 0.45],
+    [0.12, 0.72],
+    [0.72, 0.7],
+  ] as const)
+    a.box(u, v, 0.18, 0.14, 3, M.yellow);
+  a.box(0.32, 0.32, 0.38, 0.36, 7, M.steel);
+  const slit = a.p(0.51, 0.68, 4);
+  a.rect(slit[0] - 4, slit[1] - 1, 8, 2, 'ink');
+}
+
 /** All civic facilities share the residential pixel grid and prop dimensions. */
 export function facilityArt(kind: number): PixelArt {
   const n = FACILITY_SPAN[kind],
     a = new PixelArt(n * 64);
   a.ground(n, kind === 4 || kind === 5 || kind === 16 || (kind >= 27 && kind <= 32));
+  if (kind >= 48) {
+    militaryArt(a, kind, n);
+    return a;
+  }
   if (kind >= 36) {
     resourceArt(a, kind, n);
     return a;

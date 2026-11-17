@@ -72,8 +72,11 @@ export interface TerritoryState {
 }
 
 export interface ChunkPeople {
+  /** 징병을 뺀 거주 인구. */
   residents: number;
   floating: number;
+  /** 징병 전 거주 인구(징병 상한 계산용). */
+  raw: number;
 }
 
 export interface Rect {
