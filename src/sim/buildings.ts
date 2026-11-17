@@ -44,7 +44,7 @@ export const FAC_BASE = 9;
  * 시설 종류 수. 0~16은 STEP 4.5까지의 기존 값이며,
  * STEP 4.6의 17~20을 유지하고 교통 확장 시설은 21~25에만 추가한다.
  */
-export const FACILITY_COUNT = 59;
+export const FACILITY_COUNT = 62;
 /** kind 4~6만 기존 복지 시설이다. */
 export const FAC_WELFARE_BASE = 4;
 

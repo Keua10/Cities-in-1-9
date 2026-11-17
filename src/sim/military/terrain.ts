@@ -1,5 +1,6 @@
 import { CHUNK_SIZE } from '../../core/constants';
 import { MOUNTAIN_HEIGHT, quickSite } from '../../world/continent';
+import { Terrain } from '../../world/terrain';
 import type { UnitType } from '../config/military';
 
 /**
@@ -10,12 +11,20 @@ import type { UnitType } from '../config/military';
  *   river     개울: 이동 50%, 도하 공격 −30%, 건너편 방어 +20%
  *   mountain  산(높이 5 이상이 절반 넘음): 보병·공병만 40%, 공격 −20%, 방어 +50%
  *   highland  고지대(평균 높이 3 이상): 이동 70%, 방어 +20%, 아래로 공격 +15%
+ *   forest    숲(숲 칸이 땅의 절반 넘음): 이동 60%, 기갑 공격 −20%, 방어 +25%, 시야를 가린다
  *   plain     평지: 기갑 공격 +25%
  * 도시(누군가의 영토 안)는 따로 겹쳐 본다: 이동 70%, 기갑 공격 −30%, 보병 방어 +40%.
  * 골짜기(양쪽 이웃이 2단 이상 높음): 숨어 있던 쪽이 첫 30초 공격 +50%.
  */
 
-export type TerrainKind = 'sea' | 'bigRiver' | 'river' | 'mountain' | 'highland' | 'plain';
+export type TerrainKind =
+  | 'sea'
+  | 'bigRiver'
+  | 'river'
+  | 'mountain'
+  | 'highland'
+  | 'forest'
+  | 'plain';
 
 export interface ChunkTerrain {
   kind: TerrainKind;
@@ -30,10 +39,14 @@ export const TERRAIN_NAMES: Record<TerrainKind, string> = {
   river: '하천',
   mountain: '산',
   highland: '고지대',
+  forest: '숲',
   plain: '평지',
 };
 
 const cache = new Map<string, ChunkTerrain>();
+
+/** 판정 설정. 점검(tools/check)에서 넓은 평지가 필요할 때 숲 판정을 끌 수 있다. */
+export const terrainOptions = { forest: true };
 const SAMPLES = [4, 12, 20, 28];
 
 function raw(cx: number, cy: number): { kind: TerrainKind; height: number } {
@@ -41,6 +54,7 @@ function raw(cx: number, cy: number): { kind: TerrainKind; height: number } {
   let sea = 0;
   let big = 0;
   let mountain = 0;
+  let forest = 0;
   let height = 0;
   let land = 0;
   for (const oy of SAMPLES)
@@ -55,6 +69,7 @@ function raw(cx: number, cy: number): { kind: TerrainKind; height: number } {
       land++;
       height += s.height;
       if (s.height >= MOUNTAIN_HEIGHT) mountain++;
+      else if (s.tile === Terrain.Forest) forest++;
     }
   const n = SAMPLES.length * SAMPLES.length;
   const avg = land ? height / land : 0;
@@ -63,6 +78,7 @@ function raw(cx: number, cy: number): { kind: TerrainKind; height: number } {
   else if (big >= 2) kind = 'bigRiver';
   else if (water - sea >= 1) kind = 'river';
   else if (mountain >= land * 0.5 && land > 0) kind = 'mountain';
+  else if (terrainOptions.forest && forest >= land * 0.75 && land > 0) kind = 'forest';
   else if (avg >= 3) kind = 'highland';
   else kind = 'plain';
   return { kind, height: avg };
@@ -110,6 +126,9 @@ export function moveFactor(
     case 'highland':
       f = 0.7;
       break;
+    case 'forest':
+      f = 0.6;
+      break;
     default:
       f = 1;
   }
@@ -129,6 +148,7 @@ export function attackFactor(
   if (t.kind === 'bigRiver') f *= 0.5;
   if (t.kind === 'river') f *= 0.7;
   if (t.kind === 'plain' && type === 'armor') f *= 1.25;
+  if (t.kind === 'forest' && type === 'armor') f *= 0.8;
   if (urban && type === 'armor') f *= 0.7;
   if (from && from.height >= t.height + 1.5) f *= 1.15; // 높은 곳에서 아래로
   return f;
@@ -144,6 +164,7 @@ export function defenseFactor(
   let f = 1;
   if (t.kind === 'mountain') f *= 1.5;
   if (t.kind === 'highland') f *= 1.2;
+  if (t.kind === 'forest') f *= 1.25;
   if (t.kind === 'bigRiver') f *= 1.3;
   if (t.kind === 'river') f *= 1.2;
   if (urban && (type === 'infantry' || type === 'engineer')) f *= 1.4;

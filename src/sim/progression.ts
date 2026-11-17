@@ -92,6 +92,8 @@ export const FACILITY_UNLOCK_LEVEL: readonly number[] = [
   3, 3, 2,
   // 군사 6단계: 군수 4, 전차 5, 레이더 6, 공항 6, 해군 7, 공항(중간) 8, 미사일 기지·방어 9
   4, 5, 6, 6, 7, 8, 9, 9,
+  // 피드백 1차: 정찰타워 2, 벌목장 2, 탄약 공장 4
+  2, 2, 4,
 ];
 
 export function normalizeProsperity(value: unknown): number {

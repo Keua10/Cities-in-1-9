@@ -27,12 +27,15 @@ import {
   type Unit,
 } from '../../src/sim/military/army';
 import { ArmySystem } from '../../src/sim/military/armySystem';
-import { chunkTerrain } from '../../src/sim/military/terrain';
+import { chunkTerrain, terrainOptions } from '../../src/sim/military/terrain';
 import { World } from '../../src/world/world';
 import { MacroSim } from '../../src/sim/macro';
 import type { FacilityRecord } from '../../src/sim/services';
 import { FACILITY_SPECS } from '../../src/sim/facilities';
 import { CONTINENT_H, CONTINENT_W, CONTINENT_X0, CONTINENT_Y0 } from '../../src/world/continent';
+
+// 넓은 평지가 필요한 점검이라 숲 판정을 끈다(숲은 warCheck 에서 따로 본다).
+terrainOptions.forest = false;
 
 /**
  * 군사 6단계 — 기갑·대공·공군·해군·미사일 점검(순수 계산 + ArmySystem).

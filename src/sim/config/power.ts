@@ -47,6 +47,9 @@ export function facilityPowerDemand(kind: number): number {
   if (kind === 48) return 150;
   if (kind === 49) return 0;
   if (kind === 50) return 40;
+  if (kind === 59) return 5;
+  if (kind === 60) return 60;
+  if (kind === 61) return 300;
   const mil = [400, 600, 120, 500, 600, 900, 800, 700][kind - 51];
   if (mil !== undefined) return mil;
   return 100;

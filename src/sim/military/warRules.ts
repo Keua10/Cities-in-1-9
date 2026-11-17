@@ -235,7 +235,7 @@ export interface SurpriseInput {
 
 /**
  * 상대가 (cx,cy) 를 볼 수 있는가: 상대 영토나 부대에서 시야(낮 2·밤 1청크) 안이고,
- * 사이에 산 청크가 가로막지 않을 때. 기습 조건 "상대가 내 부대를 보고 있지 않을 것".
+ * 사이에 산·숲 청크가 가로막지 않을 때. 기습 조건 "상대가 내 부대를 보고 있지 않을 것".
  */
 export function seenBy(
   cx: number,
@@ -253,7 +253,8 @@ export function seenBy(
     for (let i = 1; i < d && !blocked; i++) {
       const x = s.cx + Math.round((dx * i) / d);
       const y = s.cy + Math.round((dy * i) / d);
-      if (chunkTerrain(x, y).kind === 'mountain') blocked = true;
+      const k = chunkTerrain(x, y).kind;
+      if (k === 'mountain' || k === 'forest') blocked = true;
     }
     if (!blocked) return true;
   }

@@ -14,6 +14,14 @@ import {
 } from '../../src/sim/military/warRules';
 import { CEASEFIRE_QUIET_MS, WAR_JUDGE_AFTER_MS } from '../../src/sim/config/war';
 import { World } from '../../src/world/world';
+import {
+  attackFactor,
+  chunkTerrain,
+  defenseFactor,
+  moveFactor,
+} from '../../src/sim/military/terrain';
+import { seenBy } from '../../src/sim/military/warRules';
+import { CONTINENT_H, CONTINENT_W, CONTINENT_X0, CONTINENT_Y0 } from '../../src/world/continent';
 
 /**
  * 군사 4·5단계 — 전쟁 규칙(순수 계산). 네트워크 연결은 브라우저 두 계정으로 확인.
@@ -219,6 +227,21 @@ console.log('  OK   판정 1.5배, 휴전 20분, 끊김 24시간 판정, 배상 
   assert.ok(!t.isOwned(w.baseCx - 1, w.baseCy), '다른 도시 영토는 자동 점령 안 됨');
 }
 console.log('  OK   영토 내주기(다시 안 생김)·얻기(연결 예외)·다른 도시 땅 보호');
+// 숲: 이동 60%, 기갑 공격 −20%, 방어 +25%, 시야를 가린다.
+{
+  const forest = { kind: 'forest' as const, height: 1, valley: false };
+  assert.equal(moveFactor(forest, 'infantry', false, true), 0.6);
+  assert.equal(attackFactor(forest, 'armor', false, null), 0.8);
+  assert.equal(defenseFactor(forest, 'infantry', false, false), 1.25);
+  let f: { cx: number; cy: number } | null = null;
+  for (let cy = CONTINENT_Y0 + 5; cy < CONTINENT_Y0 + CONTINENT_H - 5 && !f; cy++)
+    for (let cx = CONTINENT_X0 + 5; cx < CONTINENT_X0 + CONTINENT_W - 5 && !f; cx++)
+      if (chunkTerrain(cx, cy).kind === 'forest') f = { cx, cy };
+  assert.ok(f, '대륙에 숲 청크가 있다');
+  // 숲 너머(2칸)는 낮에도 안 보인다.
+  assert.ok(!seenBy(f!.cx + 1, f!.cy, [{ cx: f!.cx - 1, cy: f!.cy }], false), '숲이 시야를 가림');
+  console.log('  OK   숲: 이동 60%·기갑 −20%·방어 +25%·시야 가림');
+}
 console.log(
   'War passed: declare, surprise, claims, score, judge, ceasefire, reparations, territory.',
 );

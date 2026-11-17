@@ -18,7 +18,9 @@ const { MacroSim } = await import('../../src/sim/macro');
 const { WarSession } = await import('../../src/net/warSession');
 const { AllianceSession } = await import('../../src/net/alliances');
 const { newUnit } = await import('../../src/sim/military/army');
-const { chunkTerrain } = await import('../../src/sim/military/terrain');
+const { chunkTerrain, terrainOptions } = await import('../../src/sim/military/terrain');
+// 넓은 평지가 필요한 점검이라 숲 판정을 끈다(숲은 warCheck 에서 따로 본다).
+terrainOptions.forest = false;
 const { CONTINENT_H, CONTINENT_W, CONTINENT_X0, CONTINENT_Y0 } = await import(
   '../../src/world/continent'
 );

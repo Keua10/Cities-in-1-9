@@ -14,8 +14,11 @@ import {
   type Side,
   type Unit,
 } from '../../src/sim/military/army';
-import { chunkTerrain } from '../../src/sim/military/terrain';
+import { chunkTerrain, terrainOptions } from '../../src/sim/military/terrain';
 import { CONTINENT_H, CONTINENT_W, CONTINENT_X0, CONTINENT_Y0 } from '../../src/world/continent';
+
+// 넓은 평지가 필요한 점검이라 숲 판정을 끈다(숲은 warCheck 에서 따로 본다).
+terrainOptions.forest = false;
 
 /**
  * 군사 4단계 — 부대·이동·전투·점령 점검(순수 계산).

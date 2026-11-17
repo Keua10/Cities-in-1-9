@@ -571,6 +571,44 @@ function militaryArt(a: PixelArt, kind: number, n: number): void {
     a.slab(0.62, 0.16, 0.76, 0.1, 18, 'stone', 'stoneDark');
     return;
   }
+  if (kind === 59) {
+    // 정찰타워: 가는 나무 망루 + 꼭대기 망원경 지붕
+    a.slab(0.15, 0.15, 0.7, 0.7, 0, 'soil', 'shadow');
+    for (const [u, v] of [
+      [0.3, 0.3],
+      [0.7, 0.3],
+      [0.3, 0.7],
+      [0.7, 0.7],
+    ] as const)
+      a.line(a.p(u, v, 0), a.p(0.5, 0.5, 34), 'stoneDark');
+    a.box(0.36, 0.36, 0.28, 0.28, 4, M.yellow, 34);
+    const top = a.p(0.5, 0.5, 40);
+    a.rect(top[0] - 1, top[1] - 6, 6, 2, 'ink');
+    return;
+  }
+  if (kind === 60) {
+    // 벌목장: 통나무 더미, 작업 창고, 남은 나무 몇 그루
+    a.slab(0.1, 0.1, n - 0.2, n - 0.2, 0, 'soil', 'shadow');
+    longShed(a, 0.3, 0.3, 1.3, 0.9, M.roof);
+    for (let i = 0; i < 4; i++) a.box(0.4 + i * 0.12, 1.6, 0.9, 0.12, 2 + i * 0, M.yellow, i * 2);
+    for (let i = 0; i < 3; i++) a.box(1.7, 1.5 + i * 0.12, 0.9, 0.12, 2, M.yellow, 6);
+    a.tree(2.4, 0.5);
+    a.tree(2.55, 1.0);
+    a.tree(0.4, 2.5);
+    return;
+  }
+  if (kind === 61) {
+    // 탄약 공장: 둥근 지붕 저장고 둘 + 공장동, 굴뚝, 붉은 경고 띠
+    a.slab(0.1, 0.1, n - 0.2, n - 0.2, 0, 'paving', 'pavingDark');
+    longShed(a, 0.25, 0.25, 1.6, 1.1, M.steel);
+    chimney(a, 2.2, 0.35, 28);
+    for (const u of [0.3, 1.3]) {
+      a.box(u, 1.65, 0.8, 0.8, 8, M.teal);
+      const f = a.p(u + 0.4, 2.05, 8);
+      a.rect(f[0] - 6, f[1] - 1, 12, 2, 'red');
+    }
+    return;
+  }
   // 참호·벙커: 모래주머니 고리 + 낮은 콘크리트 벙커
   a.slab(0.08, 0.08, 0.84, 0.84, 0, 'soil', 'shadow');
   for (const [u, v] of [
