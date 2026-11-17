@@ -10,6 +10,7 @@ import { FOOD_SPECS } from '../sim/config/food';
 import {
   FAC_BARRACKS,
   FAC_OCC_TOWER,
+  FAC_SCOUT_TOWER,
   FAC_TRENCH,
   MILITARY_FACILITIES,
   TRENCH_DEFENSE,
@@ -18,6 +19,8 @@ import {
   CONSUMER_SPECS,
   DIFFICULTY_NAMES,
   FAC_COAL_POWER,
+  FAC_LUMBER_CAMP,
+  LUMBER_OUTPUT,
   MINE_SPECS,
   RESOURCE_NAMES,
 } from '../sim/config/resources';
@@ -32,6 +35,8 @@ const MILITARY_DETAIL: Record<number, string> = {
   56: '폭격기 생산 · 적 시설 파괴',
   57: '미사일 생산·발사(사거리 60청크) · 수도 밖에만',
   58: '8청크 안으로 날아오는 미사일 60% 요격',
+  59: '그 청크를 늘 밝힘 · 빈 땅이나 내 땅에',
+  61: '철·석탄·나무 → 탄약 20/일 · 탄약이 없으면 부대 공격 절반',
 };
 
 export const BUILD_CATEGORIES = [
@@ -171,7 +176,11 @@ for (const spec of FACILITY_SPECS) {
     entry.unlock = 1;
     continue;
   }
-  if ((MILITARY_FACILITIES as readonly number[]).includes(k) || k === FAC_OCC_TOWER) {
+  if (
+    (MILITARY_FACILITIES as readonly number[]).includes(k) ||
+    k === FAC_OCC_TOWER ||
+    k === FAC_SCOUT_TOWER
+  ) {
     items.push({
       id: `facility-${k}`,
       category: 'military',
@@ -189,12 +198,28 @@ for (const spec of FACILITY_SPECS) {
             ? '내 영토와 맞닿은 빈 청크에 세우면 완공 1시간 뒤 그 청크가 내 땅 · 사람이 살지 않아도 됨'
             : k === FAC_TRENCH
               ? `그 청크 방어 +${Math.round(TRENCH_DEFENSE * 100)}% · 내 영토에만`
-              : (MILITARY_DETAIL[k] ?? '') + ' · 도로 필요 · 내 영토에만'),
+              : k === FAC_SCOUT_TOWER
+                ? (MILITARY_DETAIL[k] ?? '')
+                : (MILITARY_DETAIL[k] ?? '') + ' · 도로 필요 · 내 영토에만'),
     });
     continue;
   }
   const mine = MINE_SPECS[k];
   const consumer = k !== FAC_COAL_POWER ? CONSUMER_SPECS[k] : undefined;
+  if (k === FAC_LUMBER_CAMP) {
+    items.push({
+      id: `facility-${k}`,
+      category: 'resource',
+      tool: 'facility',
+      kind: k,
+      name: spec.name,
+      cost: spec.cost,
+      unlock: spec.unlockLevel,
+      icon: 'mine',
+      detail: `${spec.span}×${spec.span} · 유지 ${formatMoney(spec.upkeepPerDay)}/일 · 나무 ${LUMBER_OUTPUT}/일 · 숲에만 · 도로 필요`,
+    });
+    continue;
+  }
   if (mine || consumer) {
     items.push({
       id: `facility-${k}`,

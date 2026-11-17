@@ -572,18 +572,16 @@ function militaryArt(a: PixelArt, kind: number, n: number): void {
     return;
   }
   if (kind === 59) {
-    // 정찰타워: 가는 나무 망루 + 꼭대기 망원경 지붕
+    // 정찰타워: 가는 나무 망루 + 꼭대기 망대
     a.slab(0.15, 0.15, 0.7, 0.7, 0, 'soil', 'shadow');
     for (const [u, v] of [
-      [0.3, 0.3],
-      [0.7, 0.3],
-      [0.3, 0.7],
-      [0.7, 0.7],
+      [0.32, 0.32],
+      [0.68, 0.32],
+      [0.32, 0.68],
+      [0.68, 0.68],
     ] as const)
-      a.line(a.p(u, v, 0), a.p(0.5, 0.5, 34), 'stoneDark');
-    a.box(0.36, 0.36, 0.28, 0.28, 4, M.yellow, 34);
-    const top = a.p(0.5, 0.5, 40);
-    a.rect(top[0] - 1, top[1] - 6, 6, 2, 'ink');
+      a.line(a.p(u, v, 0), a.p(0.5, 0.5, 18), 'stoneDark');
+    a.box(0.38, 0.38, 0.24, 0.24, 3, M.yellow, 18);
     return;
   }
   if (kind === 60) {

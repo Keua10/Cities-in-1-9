@@ -84,6 +84,20 @@ function raw(cx: number, cy: number): { kind: TerrainKind; height: number } {
   return { kind, height: avg };
 }
 
+/** 청크 땅 가운데 숲 칸의 비율 0~1(벌목장 자리 판정). */
+export function forestShare(cx: number, cy: number): number {
+  let land = 0;
+  let forest = 0;
+  for (const oy of SAMPLES)
+    for (const ox of SAMPLES) {
+      const s = quickSite(cx * CHUNK_SIZE + ox, cy * CHUNK_SIZE + oy);
+      if (s.water) continue;
+      land++;
+      if (s.tile === Terrain.Forest) forest++;
+    }
+  return land ? forest / land : 0;
+}
+
 export function chunkTerrain(cx: number, cy: number): ChunkTerrain {
   const key = `${cx},${cy}`;
   const hit = cache.get(key);

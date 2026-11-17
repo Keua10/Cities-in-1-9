@@ -14,9 +14,13 @@ import {
   RESOURCE_NAMES,
   RESOURCE_STORAGE,
   RESOURCES,
+  FAC_LUMBER_CAMP,
+  LUMBER_FOREST_SHARE,
+  LUMBER_OUTPUT,
   type ResourceId,
 } from './config/resources';
 import type { FacilityRecord } from './services';
+import { forestShare } from './military/terrain';
 
 /**
  * 자원 채굴·가공 (군사 2단계).
@@ -75,7 +79,7 @@ export interface ResourceSummary {
   gasDiscount: boolean;
 }
 
-const zero = (): Record<ResourceId, number> => ({ iron: 0, coal: 0, oil: 0 });
+const zero = (): Record<ResourceId, number> => ({ iron: 0, coal: 0, oil: 0, wood: 0, ammo: 0 });
 
 export function emptyResourceSummary(): ResourceSummary {
   return {
@@ -144,6 +148,10 @@ export class ResourceSystem {
   /** 연료 상태가 바뀌면 불린다(전력망 다시 세기). */
   onCoalFuel: ((ok: boolean) => void) | null = null;
   private coalFuel = true;
+  /** 벌목장 하루 생산(나무). */
+  private lumber = 0;
+  /** 공장이 하루에 만드는 자원(탄약 공장). */
+  private made: Partial<Record<ResourceId, number>> = {};
 
   constructor(private macro: MacroState) {
     macro.resources = normalizeResourceStock(macro.resources);
@@ -190,6 +198,23 @@ export class ResourceSystem {
         deposit: d,
       });
     }
+    // 벌목장: 숲 청크에서 나무를 벤다(숲은 다시 자란다).
+    this.lumber = 0;
+    for (const f of facilities) {
+      if (f.kind !== FAC_LUMBER_CAMP) continue;
+      let reason = f.hasRoad ? '' : '도로를 이어주세요';
+      if (!reason && forestShare(chunkIndexOf(f.tx), chunkIndexOf(f.ty)) < LUMBER_FOREST_SHARE)
+        reason = '숲이 아닙니다 · 숲 청크로 옮기세요';
+      if (!reason && stock.wood >= RESOURCE_STORAGE)
+        reason = '비축 창고가 가득 찼습니다 · 시장에 파세요';
+      const active = !reason;
+      if (active) {
+        s.production.wood += LUMBER_OUTPUT;
+        this.lumber += LUMBER_OUTPUT;
+      }
+      this.consumers.set(`${f.tx},${f.ty}`, { kind: f.kind, active, reason });
+    }
+    this.made = {};
     for (const f of facilities) {
       const spec = CONSUMER_SPECS[f.kind];
       if (!spec) continue;
@@ -201,9 +226,14 @@ export class ResourceSystem {
             break;
           }
       const active = !reason;
-      if (active)
+      if (active) {
         for (const [r, need] of Object.entries(spec.input) as [ResourceId, number][])
           s.consumption[r] += need;
+        for (const [r, give] of Object.entries(spec.output ?? {}) as [ResourceId, number][]) {
+          s.production[r] += give;
+          this.made[r] = (this.made[r] ?? 0) + give;
+        }
+      }
       if (f.kind === FAC_STEEL_MILL) {
         s.steelMills++;
         if (active) s.steelActive++;
@@ -249,6 +279,10 @@ export class ResourceSystem {
       mined[m.chunk] = Math.round(((mined[m.chunk] ?? 0) + take) * 100) / 100;
       m.remaining = Math.max(0, left - take);
     }
+    if (this.lumber > 0)
+      stock.wood = Math.min(RESOURCE_STORAGE, stock.wood + this.lumber * dayFraction);
+    for (const [r, give] of Object.entries(this.made) as [ResourceId, number][])
+      stock[r] = Math.min(RESOURCE_STORAGE, stock[r] + give * dayFraction);
     for (const r of RESOURCES) {
       const use = this.summary.consumption[r] * dayFraction;
       stock[r] = Math.max(0, Math.round((stock[r] - use) * 100) / 100);

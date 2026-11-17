@@ -666,6 +666,8 @@ export class WarSession {
       this.sim.resources.addStock('iron', -pay.iron);
       this.sim.resources.addStock('coal', -pay.coal);
       this.sim.resources.addStock('oil', -pay.oil);
+      this.sim.resources.addStock('wood', -(pay.wood ?? 0));
+      this.sim.resources.addStock('ammo', -(pay.ammo ?? 0));
       this.sim.territory.cede(all);
       settled[w.id] = now;
       await this.patch(w, { [`paid.${this.uid}`]: { ...pay, chunks } });
@@ -693,6 +695,8 @@ export class WarSession {
       this.sim.resources.addStock('iron', Math.floor(p.iron * share));
       this.sim.resources.addStock('coal', Math.floor(p.coal * share));
       this.sim.resources.addStock('oil', Math.floor(p.oil * share));
+      this.sim.resources.addStock('wood', Math.floor((p.wood ?? 0) * share));
+      this.sim.resources.addStock('ammo', Math.floor((p.ammo ?? 0) * share));
       const mineChunks = p.chunks?.[this.uid] ?? [];
       this.sim.territory.annex(mineChunks);
       settled[key] = now;

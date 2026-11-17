@@ -611,9 +611,8 @@ function template(): string {
     <div class="cp-section-title">자원 · 시장</div>
     <div class="cp-resources">
       <div class="cp-res-summary cp-water"></div>
-      ${['iron', 'coal', 'oil']
-        .map(
-          (r) => `<div class="cp-res-row" data-res="${r}">
+      ${RESOURCES.map(
+        (r) => `<div class="cp-res-row" data-res="${r}">
         <div class="cp-res-line"></div>
         <div class="cp-res-buttons">
           <button type="button" data-qty="100">100 사기</button>
@@ -622,8 +621,7 @@ function template(): string {
           <button type="button" data-qty="-1000">1,000 팔기</button>
         </div>
       </div>`,
-        )
-        .join('')}
+      ).join('')}
       <div class="cp-res-message" role="status"></div>
     </div>
     <div class="cp-section-title">위생·장의</div>

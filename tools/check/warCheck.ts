@@ -198,11 +198,13 @@ assert.ok(ceasefireDue(war({ startsAt: now - CEASEFIRE_QUIET_MS - 1 }), 0, now))
 assert.ok(!ceasefireDue(war({ startsAt: now - CEASEFIRE_QUIET_MS - 1 }), now - 1000, now));
 assert.ok(judgeDue(war({ pausedAt: now - WAR_JUDGE_AFTER_MS - 1 }), now));
 assert.ok(!judgeDue(war({ pausedAt: now - 1000 }), now));
-assert.deepEqual(reparations(10_000, { iron: 100, coal: 10, oil: 0 }), {
+assert.deepEqual(reparations(10_000, { iron: 100, coal: 10, oil: 0, wood: 50, ammo: 20 }), {
   money: 2500,
   iron: 30,
   coal: 3,
   oil: 0,
+  wood: 15,
+  ammo: 6,
 });
 console.log('  OK   판정 1.5배, 휴전 20분, 끊김 24시간 판정, 배상 25%·30%');
 

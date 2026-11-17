@@ -25,7 +25,13 @@ export interface TradeResult {
 }
 
 export function initialMarketStock(): MarketStock {
-  return { iron: MARKET_REF_STOCK.iron, coal: MARKET_REF_STOCK.coal, oil: MARKET_REF_STOCK.oil };
+  return {
+    iron: MARKET_REF_STOCK.iron,
+    coal: MARKET_REF_STOCK.coal,
+    oil: MARKET_REF_STOCK.oil,
+    wood: MARKET_REF_STOCK.wood,
+    ammo: MARKET_REF_STOCK.ammo,
+  };
 }
 
 export function normalizeMarketStock(raw: unknown): MarketStock {

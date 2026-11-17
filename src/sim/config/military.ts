@@ -22,8 +22,12 @@ export const FAC_NAVAL_BASE = 55;
 export const FAC_AIRBASE_2 = 56;
 export const FAC_MISSILE_BASE = 57;
 export const FAC_MISSILE_DEFENSE = 58;
+/** 정찰타워(피드백 1차): 싸고 빨리 짓는 망루. 그 청크를 늘 밝혀 준다(다른 도시 땅은 안 됨). */
+export const FAC_SCOUT_TOWER = 59;
+/** 탄약 공장(config/resources.ts 의 FAC_AMMO_FACTORY 와 같다). */
+export const FAC_AMMO = 61;
 /** 군사 시설 전부(내 영토에만). */
-export const MILITARY_FACILITIES = [48, 49, 51, 52, 53, 54, 55, 56, 57, 58] as const;
+export const MILITARY_FACILITIES = [48, 49, 51, 52, 53, 54, 55, 56, 57, 58, 61] as const;
 
 /** 땅·하늘·바다·발사체. */
 export type UnitDomain = 'ground' | 'air' | 'sea' | 'strike';

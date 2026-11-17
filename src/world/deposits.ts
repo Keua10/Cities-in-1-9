@@ -3,8 +3,8 @@ import {
   DEPOSIT_BASE_RESERVE,
   DEPOSIT_MIN_RESERVE,
   DIFFICULTY_RESERVE_MUL,
-  RESOURCES,
-  type ResourceId,
+  DEPOSIT_RESOURCES,
+  type DepositResource,
 } from '../sim/config/resources';
 import { insideContinent, MOUNTAIN_HEIGHT, quickSite } from './continent';
 import { fbm } from './terrain';
@@ -23,7 +23,7 @@ import { fbm } from './terrain';
  */
 
 export interface Deposit {
-  resource: ResourceId;
+  resource: DepositResource;
   /** 0 얕음, 1 보통, 2 깊음. */
   difficulty: number;
   /** 이 청크의 처음 매장량. */
@@ -32,8 +32,8 @@ export interface Deposit {
 
 const CELL = 8;
 const SEED = 0x5eed_0d1;
-const CHANCE: Record<ResourceId, number> = { iron: 0.34, coal: 0.36, oil: 0.55 };
-const GEO_SEED: Record<ResourceId, number> = { iron: 911, coal: 1777, oil: 2903 };
+const CHANCE: Record<DepositResource, number> = { iron: 0.34, coal: 0.36, oil: 0.55 };
+const GEO_SEED: Record<DepositResource, number> = { iron: 911, coal: 1777, oil: 2903 };
 
 function hash(x: number, y: number, s: number): number {
   let h = SEED ^ s ^ Math.imul(x | 0, 0x27d4eb2d) ^ Math.imul(y | 0, 0x165667b1);
@@ -43,7 +43,7 @@ function hash(x: number, y: number, s: number): number {
 }
 
 interface Blob {
-  resource: ResourceId;
+  resource: DepositResource;
   cx: number;
   cy: number;
   radius: number;
@@ -75,7 +75,7 @@ function chunkTerrain(cx: number, cy: number): { height: number; water: number; 
 
 /** 지형이 그 자원에 얼마나 어울리는가 0~1. */
 function suitability(
-  r: ResourceId,
+  r: DepositResource,
   t: { height: number; water: number; mountain: number },
 ): number {
   if (t.water >= 3) return 0;
@@ -99,8 +99,8 @@ function blobsOfCell(gx: number, gy: number): Blob[] {
   const hit = cellCache.get(key);
   if (hit) return hit;
   const out: Blob[] = [];
-  for (let ri = 0; ri < RESOURCES.length; ri++) {
-    const r = RESOURCES[ri];
+  for (let ri = 0; ri < DEPOSIT_RESOURCES.length; ri++) {
+    const r = DEPOSIT_RESOURCES[ri];
     // 지역 지질: 넓은 범위에서 많고 적음이 갈린다(0.15 ~ 1.85배).
     const geo = fbm(gx * 0.18, gy * 0.18, GEO_SEED[r], 3);
     const regional = Math.max(0.15, Math.min(1.85, (geo - 0.32) * 4.5));

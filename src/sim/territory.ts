@@ -92,7 +92,7 @@ export interface Rect {
   span: number;
 }
 
-export type LandUse = 'zone' | 'owned' | 'tower' | 'capital';
+export type LandUse = 'zone' | 'owned' | 'tower' | 'capital' | 'scout';
 
 export function emptyTerritory(baseCx: number, baseCy: number): TerritoryState {
   const owned: string[] = [];
@@ -226,6 +226,8 @@ export class TerritorySystem {
   landRule = (cx: number, cy: number, use: LandUse): string => {
     if (use === 'tower') return this.towerRule(cx, cy);
     if (use === 'capital') return this.isCapital(cx, cy) ? '수도' : '';
+    if (use === 'scout')
+      return this.foreign.has(chunkKey(cx, cy)) ? '다른 도시의 땅에는 세울 수 없습니다' : '';
     if (this.isOwned(cx, cy)) return '';
     if (use === 'zone' && this.isFrontier(cx, cy)) return '';
     return use === 'zone'

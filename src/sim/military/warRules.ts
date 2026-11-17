@@ -35,6 +35,9 @@ export interface Paid {
   iron: number;
   coal: number;
   oil: number;
+  /** 피드백 1차에 추가(이전 기록에는 없다). */
+  wood?: number;
+  ammo?: number;
   chunks: Record<string, string[]>;
 }
 
@@ -352,13 +355,15 @@ export function isBigBattle(fightingMen: number, totalMen: number): boolean {
 /** 패전국이 낼 배상(최대치). */
 export function reparations(
   money: number,
-  stock: { iron: number; coal: number; oil: number },
-): { money: number; iron: number; coal: number; oil: number } {
+  stock: { iron: number; coal: number; oil: number; wood?: number; ammo?: number },
+): { money: number; iron: number; coal: number; oil: number; wood: number; ammo: number } {
   return {
     money: Math.max(0, Math.floor(money * REPARATION_MONEY)),
     iron: Math.floor(stock.iron * REPARATION_RESOURCES),
     coal: Math.floor(stock.coal * REPARATION_RESOURCES),
     oil: Math.floor(stock.oil * REPARATION_RESOURCES),
+    wood: Math.floor((stock.wood ?? 0) * REPARATION_RESOURCES),
+    ammo: Math.floor((stock.ammo ?? 0) * REPARATION_RESOURCES),
   };
 }
 

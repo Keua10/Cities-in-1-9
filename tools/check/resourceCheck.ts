@@ -204,7 +204,7 @@ console.log('  OK   제철소·정유소: 재료 소비, 공업 보너스, 재�
   sim.adjustMoney(-500);
   assert.equal(sim.money, 99_500);
   sim.resetState();
-  assert.deepEqual(m.resources, { iron: 0, coal: 0, oil: 0 });
+  assert.deepEqual(m.resources, { iron: 0, coal: 0, oil: 0, wood: 0, ammo: 0 });
 }
 console.log('  OK   석탄 화력 연료·공업 세수 보너스·초기화');
 
@@ -251,6 +251,48 @@ assert.deepEqual(
   [FAC_IRON_MINE_1, FAC_IRON_MINE_2, FAC_IRON_MINE_3].map((k) => FACILITY_SPECS[k].unlockLevel),
   [2, 5, 8],
 );
+// 벌목장(숲에서만 나무 40/일)·탄약 공장(철 10 + 석탄 5 + 나무 5 → 탄약 20/일)
+{
+  const { forestShare } = await import('../../src/sim/military/terrain');
+  const { FAC_LUMBER_CAMP, FAC_AMMO_FACTORY } = await import('../../src/sim/config/resources');
+  let forest: [number, number] | null = null;
+  let bare: [number, number] | null = null;
+  for (let cy = 60; cy < 140 && (!forest || !bare); cy++)
+    for (let cx = -40; cx < 40 && (!forest || !bare); cx++) {
+      const f = forestShare(cx, cy);
+      if (f >= 0.6 && !forest) forest = [cx, cy];
+      if (f === 0 && !bare) bare = [cx, cy];
+    }
+  assert.ok(forest && bare, '숲 청크와 숲 없는 청크');
+  const rec = (kind: number, cx: number, cy: number, index: number): FacilityRecord =>
+    ({
+      index,
+      kind,
+      tx: cx * CHUNK_SIZE + 4,
+      ty: cy * CHUNK_SIZE + 4,
+      span: 3,
+      hasRoad: true,
+      needsRoad: true,
+    }) as FacilityRecord;
+  const macro = { resources: { iron: 100, coal: 100, oil: 0, wood: 0, ammo: 0 } } as MacroState;
+  const rs = new ResourceSystem(macro);
+  rs.refresh([
+    rec(FAC_LUMBER_CAMP, forest![0], forest![1], 0),
+    rec(FAC_LUMBER_CAMP, bare![0], bare![1], 1),
+  ]);
+  assert.equal(rs.summary.production.wood, 40, '숲 벌목장만 일함');
+  assert.ok(
+    rs.consumerAt(bare![0] * CHUNK_SIZE + 4, bare![1] * CHUNK_SIZE + 4)!.reason.includes('숲'),
+  );
+  rs.advance(1);
+  assert.equal(rs.stockNow.wood, 40);
+  rs.refresh([rec(FAC_AMMO_FACTORY, bare![0], bare![1], 0)]);
+  rs.advance(1);
+  assert.equal(rs.stockNow.ammo, 20);
+  assert.equal(rs.stockNow.iron, 90);
+  assert.equal(rs.stockNow.wood, 35);
+  console.log('  OK   벌목장(숲에서만 나무 40/일), 탄약 공장(철·석탄·나무 → 탄약 20/일)');
+}
 console.log(
   'Resources passed: deposits, mine sites, mining, processing, coal power, market, tables.',
 );

@@ -1,4 +1,11 @@
-import { FAC_MISSILE_BASE, FAC_NAVAL_BASE, FAC_OCC_TOWER } from './config/military';
+import {
+  FAC_MISSILE_BASE,
+  FAC_NAVAL_BASE,
+  FAC_OCC_TOWER,
+  FAC_SCOUT_TOWER,
+} from './config/military';
+import { FAC_LUMBER_CAMP, LUMBER_FOREST_SHARE } from './config/resources';
+import { forestShare } from './military/terrain';
 import { chunkTerrain } from './military/terrain';
 import { chunkIndexOf } from '../core/iso';
 import { Build, type PlaceResult } from '../world/build';
@@ -18,7 +25,7 @@ import { mineSiteProblem } from './resources';
  * 발전·상하수도·위생·농장·교통 시설은 탐사한 땅이면 어디든 지을 수 있다(보호는 안 됨).
  */
 export const OWNED_ONLY_FACILITIES: ReadonlySet<number> = new Set([
-  0, 1, 2, 3, 4, 5, 6, 20, 48, 49, 51, 52, 53, 54, 55, 56, 57, 58,
+  0, 1, 2, 3, 4, 5, 6, 20, 48, 49, 51, 52, 53, 54, 55, 56, 57, 58, 60, 61,
 ]);
 import {
   FACILITY_CAPACITY,
@@ -116,6 +123,15 @@ export function canPlaceFacility(
         const land = world.landRule?.(chunkIndexOf(x), chunkIndexOf(y), 'tower');
         if (land) return { ok: false, reason: land };
       }
+      if (kind === FAC_SCOUT_TOWER) {
+        const land = world.landRule?.(chunkIndexOf(x), chunkIndexOf(y), 'scout');
+        if (land) return { ok: false, reason: land };
+      }
+      if (
+        kind === FAC_LUMBER_CAMP &&
+        forestShare(chunkIndexOf(x), chunkIndexOf(y)) < LUMBER_FOREST_SHARE
+      )
+        return { ok: false, reason: '벌목장은 숲에 지어야 합니다' };
       if (
         kind === FAC_MISSILE_BASE &&
         world.landRule?.(chunkIndexOf(x), chunkIndexOf(y), 'capital')

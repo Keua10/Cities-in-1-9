@@ -10,18 +10,25 @@
  * 단위: 자원은 "단위", 돈은 만 원(다른 설정과 같음).
  */
 
-export type ResourceId = 'iron' | 'coal' | 'oil';
-export const RESOURCES: readonly ResourceId[] = ['iron', 'coal', 'oil'];
+export type ResourceId = 'iron' | 'coal' | 'oil' | 'wood' | 'ammo';
+export const RESOURCES: readonly ResourceId[] = ['iron', 'coal', 'oil', 'wood', 'ammo'];
+/** 땅속 매장지에서 캐는 자원(나무는 숲에서 베고, 탄약은 공장에서 만든다). */
+export type DepositResource = 'iron' | 'coal' | 'oil';
+export const DEPOSIT_RESOURCES: readonly DepositResource[] = ['iron', 'coal', 'oil'];
 export const RESOURCE_NAMES: Record<ResourceId, string> = {
   iron: '철',
   coal: '석탄',
   oil: '석유',
+  wood: '나무',
+  ammo: '탄약',
 };
 /** 지도·패널 색. */
 export const RESOURCE_COLORS: Record<ResourceId, number> = {
   iron: 0xc8643c,
   coal: 0xd6dde4,
   oil: 0xe0b23a,
+  wood: 0x6f9e4a,
+  ammo: 0xb0473a,
 };
 
 /** 채굴 난이도. 0 얕음, 1 보통, 2 깊음. 채굴 시설 단계 - 1 이하만 캘 수 있다. */
@@ -41,9 +48,17 @@ export const FAC_OIL_WELL_3 = 44;
 export const FAC_STEEL_MILL = 45;
 export const FAC_REFINERY = 46;
 export const FAC_COAL_POWER = 47;
+/** 벌목장(피드백 1차): 숲 청크에 지으면 나무를 벤다. 숲은 다시 자라 바닥나지 않는다. */
+export const FAC_LUMBER_CAMP = 60;
+/** 탄약 공장(피드백 1차): 철·석탄·나무 → 탄약. */
+export const FAC_AMMO_FACTORY = 61;
+/** 벌목장 하루 생산량. */
+export const LUMBER_OUTPUT = 40;
+/** 벌목장 청크의 숲 칸 비율이 이 이상이어야 한다. */
+export const LUMBER_FOREST_SHARE = 0.4;
 
 export interface MineSpec {
-  resource: ResourceId;
+  resource: DepositResource;
   /** 1~3. 캘 수 있는 난이도 = tier - 1 이하. */
   tier: number;
   /** 하루 채굴량(단위). */
@@ -53,16 +68,16 @@ export interface MineSpec {
 /** 단계별 채굴 속도 배수: ×1, ×2, ×3.5 (설계안 Ⅳ). */
 export const MINE_TIER_RATE = [1, 2, 3.5] as const;
 /** 1단계 기준 하루 채굴량. */
-export const MINE_BASE_OUTPUT: Record<ResourceId, number> = { iron: 40, coal: 50, oil: 25 };
+export const MINE_BASE_OUTPUT: Record<DepositResource, number> = { iron: 40, coal: 50, oil: 25 };
 
 export const MINE_SPECS: Readonly<Record<number, MineSpec>> = (() => {
   const out: Record<number, MineSpec> = {};
-  const ids: Record<ResourceId, number[]> = {
+  const ids: Record<DepositResource, number[]> = {
     iron: [FAC_IRON_MINE_1, FAC_IRON_MINE_2, FAC_IRON_MINE_3],
     coal: [FAC_COAL_MINE_1, FAC_COAL_MINE_2, FAC_COAL_MINE_3],
     oil: [FAC_OIL_WELL_1, FAC_OIL_WELL_2, FAC_OIL_WELL_3],
   };
-  for (const r of RESOURCES)
+  for (const r of DEPOSIT_RESOURCES)
     ids[r].forEach((kind, i) => {
       out[kind] = {
         resource: r,
@@ -82,6 +97,8 @@ export function isMineKind(kind: number): boolean {
 export interface ConsumerSpec {
   /** 하루에 쓰는 자원. */
   input: Partial<Record<ResourceId, number>>;
+  /** 하루에 만드는 자원(탄약 공장). */
+  output?: Partial<Record<ResourceId, number>>;
   blurb: string;
 }
 
@@ -93,6 +110,11 @@ export const CONSUMER_SPECS: Readonly<Record<number, ConsumerSpec>> = {
   [FAC_REFINERY]: {
     input: { oil: 20 },
     blurb: '석유 20/일 → 공업 생산력 +12% (두 번째부터 +6%) · 가스 발전 연료비 -40%',
+  },
+  [FAC_AMMO_FACTORY]: {
+    input: { iron: 10, coal: 5, wood: 5 },
+    output: { ammo: 20 },
+    blurb: '철 10 + 석탄 5 + 나무 5/일 → 탄약 20 · 탄약이 없으면 부대 공격 절반',
   },
   [FAC_COAL_POWER]: {
     input: { coal: 35 },
@@ -113,7 +135,7 @@ export const RESOURCE_STORAGE = 10_000;
 /* ---------------- 매장지 생성 ---------------- */
 
 /** 청크 하나의 기본 매장량(얕음). 보통 ×1.6, 깊음 ×2.8. */
-export const DEPOSIT_BASE_RESERVE: Record<ResourceId, number> = {
+export const DEPOSIT_BASE_RESERVE: Record<DepositResource, number> = {
   iron: 6_000,
   coal: 7_000,
   oil: 4_000,
@@ -125,12 +147,20 @@ export const DEPOSIT_MIN_RESERVE = 2_500;
 /* ---------------- 시장 ---------------- */
 
 /** 기준 가격(만 원/단위). */
-export const MARKET_BASE_PRICE: Record<ResourceId, number> = { iron: 6, coal: 4, oil: 10 };
+export const MARKET_BASE_PRICE: Record<ResourceId, number> = {
+  iron: 6,
+  coal: 4,
+  oil: 10,
+  wood: 3,
+  ammo: 12,
+};
 /** 시장 재고가 이 값이면 기준 가격. 많으면 싸지고 적으면 비싸진다. */
 export const MARKET_REF_STOCK: Record<ResourceId, number> = {
   iron: 30_000,
   coal: 30_000,
   oil: 20_000,
+  wood: 30_000,
+  ammo: 15_000,
 };
 export const MARKET_PRICE_MIN = 0.35;
 export const MARKET_PRICE_MAX = 3;

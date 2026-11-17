@@ -17,6 +17,7 @@ import {
   FAC_MUNITIONS,
   FAC_NAVAL_BASE,
   FAC_RADAR,
+  FAC_SCOUT_TOWER,
   FAC_TRENCH,
   MISSILE_DEFENSE_INTERCEPT,
   MISSILE_DEFENSE_RANGE,
@@ -542,6 +543,8 @@ export class ArmySystem {
     for (const t of this.facilities())
       if (t.kind === FAC_COMM_TOWER_KIND)
         out.push({ cx: chunkIndexOf(t.tx), cy: chunkIndexOf(t.ty), r: COMM_TOWER_VISION });
+      else if (t.kind === FAC_SCOUT_TOWER)
+        out.push({ cx: chunkIndexOf(t.tx), cy: chunkIndexOf(t.ty), r: 0 });
     return out;
   }
 

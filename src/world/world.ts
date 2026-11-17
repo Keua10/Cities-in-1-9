@@ -198,7 +198,7 @@ export class World {
    * (점검 도구·둘러보기 전 단계).
    */
   landRule:
-    | ((cx: number, cy: number, use: 'zone' | 'owned' | 'tower' | 'capital') => string)
+    | ((cx: number, cy: number, use: 'zone' | 'owned' | 'tower' | 'capital' | 'scout') => string)
     | null = null;
 
   /** 광산 자리 규칙(sim/resources.ts mineSiteProblem + 남은 매장량). 없으면 매장지만 본다. */

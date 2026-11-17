@@ -49,10 +49,10 @@ for (const spec of FACILITY_SPECS) {
     'unlockLevel',
   ] as const)
     assert.ok(Number.isFinite(spec[key]), `${spec.name} ${key}`);
-  // 소공원(4)·통신탑(17)·참호(49)·점령타워(50)만 도로 없이 놓을 수 있다.
+  // 소공원(4)·통신탑(17)·참호(49)·점령타워(50)·정찰타워(59)만 도로 없이 놓을 수 있다.
   assert.equal(
     spec.needsRoad,
-    ![FAC_MINIPARK, FAC_COMM_TOWER, FAC_TRENCH, FAC_OCC_TOWER].includes(spec.kind),
+    ![FAC_MINIPARK, FAC_COMM_TOWER, FAC_TRENCH, FAC_OCC_TOWER, 59].includes(spec.kind),
     'only mini park, comm tower, trench and occupation tower are road optional',
   );
 }
