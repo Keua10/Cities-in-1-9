@@ -115,6 +115,10 @@ export interface CompactUnit {
   path: string[];
   s: string;
   ar?: number;
+  /** 경험치(0 이면 생략). */
+  ex?: number;
+  /** 탄약 없음. */
+  na?: 1;
 }
 
 /** 두 도시 영토 사이의 가장 가까운 거리(청크, 체비쇼프). */

@@ -328,3 +328,18 @@
 .cm-war-fronts button.on {
   outline: 2px solid #f0c060;
 }
+
+.cm-unit.picked {
+  outline: 2px solid #f2cf7a;
+  background: rgba(242, 207, 122, 0.08);
+}
+.cm-pick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  font-size: 12px;
+}
+.cm-pick[hidden] {
+  display: none;
+}

@@ -20,6 +20,12 @@ import {
   EMBARKED_MOVE,
   FIGHTER_VS_SURFACE,
   SHORE_BOMBARD,
+  AMMO_OUT_ATTACK,
+  EXP_MAX,
+  EXP_MIN,
+  EXP_PER_FIGHT_SECOND,
+  EXP_RETREAT_LOSS,
+  expMul,
   unitStrength,
   type UnitDomain,
   type UnitType,
@@ -46,7 +52,10 @@ export interface Unit {
   org: number;
   /** 사기 0.3~1. */
   morale: number;
+  /** 경험치 −50~100(config/military.ts expMul). 0 = 전투 경험 없는 보통 부대. */
   exp: number;
+  /** 탄약이 떨어졌다(공격 절반). */
+  noAmmo?: boolean;
   /** 지금 있는 청크. */
   cx: number;
   cy: number;
@@ -99,6 +108,7 @@ export function normalizeArmy(raw: unknown): ArmyState {
     u.path = Array.isArray(u.path) ? u.path.filter((k) => typeof k === 'string') : [];
     u.source = u.source && typeof u.source === 'object' ? u.source : {};
     u.progress = Math.max(0, Math.min(1, Number(u.progress) || 0));
+    u.exp = Math.max(EXP_MIN, Math.min(EXP_MAX, Number(u.exp) || 0));
     if (u.airlift && (typeof u.airlift.to !== 'string' || !Number.isFinite(u.airlift.arriveAt)))
       delete u.airlift;
   }
@@ -489,6 +499,8 @@ export function stepArmy(army: ArmyState, bf: Battlefield, dtMs: number): Battle
           (surface ? attackFactor(t, e.type, urban, from) : 1) *
           matchup(e.type, mine) *
           (es.domain === 'air' ? weatherAir(bf.now, e.cx, e.cy) : 1) *
+          expMul(e.exp) *
+          (e.noAmmo ? AMMO_OUT_ATTACK : 1) *
           jitter(sec, e.id);
         // 매복: 골짜기에서 먼저 자리 잡고 있던 적이 처음 30초 +50%.
         const eng = mine[0].engagedAt ?? bf.now;
@@ -535,6 +547,10 @@ export function stepArmy(army: ArmyState, bf: Battlefield, dtMs: number): Battle
     }
   }
 
+  // 싸운 부대는 경험이 쌓인다(10초에 1).
+  for (const u of army.units)
+    if (u.state === 'fighting') u.exp = Math.min(EXP_MAX, (u.exp || 0) + dt * EXP_PER_FIGHT_SECOND);
+
   // 3) 조직력 0 → 후퇴(갈 곳 없으면 포위 전멸), 병력 바닥 → 전멸
   for (const u of [...army.units]) {
     if (u.state === 'training' || u.airlift || UNIT_SPECS[u.type].domain === 'strike') continue;
@@ -553,6 +569,7 @@ export function stepArmy(army: ArmyState, bf: Battlefield, dtMs: number): Battle
       u.path = path;
       u.progress = 0;
       u.state = 'retreating';
+      u.exp = Math.max(EXP_MIN, (u.exp || 0) - EXP_RETREAT_LOSS);
       events.push({ type: 'retreat', unit: u.id });
     }
   }
@@ -750,6 +767,71 @@ export function removeUnit(army: ArmyState, id: string, disband: boolean): void 
     if (army.drafted[key] < 0.5) delete army.drafted[key];
   }
   army.units = army.units.filter((x) => x !== u);
+}
+
+/**
+ * 부대 합치기(피드백 1차): 같은 병종·같은 청크·쉬는 부대들을 하나로. 인원·최대 인원은 더하고
+ * 조직력·사기·경험치는 인원 비율로 섞는다. 막히면 이유.
+ */
+export function mergeUnits(army: ArmyState, ids: readonly string[]): string {
+  const list = ids.map((id) => army.units.find((u) => u.id === id)).filter((u): u is Unit => !!u);
+  if (list.length < 2) return '합칠 부대를 둘 이상 고르세요';
+  const head = list[0];
+  for (const u of list) {
+    if (u.type !== head.type) return '같은 병종끼리만 합칠 수 있습니다';
+    if (u.cx !== head.cx || u.cy !== head.cy) return '같은 청크에 모인 부대만 합칠 수 있습니다';
+    if (u.state === 'training' || u.airlift) return '훈련·수송 중인 부대는 합칠 수 없습니다';
+    if (u.state === 'fighting' || u.state === 'retreating')
+      return '싸우거나 물러나는 부대는 합칠 수 없습니다';
+    if (UNIT_SPECS[u.type].domain === 'strike') return '미사일은 합칠 수 없습니다';
+  }
+  const men = list.reduce((s, u) => s + u.men, 0);
+  const mix = (f: (u: Unit) => number) =>
+    men > 0 ? list.reduce((s, u) => s + f(u) * u.men, 0) / men : f(head);
+  head.org = mix((u) => u.org);
+  head.morale = mix((u) => u.morale);
+  head.exp = mix((u) => u.exp || 0);
+  head.maxMen = list.reduce((s, u) => s + u.maxMen, 0);
+  for (const u of list.slice(1))
+    for (const [k, n] of Object.entries(u.source)) head.source[k] = (head.source[k] ?? 0) + n;
+  head.men = men;
+  head.path = [];
+  head.progress = 0;
+  head.state = 'idle';
+  const drop = new Set(list.slice(1));
+  army.units = army.units.filter((u) => !drop.has(u));
+  return '';
+}
+
+/** 부대 나누기: 인원을 반으로 나눠 같은 자리에 새 부대를 만든다. 새 부대 또는 이유. */
+export function splitUnit(army: ArmyState, id: string): Unit | string {
+  const u = army.units.find((x) => x.id === id);
+  if (!u) return '부대가 없습니다';
+  if (u.state === 'training' || u.airlift) return '훈련·수송 중인 부대는 나눌 수 없습니다';
+  if (u.state === 'fighting' || u.state === 'retreating')
+    return '싸우거나 물러나는 부대는 나눌 수 없습니다';
+  if (UNIT_SPECS[u.type].domain === 'strike') return '미사일은 나눌 수 없습니다';
+  if (u.men < Math.max(20, unitStrength(u.type) * 0.2)) return '인원이 너무 적어 나눌 수 없습니다';
+  const half = u.men / 2;
+  const source: Record<string, number> = {};
+  for (const [k, n] of Object.entries(u.source)) {
+    source[k] = n / 2;
+    u.source[k] = n - n / 2;
+  }
+  const b: Unit = {
+    ...u,
+    id: `u${army.nextId++}`,
+    men: half,
+    maxMen: Math.max(1, Math.round(u.maxMen / 2)),
+    path: [],
+    progress: 0,
+    state: 'idle',
+    source,
+  };
+  u.men -= half;
+  u.maxMen = Math.max(1, u.maxMen - b.maxMen);
+  army.units.push(b);
+  return b;
 }
 
 /**

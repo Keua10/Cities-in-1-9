@@ -114,6 +114,8 @@ function compact(u: Unit): CompactUnit {
     path: u.path.slice(0, 6),
     s: u.state,
     ...(u.arrivedAt ? { ar: u.arrivedAt } : {}),
+    ...(u.exp ? { ex: Math.round(u.exp) } : {}),
+    ...(u.noAmmo ? { na: 1 } : {}),
   };
 }
 
@@ -125,7 +127,8 @@ function expand(c: CompactUnit, owner = 'e'): Unit {
     maxMen: c.m,
     org: c.o,
     morale: c.mo,
-    exp: 0,
+    exp: Number(c.ex) || 0,
+    ...(c.na ? { noAmmo: true } : {}),
     cx: c.x,
     cy: c.y,
     progress: c.p,

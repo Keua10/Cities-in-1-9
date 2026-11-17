@@ -82,6 +82,65 @@ const bf = (me: Side, enemy: Side | null, now = 0): Battlefield => ({
   foreign: () => false,
 });
 
+// 0. 경험치(피해 배율 0.5~1.8)·탄약(없으면 공격 절반) — 피드백 1차
+{
+  const { expMul, expRank } = await import('../../src/sim/config/military');
+  assert.equal(expMul(0), 1);
+  assert.equal(expMul(100), 1.8);
+  assert.equal(expMul(-50), 0.5);
+  assert.equal(expRank(-10), '하급');
+  const hit = (exp: number, noAmmo = false) => {
+    const a = emptyArmy();
+    const b = emptyArmy();
+    const me = mk(a, 'infantry', 2);
+    const foe = mk(b, 'infantry', 2);
+    foe.exp = exp;
+    if (noAmmo) foe.noAmmo = true;
+    const before = me.men;
+    stepArmy(a, bf(side('a', a.units, keys(0, 6)), side('b', b.units, keys(7, 9)), 1000), 1000);
+    return before - me.men;
+  };
+  const d0 = hit(0);
+  assert.ok(Math.abs(hit(100) / d0 - 1.8) < 1e-6, '정예 1.8배');
+  assert.ok(Math.abs(hit(-50) / d0 - 0.5) < 1e-6, '하급 0.5배');
+  assert.ok(Math.abs(hit(0, true) / d0 - 0.5) < 1e-6, '탄약 없으면 절반');
+  // 싸우면 경험이 쌓인다.
+  const a = emptyArmy();
+  const b = emptyArmy();
+  const me = mk(a, 'infantry', 2);
+  mk(b, 'infantry', 2);
+  for (let t = 1; t <= 20; t++)
+    stepArmy(a, bf(side('a', a.units, keys(0, 6)), side('b', b.units, keys(7, 9)), t * 1000), 1000);
+  assert.ok(me.exp > 1.5 && me.exp < 2.5, `20초 전투 경험 ${me.exp}`);
+  console.log('  OK   경험치 배율 0.5~1.8(보통 1)·전투로 상승·탄약 없으면 공격 절반');
+}
+
+// 0-2. 부대 합치기·나누기
+{
+  const { mergeUnits, splitUnit } = await import('../../src/sim/military/army');
+  const a = emptyArmy();
+  const x = mk(a, 'infantry', 2);
+  const y = mk(a, 'infantry', 2);
+  x.source = { k1: 500 };
+  y.source = { k2: 500 };
+  x.exp = 40;
+  y.men = 250;
+  y.exp = 10;
+  assert.ok(mergeUnits(a, [x.id, mk(a, 'artillery', 2).id]).includes('같은 병종'));
+  assert.equal(mergeUnits(a, [x.id, y.id]), '');
+  assert.equal(x.men, 750);
+  assert.equal(x.maxMen, 1000);
+  assert.ok(Math.abs(x.exp - 30) < 1e-6, `인원 비율로 섞인 경험 ${x.exp}`);
+  assert.deepEqual(x.source, { k1: 500, k2: 500 });
+  assert.ok(!a.units.includes(y));
+  const z = splitUnit(a, x.id);
+  assert.ok(typeof z !== 'string');
+  assert.equal(x.men + (z as typeof x).men, 750);
+  assert.equal((z as typeof x).exp, x.exp);
+  assert.equal((z as typeof x).source.k1 + x.source.k1, 500);
+  console.log('  OK   부대 합치기(같은 병종·같은 청크, 경험·조직력 인원 비율)·나누기(반씩)');
+}
+
 // 1. 기계 부대 전력, 땅·하늘·바다 이동
 {
   const a = emptyArmy();

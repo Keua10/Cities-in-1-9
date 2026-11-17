@@ -11,6 +11,7 @@ import {
   WEATHER_REGION,
 } from '../sim/military/weather';
 import {
+  expRank,
   AIRLIFT_COST,
   AIRLIFT_RANGE_CHUNKS,
   OCCUPY_SECONDS,
@@ -125,6 +126,9 @@ export class ContinentMap {
   private selected: string | null = null;
   /** 고른 내 부대 id. */
   private selectedUnit: string | null = null;
+  /** 길게 눌러 고른 여러 부대(한꺼번에 이동·합치기). */
+  private picked = new Set<string>();
+  private pickEl!: HTMLElement;
   private tab: 'cities' | 'army' = 'cities';
   private frame = 0;
   private lastArmyRevision = -1;
@@ -191,6 +195,12 @@ export class ContinentMap {
             <div class="cm-army-info cm-legend"></div>
             <div class="cm-recruit"></div>
             <div class="cm-army-msg" role="status"></div>
+            <div class="cm-pick" hidden>
+              <span class="cm-pick-text"></span>
+              <button type="button" class="cm-pick-merge">합치기</button>
+              <button type="button" class="cm-pick-split">나누기</button>
+              <button type="button" class="cm-pick-clear">선택 해제</button>
+            </div>
             <ol class="cm-units"></ol>
           </div>
         </aside>
@@ -199,6 +209,32 @@ export class ContinentMap {
     this.list = this.root.querySelector('.cm-list')!;
     this.status = this.root.querySelector('.cm-status')!;
     this.unitsEl = this.root.querySelector('.cm-units')!;
+    this.pickEl = this.root.querySelector('.cm-pick')!;
+    this.pickEl.querySelector('.cm-pick-merge')!.addEventListener('click', () => {
+      const ids = this.pickedIds();
+      const why = this.source.army.merge(ids);
+      this.armyMsgEl.textContent = why || '부대를 합쳤습니다';
+      if (!why) {
+        this.selectedUnit = ids[0];
+        this.picked.clear();
+      }
+      this.refreshArmy();
+    });
+    this.pickEl.querySelector('.cm-pick-split')!.addEventListener('click', () => {
+      const id = this.pickedIds()[0];
+      if (!id) return;
+      const r = this.source.army.split(id);
+      this.armyMsgEl.textContent = typeof r === 'string' ? r : '부대를 둘로 나눴습니다';
+      if (typeof r !== 'string') {
+        this.picked = new Set([id, r.id]);
+        this.selectedUnit = null;
+      }
+      this.refreshArmy();
+    });
+    this.pickEl.querySelector('.cm-pick-clear')!.addEventListener('click', () => {
+      this.picked.clear();
+      this.refreshArmy();
+    });
     this.recruitEl = this.root.querySelector('.cm-recruit')!;
     this.armyInfoEl = this.root.querySelector('.cm-army-info')!;
     this.armyMsgEl = this.root.querySelector('.cm-army-msg')!;
@@ -587,13 +623,33 @@ export class ContinentMap {
     for (const u of units) {
       const li = document.createElement('li');
       li.dataset.id = u.id;
-      li.className = 'cm-unit' + (u.id === this.selectedUnit ? ' selected' : '');
+      li.className =
+        'cm-unit' +
+        (u.id === this.selectedUnit ? ' selected' : '') +
+        (this.picked.has(u.id) ? ' picked' : '');
+      let pressTimer = 0;
+      let pressed = false;
+      li.addEventListener('pointerdown', (e) => {
+        if ((e.target as HTMLElement).closest('button')) return;
+        pressed = false;
+        pressTimer = window.setTimeout(() => {
+          pressed = true;
+          this.togglePick(u.id);
+        }, 450);
+      });
+      for (const ev of ['pointerup', 'pointerleave', 'pointercancel'])
+        li.addEventListener(ev, () => clearTimeout(pressTimer));
       li.innerHTML = `<span class="cm-unit-badge"></span><span class="cm-unit-text"></span>
         <span class="cm-bar"><i class="org"></i></span>
         <button type="button" class="cm-airlift" title="공중 수송: 공항에서 내 땅으로" hidden>✈</button>
         <button type="button" class="cm-disband" title="해산: 남은 인원이 인구로 돌아갑니다">해산</button>`;
       li.addEventListener('click', (e) => {
         if ((e.target as HTMLElement).closest('.cm-disband, .cm-airlift')) return;
+        if (pressed) return;
+        if (this.picked.size) {
+          this.togglePick(u.id);
+          return;
+        }
         this.selectedUnit = u.id === this.selectedUnit ? null : u.id;
         if (this.selectedUnit) this.focusUnit(u);
         this.lastArmyRevision = -1;
@@ -638,8 +694,47 @@ export class ContinentMap {
         : '';
     li.querySelector('.cm-unit-text')!.textContent =
       `${spec.name} ${u.id.slice(1)} · ${Math.round(u.men)}/${u.maxMen}명 · ${STATE_TEXT[u.state]}${train}` +
-      (u.path.length ? ` · ${u.path.length}청크 남음` : '');
+      (u.path.length ? ` · ${u.path.length}청크 남음` : '') +
+      (expRank(u.exp) !== '보통' ? ` · ${expRank(u.exp)}` : '') +
+      (u.noAmmo ? ' · 탄약 없음' : '');
     (li.querySelector('.cm-bar i') as HTMLElement).style.width = `${Math.round(u.org)}%`;
+  }
+
+  /** 지금 고른 부대들(길게 눌러 고른 것 + 눌러 고른 것). */
+  private pickedIds(): string[] {
+    const live = new Set(this.source.army.units.map((u) => u.id));
+    const out = [...this.picked].filter((id) => live.has(id));
+    if (this.selectedUnit && live.has(this.selectedUnit) && !out.includes(this.selectedUnit))
+      out.unshift(this.selectedUnit);
+    return out;
+  }
+
+  /** 길게 누르기: 여러 부대 고르기에 넣거나 뺀다. */
+  private togglePick(id: string): void {
+    if (this.picked.has(id)) this.picked.delete(id);
+    else this.picked.add(id);
+    if (this.selectedUnit && !this.picked.has(this.selectedUnit)) {
+      this.picked.add(this.selectedUnit);
+      this.selectedUnit = null;
+    }
+    this.refreshArmy();
+  }
+
+  private refreshArmy(): void {
+    this.lastArmyRevision = -1;
+    this.renderArmy(true);
+    this.renderPick();
+    this.draw();
+  }
+
+  private renderPick(): void {
+    const ids = this.pickedIds();
+    const many = this.picked.size > 0;
+    this.pickEl.hidden = !many;
+    if (!many) return;
+    this.pickEl.querySelector('.cm-pick-text')!.textContent = `${ids.length}개 선택`;
+    this.pickEl.querySelector<HTMLButtonElement>('.cm-pick-merge')!.disabled = ids.length < 2;
+    this.pickEl.querySelector<HTMLButtonElement>('.cm-pick-split')!.disabled = ids.length !== 1;
   }
 
   private focusUnit(u: Unit): void {
@@ -1039,8 +1134,9 @@ export class ContinentMap {
         ctx.setLineDash([]);
       }
       ctx.fillStyle = mine ? (u.state === 'training' ? '#5b6e78' : '#2f6fd0') : '#c8402f';
-      ctx.strokeStyle = mine && u.id === this.selectedUnit ? '#f2cf7a' : '#0d1418';
-      ctx.lineWidth = mine && u.id === this.selectedUnit ? 3 : 1.5;
+      const on = mine && (u.id === this.selectedUnit || this.picked.has(u.id));
+      ctx.strokeStyle = on ? '#f2cf7a' : '#0d1418';
+      ctx.lineWidth = on ? 3 : 1.5;
       ctx.beginPath();
       ctx.rect(x - r, y - r * 0.75, r * 2, r * 1.5);
       ctx.fill();
@@ -1314,6 +1410,28 @@ export class ContinentMap {
 
   private tapAt(px: number, py: number): void {
     const hit = this.unitAt(px, py);
+    if (hit && this.picked.size) {
+      this.togglePick(hit.id);
+      this.setTab('army');
+      return;
+    }
+    if (!hit && this.picked.size && !this.airliftMode) {
+      const s = this.scale * PX_PER_CHUNK;
+      const cx = Math.floor(CONTINENT_X0 + (px - this.ox) / s);
+      const cy = Math.floor(CONTINENT_Y0 + (py - this.oy) / s);
+      let ok = 0;
+      let why = '';
+      for (const id of this.pickedIds()) {
+        const r = this.source.army.order(id, cx, cy);
+        if (r) why = r;
+        else ok++;
+      }
+      this.armyMsgEl.textContent = ok
+        ? `${ok}개 부대에 이동 명령을 내렸습니다${why ? ` · 못 간 부대: ${why}` : ''}`
+        : why;
+      this.refreshArmy();
+      return;
+    }
     if (hit) {
       this.selectedUnit = hit.id === this.selectedUnit ? null : hit.id;
       this.setTab('army');
@@ -1357,12 +1475,24 @@ export class ContinentMap {
       const r = c.getBoundingClientRect();
       return { x: e.clientX - r.left, y: e.clientY - r.top };
     };
+    let pressTimer = 0;
     c.addEventListener('pointerdown', (e) => {
       c.setPointerCapture(e.pointerId);
       pointers.set(e.pointerId, local(e));
       if (pointers.size === 1) {
         downAt = local(e);
         dragged = false;
+        // 부대를 길게 누르면 여러 부대 고르기.
+        const at = downAt;
+        clearTimeout(pressTimer);
+        pressTimer = window.setTimeout(() => {
+          if (dragged || pointers.size !== 1) return;
+          const hit = this.unitAt(at.x, at.y);
+          if (!hit) return;
+          dragged = true; // 손을 떼도 탭으로 처리하지 않는다.
+          this.togglePick(hit.id);
+          this.setTab('army');
+        }, 450);
       }
       if (pointers.size === 2) {
         dragged = true;
@@ -1390,6 +1520,7 @@ export class ContinentMap {
       this.draw();
     });
     const up = (e: PointerEvent) => {
+      clearTimeout(pressTimer);
       pointers.delete(e.pointerId);
       if (pointers.size === 0 && downAt && !dragged) {
         const p = local(e);

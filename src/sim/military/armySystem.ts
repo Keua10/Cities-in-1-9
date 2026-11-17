@@ -17,6 +17,7 @@ import {
   FAC_MUNITIONS,
   FAC_NAVAL_BASE,
   FAC_RADAR,
+  AMMO_PER_MIN,
   FAC_SCOUT_TOWER,
   FAC_TRENCH,
   MISSILE_DEFENSE_INTERCEPT,
@@ -52,7 +53,9 @@ import {
   findPath,
   newUnit,
   normalizeArmy,
+  mergeUnits,
   removeUnit,
+  splitUnit,
   stepArmy,
   type ArmyState,
   type Battlefield,
@@ -245,6 +248,21 @@ export class ArmySystem {
     this.bump();
   }
 
+  /** 같은 병종·같은 청크 부대를 합친다. 막히면 이유. */
+  merge(ids: readonly string[]): string {
+    const why = mergeUnits(this.army, ids);
+    if (!why) this.bump();
+    return why;
+  }
+
+  /** 부대를 반으로 나눈다. 새 부대 id 또는 이유(빈 id 아님). */
+  split(id: string): { id: string } | string {
+    const r = splitUnit(this.army, id);
+    if (typeof r === 'string') return r;
+    this.bump();
+    return { id: r.id };
+  }
+
   /** 부대 id 를 (cx,cy) 로 보낸다. 길이 없으면 이유. */
   order(id: string, cx: number, cy: number, now = Date.now()): string {
     const u = this.army.units.find((x) => x.id === id);
@@ -340,9 +358,29 @@ export class ArmySystem {
       const step = Math.min(1000, span - t);
       events.push(...stepArmy(this.army, this.battlefield(now - span + t + step), step));
     }
+    this.useAmmo(span);
     events.push(...struck, ...this.radar(now));
     if (events.length) this.emit(events);
     return events;
+  }
+
+  /**
+   * 싸우는 부대가 탄약을 쓴다(전쟁 중에만). 비축이 모자라면 싸우는 부대 모두 탄약 없음
+   * (공격 절반) — 상대 기기가 스냅숏으로 보고 피해를 줄인다.
+   */
+  private useAmmo(ms: number): void {
+    const fighting = this.army.units.filter((u) => u.state === 'fighting');
+    if (!this.war || !fighting.length) {
+      for (const u of this.army.units) delete u.noAmmo;
+      return;
+    }
+    const need = fighting.reduce((s, u) => s + AMMO_PER_MIN[u.type], 0) * (ms / 60_000);
+    const have = this.resources.stockNow.ammo ?? 0;
+    const out = need > 0 && have < need;
+    this.resources.addStock('ammo', -Math.min(have, need));
+    for (const u of this.army.units)
+      if (out && u.state === 'fighting' && AMMO_PER_MIN[u.type] > 0) u.noAmmo = true;
+      else delete u.noAmmo;
   }
 
   /** 대륙 지도 애니메이션용 최근 효과(3초). 화면만 쓰고 저장하지 않는다. */

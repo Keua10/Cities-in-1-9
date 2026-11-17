@@ -386,3 +386,37 @@ export const AIRLIFT_COST = 200;
 /** 비행 시간 = 기본 + 청크당. */
 export const AIRLIFT_BASE_MS = 30_000;
 export const AIRLIFT_PER_CHUNK_MS = 1_500;
+
+/* ---------------- 경험치·탄약 (피드백 1차) ---------------- */
+
+/**
+ * 부대 경험치 −50~100. 피해식에 곱하는 배율 0.5~1.8: 전투 경험이 없는 보통 부대(0)가 1.
+ * 싸울수록 오르고(10초에 1), 후퇴할 때마다 10씩 깎여 0 아래로 내려가면 하급 부대가 된다.
+ */
+export const EXP_MIN = -50;
+export const EXP_MAX = 100;
+export const EXP_PER_FIGHT_SECOND = 0.1;
+export const EXP_RETREAT_LOSS = 10;
+export function expMul(exp: number): number {
+  const e = Math.max(EXP_MIN, Math.min(EXP_MAX, Number(exp) || 0));
+  return e < 0 ? 1 + e / 100 : 1 + (0.8 * e) / EXP_MAX;
+}
+/** 경험치 등급 이름. */
+export function expRank(exp: number): string {
+  return exp < 0 ? '하급' : exp < 20 ? '보통' : exp < 60 ? '숙련' : '정예';
+}
+
+/** 싸우는 동안 부대가 1분에 쓰는 탄약. */
+export const AMMO_PER_MIN: Record<UnitType, number> = {
+  infantry: 2,
+  engineer: 1,
+  artillery: 6,
+  armor: 4,
+  aa: 3,
+  fighter: 3,
+  bomber: 5,
+  ship: 6,
+  missile: 0,
+};
+/** 탄약이 떨어지면 공격 배율. */
+export const AMMO_OUT_ATTACK = 0.5;
