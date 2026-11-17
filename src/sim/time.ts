@@ -106,6 +106,15 @@ export function worldDaytimeAt(now: number): DaytimeSnapshot {
 }
 
 /**
+ * 도시 시계: 대륙 공통 시계에 이 도시가 배속으로 앞서 간 만큼(offsetMs, 멈춘 동안은 뒤로)을
+ * 더한 시각. 배속을 올리면 낮·밤·출퇴근이 그만큼 빨라진다. 전쟁 중에는 1배속이고 offset 을 0 으로
+ * 맞추므로 전쟁 상대와 같은 낮·밤을 본다. 계절(날)은 대륙 공통.
+ */
+export function cityDaytimeAt(now: number, offsetMs: number): DaytimeSnapshot {
+  return daytimeAt(now + (Number(offsetMs) || 0), worldGameDay(now));
+}
+
+/**
  * 테스트용 세션 시계. 페이지에 접속할 때마다 월요일 07:30에서 시작하고,
  * 이후에는 실제 벽시각이 아니라 앱이 실행된 경과시간만큼 진행한다.
  */

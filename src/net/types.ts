@@ -22,6 +22,8 @@ export interface TransportState {
  */
 export interface MacroState {
   lifeElapsedMs?: number;
+  /** 도시 시계가 대륙 공통 시계보다 앞선 ms(배속으로 쌓인다, 전쟁 중 0). time.ts cityDaytimeAt. */
+  clockOffsetMs?: number;
   nature?: NatureState;
   construction?: ConstructionJob[];
   /** 공사를 마지막으로 진행시킨 실제 시각(ms). 접속하지 않은 동안의 공사를 이어서 계산한다. */

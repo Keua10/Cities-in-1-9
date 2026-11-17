@@ -745,16 +745,17 @@ async function boot(): Promise<void> {
   let lastFrameAt = performance.now();
   app.ticker.add((ticker) => {
     const now = performance.now();
-    const gameDelta = Math.min(ticker.deltaMS, 100) * (sim.atWar ? WAR_SPEED : chrome.speed);
+    const frameDelta = Math.min(ticker.deltaMS, 100);
+    const gameDelta = frameDelta * (sim.atWar ? WAR_SPEED : chrome.speed);
     // 스타트 버닝은 실제 플레이 시간으로 줄인다. 느린 기기(프레임 100ms 이상)에서도
     // 버닝이 덜 들어가지 않게 1초까지는 그대로 센다. 탭이 숨겨졌다 돌아온 큰 공백은 뺀다.
     // (Pixi 의 deltaMS 는 프레임당 100ms 로 잘리므로 실제 시계로 직접 잰다.)
     const playDelta = Math.min(Math.max(0, now - lastFrameAt), 1000);
     lastFrameAt = now;
     if (chrome.speed > 0) {
-      sim.update(gameDelta, CATCHUP_TICKS_PER_FRAME, playDelta);
+      sim.update(gameDelta, CATCHUP_TICKS_PER_FRAME, playDelta, frameDelta);
       transport.update();
-    } else sim.holdClock();
+    } else sim.holdClock(Date.now(), frameDelta);
     if (sim.territory.revision !== roamRevision) {
       roamRevision = sim.territory.revision;
       camera.limit = roamLimit(world);
