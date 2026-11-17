@@ -51,6 +51,7 @@ const checks = {
   multiplayer: 'tools/check/multiplayerCheck.ts',
   military: 'tools/check/militaryCheck.ts',
   war: 'tools/check/warCheck.ts',
+  warSession: 'tools/check/warSessionCheck.ts',
 };
 mkdirSync('.check', { recursive: true });
 for (const name of process.argv.length > 2 ? process.argv.slice(2) : Object.keys(checks)) {
@@ -62,7 +63,29 @@ for (const name of process.argv.length > 2 ? process.argv.slice(2) : Object.keys
     bundle: true,
     platform: 'node',
     format: 'esm',
-    alias: name === 'alertRender' ? {} : { 'pixi.js': resolve('tools/check/stub-pixi.ts') },
+    alias:
+      name === 'alertRender'
+        ? {}
+        : name === 'warSession'
+          ? {
+              'pixi.js': resolve('tools/check/stub-pixi.ts'),
+              // 전쟁 연결 점검: Firestore 를 메모리 가짜로 바꿔 두 기기를 한 프로세스에서 돌린다.
+              'firebase/app': resolve('tools/check/fakeFirebase.ts'),
+              'firebase/auth': resolve('tools/check/fakeFirebase.ts'),
+              'firebase/firestore': resolve('tools/check/fakeFirebase.ts'),
+            }
+          : { 'pixi.js': resolve('tools/check/stub-pixi.ts') },
+    define:
+      name === 'warSession'
+        ? {
+            'import.meta.env': JSON.stringify({
+              VITE_FIREBASE_API_KEY: 'x',
+              VITE_FIREBASE_AUTH_DOMAIN: 'x',
+              VITE_FIREBASE_PROJECT_ID: 'x',
+              VITE_FIREBASE_APP_ID: 'x',
+            }),
+          }
+        : {},
     external: ['@napi-rs/canvas', ...(name === 'alertRender' ? ['pixi.js'] : [])],
     logLevel: 'warning',
   });

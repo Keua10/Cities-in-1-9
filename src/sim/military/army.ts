@@ -377,7 +377,7 @@ export function stepArmy(army: ArmyState, bf: Battlefield, dtMs: number): Battle
         u.org = Math.max(0, u.org - d * ORG_LOSS_PER_DAMAGE);
         const lost = Math.min(u.men, d * MEN_LOSS_PER_DAMAGE);
         if (lost > 0) loseMen(army, u, lost);
-        if (u.state !== 'fighting' && foes.length) {
+        if (u.state !== 'fighting' && u.state !== 'retreating' && foes.length) {
           u.state = 'fighting';
           u.engagedAt = bf.now;
         }
