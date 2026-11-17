@@ -326,7 +326,11 @@ export class WorldRenderer {
     view.maxY += MAX_HEIGHT * HEIGHT_UNIT;
     const range = visibleChunkRange(view);
     this.waterLayer.update(this.world, this.waterField, this.powerField, this.utilityMode, range);
-    this.resourceLayer.update(this.world, this.utilityMode === 'resources' && !this.metroMode, range);
+    this.resourceLayer.update(
+      this.world,
+      this.utilityMode === 'resources' && !this.metroMode,
+      range,
+    );
     this.effects.update(this.world, now);
     this.pollutionLayer.update(
       this.world,
