@@ -222,6 +222,16 @@ await tickAll(5_000);
 assert.equal(sa.status().phase, 'active', '다시 이어지면 재개');
 console.log('  OK   상대 끊김 → 일시정지 → 재개');
 
+// 3.5 휴전 제안은 상대가 반대하면 무산(전쟁 계속)
+assert.equal(await sb.offerCeasefire(), '');
+await tickAll(1000);
+assert.equal(sa.status().ceasefire?.needed, 2);
+await sa.voteCeasefire(false);
+await tickAll(1500);
+assert.equal(sa.status().ceasefire, null);
+assert.equal(sa.status().phase, 'active');
+console.log('  OK   휴전 제안 반대 → 무산');
+
 // 4. 항복 → 승인 → 배상
 const moneyA = A.sim.money;
 const moneyB = B.sim.money;

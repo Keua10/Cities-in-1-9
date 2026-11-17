@@ -118,6 +118,9 @@ export class ContinentMap {
           <span class="cm-war-text"></span>
           <button type="button" class="cm-war-surrender">항복 신청</button>
           <button type="button" class="cm-war-accept" hidden>항복 받아들이기</button>
+          <button type="button" class="cm-war-truce">휴전 제안</button>
+          <button type="button" class="cm-war-truce-yes" hidden>휴전 찬성</button>
+          <button type="button" class="cm-war-truce-no" hidden>휴전 반대</button>
         </div>
         <button type="button" class="cm-close" aria-label="대륙 지도 닫기">×</button>
       </header>
@@ -184,6 +187,23 @@ export class ContinentMap {
     });
     this.root.querySelector('.cm-war-accept')!.addEventListener('click', () => {
       void this.source.war?.acceptSurrender();
+    });
+    this.root.querySelector('.cm-war-truce')!.addEventListener('click', async () => {
+      const war = this.source.war;
+      if (!war) return;
+      if (war.status().ceasefire?.byMe) await war.withdrawCeasefire();
+      else {
+        const why = await war.offerCeasefire();
+        this.source.announce(
+          why || '휴전을 제안했습니다 · 참가국 2/3(직접 참여국 둘 다 포함)가 찬성하면 휴전',
+        );
+      }
+    });
+    this.root.querySelector('.cm-war-truce-yes')!.addEventListener('click', () => {
+      void this.source.war?.voteCeasefire(true);
+    });
+    this.root.querySelector('.cm-war-truce-no')!.addEventListener('click', () => {
+      void this.source.war?.voteCeasefire(false);
     });
     for (const b of this.declareEl.querySelectorAll<HTMLButtonElement>('button[data-war]'))
       b.addEventListener(
@@ -295,6 +315,21 @@ export class ContinentMap {
     const accept = this.warEl.querySelector<HTMLButtonElement>('.cm-war-accept')!;
     accept.hidden = !st.surrenderOffered;
     accept.textContent = st.allies.length ? '항복에 동의(대표 동의 또는 2/3)' : '항복 받아들이기';
+    // 휴전: 참가국 누구나 제안, 모든 진영 2/3 + 직접 참여국 둘 다 찬성이면 휴전.
+    const c = st.ceasefire;
+    const truce = this.warEl.querySelector<HTMLButtonElement>('.cm-war-truce')!;
+    truce.hidden = st.phase === 'prep' || (!!c && !c.byMe);
+    truce.textContent = c?.byMe ? `휴전 제안 철회 (찬성 ${c.yes}/${c.needed})` : '휴전 제안';
+    const voting = !!c && !c.byMe;
+    const yes = this.warEl.querySelector<HTMLButtonElement>('.cm-war-truce-yes')!;
+    const no = this.warEl.querySelector<HTMLButtonElement>('.cm-war-truce-no')!;
+    yes.hidden = no.hidden = !voting;
+    if (c && voting) {
+      yes.textContent = `${c.byName}의 휴전 제안 찬성 (${c.yes}/${c.needed}${c.myVote === true ? ' ✓' : ''})`;
+      no.textContent = c.myVote === false ? '반대함' : '반대';
+      yes.disabled = c.myVote === true;
+      no.disabled = c.myVote === false;
+    }
   }
 
   /** 고른 다른 도시에 대한 선전포고 칸. */

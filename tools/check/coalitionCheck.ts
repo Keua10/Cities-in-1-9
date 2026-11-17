@@ -162,6 +162,31 @@ console.log(
   `  OK   참가국 땅 보호, 대규모 전쟁 수도 점령 (진영 점수 ${st.scoreMe} : ${st.scoreEnemy})`,
 );
 
+// 2.5 휴전 제안: 직접 참여국 둘 다 + 참가국 2/3. B 가 반대하면 무산.
+{
+  const { ceasefireAccepted } = await import('../../src/sim/military/warRules');
+  const w = A.war.current()!;
+  const base = { ...w, ceasefireOffer: { by: C.uid, at: 0, votes: {} as Record<string, boolean> } };
+  const v = (votes: Record<string, boolean>) =>
+    ceasefireAccepted({ ...base, ceasefireOffer: { ...base.ceasefireOffer, votes } });
+  assert.ok(!v({ alice: true, carol: true }), 'B(직접 참여국) 없이 2/3 는 안 됨');
+  assert.ok(v({ alice: true, bob: true }), '참가 3곳 중 A·B = 2/3');
+
+  assert.equal(await C.war.offerCeasefire(), '');
+  await tickAll(1000);
+  assert.ok(notes.some((n) => n.startsWith('bob:') && n.includes('휴전을 제안')));
+  assert.equal(B.war.status().ceasefire?.needed, 2);
+  await A.war.voteCeasefire(true);
+  await tickAll(1000);
+  assert.equal(A.war.status().ceasefire?.yes, 2, 'C(제안)·A 찬성');
+  assert.equal(A.war.status().phase, 'active', 'B 동의 전이라 계속');
+  await B.war.voteCeasefire(false);
+  await tickAll(1500);
+  assert.equal(A.war.status().ceasefire, null, '직접 참여국 반대 → 무산');
+  assert.ok(notes.some((n) => n.includes('무산')));
+}
+console.log('  OK   휴전 제안: 참가국 2/3 + 직접 참여국 둘 다, 반대하면 무산');
+
 // 3. 항복: C 혼자 동의(1/2)로는 부족, A(대표) 동의로 승전
 const mB = B.sim.money;
 const mA = A.sim.money;

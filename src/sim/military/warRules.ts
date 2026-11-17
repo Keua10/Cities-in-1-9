@@ -56,6 +56,10 @@ export interface WarDoc {
   pausedAt?: number;
   /** 항복 신청(진영 대표가 낸다). votes = 받는 진영에서 동의한 도시. */
   surrender?: { by: string; at: number; votes?: Record<string, boolean> };
+  /** 휴전 제안. votes = 참가국별 찬성(true)·반대(false). 모든 진영 2/3 + 직접 참여국 둘 다 찬성이면 휴전. */
+  ceasefireOffer?: { by: string; at: number; votes: Record<string, boolean> };
+  /** 휴전 제안이 받아들여져 끝났다(큰 전투 없이 1시간 휴전과 구분). */
+  agreedCeasefire?: boolean;
   result?: WarResult;
   endedAt?: number;
   /** 이 시각까지 두 도시는 다시 전쟁할 수 없다. */
@@ -398,4 +402,33 @@ export function joinBlock(x: {
   if (!membersOf(w, x.side).some((u) => x.alliedWith(u)))
     return '그 진영 도시와 동맹이어야 참가할 수 있습니다';
   return '';
+}
+
+/* ---------------- 휴전 제안 ---------------- */
+
+/** 휴전에 필요한 찬성 수: 모든 참가국의 2/3. */
+export function ceasefireNeeded(w: WarDoc): number {
+  return Math.max(2, Math.ceil(w.parties.length * (2 / 3) - 1e-9));
+}
+
+/** 찬성한 참가국 수. */
+export function ceasefireYes(w: WarDoc): number {
+  const v = w.ceasefireOffer?.votes ?? {};
+  return w.parties.filter((u) => v[u] === true).length;
+}
+
+/** 휴전 제안이 통과했는가: 참가국 2/3 찬성, 직접 참여국(선포·받은 쪽) 둘 다 찬성. */
+export function ceasefireAccepted(w: WarDoc): boolean {
+  const o = w.ceasefireOffer;
+  if (!o) return false;
+  return o.votes[w.a] === true && o.votes[w.b] === true && ceasefireYes(w) >= ceasefireNeeded(w);
+}
+
+/** 더 이상 통과할 수 없는가(직접 참여국이 반대했거나, 남은 표를 다 더해도 모자람). */
+export function ceasefireDead(w: WarDoc): boolean {
+  const o = w.ceasefireOffer;
+  if (!o) return false;
+  if (o.votes[w.a] === false || o.votes[w.b] === false) return true;
+  const no = w.parties.filter((u) => o.votes[u] === false).length;
+  return w.parties.length - no < ceasefireNeeded(w);
 }

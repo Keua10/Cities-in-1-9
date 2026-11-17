@@ -23,7 +23,11 @@ import type { Side, Unit } from '../sim/military/army';
 import type { WarLink } from '../sim/military/armySystem';
 import {
   capitalOpen,
+  ceasefireAccepted,
+  ceasefireDead,
   ceasefireDue,
+  ceasefireNeeded,
+  ceasefireYes,
   contributions,
   declareBlock,
   isBigBattle,
@@ -78,6 +82,17 @@ export interface WarStatus {
   surrenderPending: boolean;
   /** 내가 진영 대표(선포한 쪽·받은 쪽)인가 — 항복 신청은 대표만. */
   isLeader: boolean;
+  /** 올라와 있는 휴전 제안. */
+  ceasefire: {
+    byMe: boolean;
+    byName: string;
+    /** 내 표(아직 안 냈으면 undefined). */
+    myVote: boolean | undefined;
+    yes: number;
+    needed: number;
+    /** 직접 참여국 찬성 수(0~2, 둘 다 필요). */
+    leadersYes: number;
+  } | null;
   /** 우리 진영 다른 도시·상대 진영 도시 이름. */
   allies: string[];
   enemies: string[];
@@ -185,6 +200,17 @@ export class WarSession {
           sideOf(now, now.surrender.by) !== sideOf(now, this.uid)
         )
           this.onNotice?.('상대가 항복을 신청했습니다 · 대륙 지도에서 받아들일 수 있습니다');
+        if (
+          now &&
+          now.ceasefireOffer &&
+          now.ceasefireOffer.by !== this.uid &&
+          before?.ceasefireOffer?.at !== now.ceasefireOffer.at
+        )
+          this.onNotice?.(
+            `🕊 ${now.names[now.ceasefireOffer.by] ?? '참가국'}이(가) 휴전을 제안했습니다 · 대륙 지도에서 찬성·반대`,
+          );
+        if (before?.ceasefireOffer && now && !now.ceasefireOffer && now.state !== 'ended')
+          this.onNotice?.('휴전 제안이 무산되었습니다');
         this.revision++;
         this.attach();
       },
@@ -375,6 +401,15 @@ export class WarSession {
       if (!stale && w.pausedAt !== undefined) void this.patch(w, { pausedAt: deleteField() });
     }
 
+    // 휴전 제안: 통과하면 휴전, 더 이상 통과할 수 없으면 거둔다.
+    if (w.state !== 'ended' && w.ceasefireOffer) {
+      if (ceasefireAccepted(w)) {
+        void this.end(w, 'ceasefire', now, true);
+        return;
+      }
+      if (ceasefireDead(w)) void this.patch(w, { ceasefireOffer: deleteField() });
+    }
+
     // 항복이 받아들여졌으면 끝낸다(받는 진영 누구든 먼저 본 쪽이).
     if (w.state !== 'ended' && surrenderAccepted(w)) {
       const loser = sideOf(w, w.surrender!.by)!;
@@ -438,7 +473,12 @@ export class WarSession {
 
   private ending = '';
 
-  private async end(w: WarDoc, result: WarDoc['result'], now: number): Promise<void> {
+  private async end(
+    w: WarDoc,
+    result: WarDoc['result'],
+    now: number,
+    agreed = false,
+  ): Promise<void> {
     if (this.ending === w.id) return;
     this.ending = w.id;
     const peace =
@@ -460,6 +500,8 @@ export class WarSession {
       score: { [w[mine]]: me, [w[otherSide(mine)]]: them },
       contrib: contributions(w, occupied, armyValue),
       surrender: deleteField(),
+      ceasefireOffer: deleteField(),
+      ...(agreed ? { agreedCeasefire: true } : {}),
     });
   }
 
@@ -493,7 +535,9 @@ export class WarSession {
       settled[w.id] = now;
       this.onNotice?.(
         w.result === 'ceasefire'
-          ? '휴전 · 큰 전투 없이 1시간이 지났습니다 · 12시간 동안 다시 전쟁할 수 없습니다'
+          ? w.agreedCeasefire
+            ? '휴전 협정 · 참가국 2/3 이상이 동의했습니다 · 배상 없음, 12시간 동안 다시 전쟁할 수 없습니다'
+            : '휴전 · 큰 전투 없이 1시간이 지났습니다 · 12시간 동안 다시 전쟁할 수 없습니다'
           : '종전 협정 · 피해가 비슷해 배상 없이 끝났습니다',
       );
       this.done();
@@ -609,6 +653,7 @@ export class WarSession {
         isLeader: false,
         allies: [],
         enemies: [],
+        ceasefire: null,
       };
     const now = sharedNow();
     const other = otherSide(mine);
@@ -635,6 +680,18 @@ export class WarSession {
       isLeader: leader,
       allies: allies.map((u) => w.names[u] ?? u),
       enemies: enemies.map((u) => w.names[u] ?? u),
+      ceasefire: w.ceasefireOffer
+        ? {
+            byMe: w.ceasefireOffer.by === this.uid,
+            byName: w.names[w.ceasefireOffer.by] ?? '참가국',
+            myVote: w.ceasefireOffer.votes[this.uid],
+            yes: ceasefireYes(w),
+            needed: ceasefireNeeded(w),
+            leadersYes:
+              (w.ceasefireOffer.votes[w.a] === true ? 1 : 0) +
+              (w.ceasefireOffer.votes[w.b] === true ? 1 : 0),
+          }
+        : null,
     };
   }
 
@@ -733,6 +790,30 @@ export class WarSession {
       console.warn('전쟁 참가 실패', err);
       return '참가하지 못했습니다';
     }
+  }
+
+  /** 휴전 제안(참가국 누구나, 전투 중·일시정지 중). 제안한 도시는 찬성으로 셈. */
+  async offerCeasefire(): Promise<string> {
+    const w = this.current();
+    if (!w || w.state !== 'active') return '전투 중에만 휴전을 제안할 수 있습니다';
+    if (w.ceasefireOffer) return '이미 휴전 제안이 올라와 있습니다';
+    await this.patch(w, {
+      ceasefireOffer: { by: this.uid, at: sharedNow(), votes: { [this.uid]: true } },
+    });
+    return '';
+  }
+
+  /** 휴전 제안에 찬성·반대. */
+  async voteCeasefire(yes: boolean): Promise<void> {
+    const w = this.current();
+    if (!w?.ceasefireOffer) return;
+    await this.patch(w, { [`ceasefireOffer.votes.${this.uid}`]: yes });
+  }
+
+  /** 내가 낸 휴전 제안을 거둔다. */
+  async withdrawCeasefire(): Promise<void> {
+    const w = this.current();
+    if (w?.ceasefireOffer?.by === this.uid) await this.patch(w, { ceasefireOffer: deleteField() });
   }
 
   /** 항복 신청(진영 대표만). */
