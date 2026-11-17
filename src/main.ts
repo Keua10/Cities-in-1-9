@@ -316,10 +316,7 @@ async function boot(): Promise<void> {
   const alliances =
     online && session && city ? new AllianceSession(session.uid, sim, city.cityName) : null;
   if (alliances) {
-    alliances.atWarWith = (uid) => {
-      const w = warSession?.current();
-      return !!w && (w.a === uid || w.b === uid);
-    };
+    alliances.atWarWith = (uid) => !!warSession?.atWarWith(uid);
     alliances.onNotice = (text) => tools.announce(text);
     alliances.start();
   }

@@ -103,6 +103,8 @@ export class ContinentMap {
   private warEl: HTMLElement;
   private declareEl: HTMLElement;
   private incomingEl!: HTMLElement;
+  private openWarsEl!: HTMLElement;
+  private openWarsRev = -1;
   private allyRev = -1;
 
   constructor(private source: ContinentMapSource) {
@@ -129,6 +131,7 @@ export class ContinentMap {
           <div class="cm-pane" data-pane="cities">
             <div class="cm-legend">금색 테두리 = 수도 · ● 접속 중 · 전쟁은 양쪽이 접속해 있어야 합니다</div>
             <div class="cm-incoming" hidden></div>
+            <div class="cm-open-wars" hidden></div>
             <ol class="cm-list"></ol>
             <div class="cm-declare" hidden>
               <div class="cm-declare-title"></div>
@@ -164,6 +167,7 @@ export class ContinentMap {
     this.warEl = this.root.querySelector('.cm-war')!;
     this.declareEl = this.root.querySelector('.cm-declare')!;
     this.incomingEl = this.root.querySelector('.cm-incoming')!;
+    this.openWarsEl = this.root.querySelector('.cm-open-wars')!;
     const deposit = this.root.querySelector<HTMLSelectElement>('.cm-ally-deposit')!;
     for (const d of ALLIANCE_DEPOSITS) {
       const o = document.createElement('option');
@@ -243,6 +247,10 @@ export class ContinentMap {
       if (this.root.hidden) return;
       this.renderArmy(false);
       this.renderWar();
+      if (this.source.war && this.source.war.revision !== this.openWarsRev) {
+        this.openWarsRev = this.source.war.revision;
+        this.renderOpenWars();
+      }
       if (this.source.alliances && this.source.alliances.revision !== this.allyRev) {
         this.allyRev = this.source.alliances.revision;
         this.renderIncoming();
@@ -278,10 +286,15 @@ export class ContinentMap {
           ? '일시정지 — 상대가 접속을 끊었습니다(24시간 뒤 판정)'
           : '전투 중';
     this.warEl.querySelector('.cm-war-text')!.textContent =
-      `⚔ ${st.enemyName}와 ${st.war?.kind === 'large' ? '대규모' : '소규모'} 전쟁 · ${phase} · 점수 ${st.scoreMe.toLocaleString('ko-KR')} : ${st.scoreEnemy.toLocaleString('ko-KR')}`;
+      `⚔ ${st.enemyName}와 ${st.war?.kind === 'large' ? '대규모' : '소규모'} 전쟁 · ${phase} · 점수 ${st.scoreMe.toLocaleString('ko-KR')} : ${st.scoreEnemy.toLocaleString('ko-KR')}` +
+      (st.allies.length ? ` · 우리 진영: ${st.allies.join(', ')}` : '');
     const surrender = this.warEl.querySelector<HTMLButtonElement>('.cm-war-surrender')!;
+    // 항복 신청·철회는 진영 대표만.
+    surrender.hidden = !st.isLeader;
     surrender.textContent = st.surrenderPending ? '항복 철회' : '항복 신청';
-    this.warEl.querySelector<HTMLButtonElement>('.cm-war-accept')!.hidden = !st.surrenderOffered;
+    const accept = this.warEl.querySelector<HTMLButtonElement>('.cm-war-accept')!;
+    accept.hidden = !st.surrenderOffered;
+    accept.textContent = st.allies.length ? '항복에 동의(대표 동의 또는 2/3)' : '항복 받아들이기';
   }
 
   /** 고른 다른 도시에 대한 선전포고 칸. */
@@ -318,6 +331,38 @@ export class ContinentMap {
     } else {
       stateEl.textContent = '이 도시가 동맹을 신청했습니다 · 위 알림에서 답하세요';
       go.textContent = '거절';
+    }
+  }
+
+  /** 다른 도시들의 대규모 전쟁: 동맹한 진영으로 참가. */
+  private renderOpenWars(): void {
+    const war = this.source.war;
+    const list = war?.openLarge ?? [];
+    this.openWarsEl.hidden = !list.length;
+    this.openWarsEl.innerHTML = '';
+    const me = this.source.mine();
+    for (const w of list) {
+      const row = document.createElement('div');
+      row.className = 'cm-open-war';
+      const text = document.createElement('span');
+      const count = (side: 'a' | 'b') =>
+        1 + Object.values(w.joined ?? {}).filter((j) => j.side === side).length;
+      text.textContent = `⚔ 대규모 전쟁: ${w.names[w.a] ?? '?'} 진영(${count('a')}) vs ${w.names[w.b] ?? '?'} 진영(${count('b')})`;
+      row.append(text);
+      for (const side of ['a', 'b'] as const) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.textContent = `${w.names[w[side]] ?? '?'} 진영으로 참가`;
+        const why = war!.joinWhy(w, side, me);
+        b.disabled = !!why;
+        b.title = why;
+        b.addEventListener('click', async () => {
+          const r = await war!.join(w, side, this.source.mine());
+          this.source.announce(r || '전쟁에 참가했습니다 · 5분 준비 뒤 개전(이미 시작했으면 바로)');
+        });
+        row.append(b);
+      }
+      this.openWarsEl.append(row);
     }
   }
 

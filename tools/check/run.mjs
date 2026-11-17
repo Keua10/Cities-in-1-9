@@ -53,6 +53,7 @@ const checks = {
   war: 'tools/check/warCheck.ts',
   warSession: 'tools/check/warSessionCheck.ts',
   military6: 'tools/check/military6Check.ts',
+  coalition: 'tools/check/coalitionCheck.ts',
 };
 mkdirSync('.check', { recursive: true });
 for (const name of process.argv.length > 2 ? process.argv.slice(2) : Object.keys(checks)) {
@@ -67,7 +68,7 @@ for (const name of process.argv.length > 2 ? process.argv.slice(2) : Object.keys
     alias:
       name === 'alertRender'
         ? {}
-        : name === 'warSession'
+        : name === 'warSession' || name === 'coalition'
           ? {
               'pixi.js': resolve('tools/check/stub-pixi.ts'),
               // 전쟁 연결 점검: Firestore 를 메모리 가짜로 바꿔 두 기기를 한 프로세스에서 돌린다.
@@ -77,7 +78,7 @@ for (const name of process.argv.length > 2 ? process.argv.slice(2) : Object.keys
             }
           : { 'pixi.js': resolve('tools/check/stub-pixi.ts') },
     define:
-      name === 'warSession'
+      name === 'warSession' || name === 'coalition'
         ? {
             'import.meta.env': JSON.stringify({
               VITE_FIREBASE_API_KEY: 'x',

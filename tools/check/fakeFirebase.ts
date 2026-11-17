@@ -43,20 +43,33 @@ export function doc(_db: unknown, ...parts: string[]): Ref {
 export function collection(_db: unknown, ...parts: string[]): Ref {
   return { kind: 'coll', path: parts.join('/'), id: parts[parts.length - 1] };
 }
-interface Query {
-  coll: Ref;
+interface Cond {
   field: string;
+  op: string;
   value: unknown;
 }
-export function where(
-  field: string,
-  _op: string,
-  value: unknown,
-): { field: string; value: unknown } {
-  return { field, value };
+interface Query {
+  coll: Ref;
+  conds: Cond[];
 }
-export function query(coll: Ref, w: { field: string; value: unknown }): Query {
-  return { coll, field: w.field, value: w.value };
+export function where(field: string, op: string, value: unknown): Cond {
+  return { field, op, value };
+}
+export function query(coll: Ref, ...conds: Cond[]): Query {
+  return { coll, conds };
+}
+function matches(d: Data | undefined, c: Cond): boolean {
+  const v = d?.[c.field];
+  if (c.op === 'array-contains') return Array.isArray(v) && v.includes(c.value);
+  if (c.op === 'in') return (c.value as unknown[]).includes(v);
+  if (c.op === '==') return v === c.value;
+  throw new Error(`가짜 Firestore: ${c.op} 없음`);
+}
+function listDocs(coll: Ref, conds: Cond[]) {
+  return [...store.keys()]
+    .filter((p) => p.startsWith(coll.path + '/') && !p.slice(coll.path.length + 1).includes('/'))
+    .filter((p) => conds.every((c) => matches(store.get(p), c)))
+    .map((p) => snapOf({ kind: 'doc', path: p, id: p.split('/').pop()! }));
 }
 
 function snapOf(ref: Ref) {
@@ -83,36 +96,32 @@ export async function updateDoc(ref: Ref, data: Data): Promise<void> {
   const cur = store.get(ref.path);
   if (!cur) throw new Error('없는 문서');
   for (const [k, v] of Object.entries(data)) {
-    if (v === DELETE) delete cur[k];
-    else cur[k] = clean({ v }).v as unknown;
+    // "a.b.c" 경로는 안쪽 객체를 고친다(진짜 Firestore 와 같게).
+    const parts = k.split('.');
+    let obj = cur as Record<string, unknown>;
+    for (const part of parts.slice(0, -1)) {
+      if (typeof obj[part] !== 'object' || obj[part] === null) obj[part] = {};
+      obj = obj[part] as Record<string, unknown>;
+    }
+    const last = parts[parts.length - 1];
+    if (v === DELETE) delete obj[last];
+    else obj[last] = clean({ v }).v as unknown;
   }
   notify();
 }
 export async function getDoc(ref: Ref) {
   return snapOf(ref);
 }
-export async function getDocs(coll: Ref) {
-  const docs = [...store.keys()]
-    .filter((p) => p.startsWith(coll.path + '/') && !p.slice(coll.path.length + 1).includes('/'))
-    .map((p) => snapOf({ kind: 'doc', path: p, id: p.split('/').pop()! }));
-  return { docs };
+export async function getDocs(target: Ref | Query) {
+  return 'conds' in target
+    ? { docs: listDocs(target.coll, target.conds) }
+    : { docs: listDocs(target, []) };
 }
 export function onSnapshot(target: Ref | Query, next: (snap: any) => void): () => void {
   const fire = () => {
-    if ('coll' in target) {
-      const docs = [...store.keys()]
-        .filter(
-          (p) =>
-            p.startsWith(target.coll.path + '/') &&
-            !p.slice(target.coll.path.length + 1).includes('/'),
-        )
-        .filter((p) => {
-          const v = store.get(p)?.[target.field];
-          return Array.isArray(v) && v.includes(target.value);
-        })
-        .map((p) => snapOf({ kind: 'doc', path: p, id: p.split('/').pop()! }));
-      next({ docs });
-    } else next(snapOf(target));
+    if ('conds' in target) next({ docs: listDocs(target.coll, target.conds) });
+    else if (target.kind === 'coll') next({ docs: listDocs(target, []) });
+    else next(snapOf(target));
   };
   listeners.add(fire);
   fire();

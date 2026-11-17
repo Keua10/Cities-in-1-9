@@ -248,7 +248,8 @@ export function findPath(
   const start = chunkKey(from.cx, from.cy);
   if (goal === start) return [];
   const pass = (key: string, cx: number, cy: number): number => {
-    if (bf.foreign(key) && !(bf.enemy && bf.enemy.owned.has(key))) return 0;
+    if (bf.foreign(key) && !bf.me.owned.has(key) && !(bf.enemy && bf.enemy.owned.has(key)))
+      return 0;
     return passFactor(bf, type, key, cx, cy);
   };
   if (spec.domain === 'strike') return [];

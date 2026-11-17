@@ -24,13 +24,29 @@ import { unitStrength, UNIT_SPECS, type UnitType } from '../config/military';
 export type WarKind = 'small' | 'large';
 export type WarState = 'prep' | 'active' | 'ended';
 export type WarResult = 'winA' | 'winB' | 'truce' | 'ceasefire';
+/** 진영: a = 선포한 쪽, b = 받은 쪽. 대규모 전쟁에서는 다른 도시가 어느 진영으로 참가한다. */
+export type WarSide = 'a' | 'b';
+
+/** 패전국 한 곳이 낸 배상. chunks = 승전 진영 도시별로 내준 청크. */
+export interface Paid {
+  money: number;
+  iron: number;
+  coal: number;
+  oil: number;
+  chunks: Record<string, string[]>;
+}
 
 export interface WarDoc {
   id: string;
   a: string;
   b: string;
-  parties: [string, string];
+  /** 참가한 모든 도시(선포·받은 쪽 + 참가국). */
+  parties: string[];
   names: Record<string, string>;
+  /** 대규모 전쟁 참가국: 진영·수도 레벨·참가 시각. */
+  joined?: Record<string, { side: WarSide; level: number; at: number }>;
+  /** 선포·받은 쪽 수도 레벨(참가국 공격 제한 판정). */
+  levels?: Record<string, number>;
   kind: WarKind;
   surprise: boolean;
   state: WarState;
@@ -38,16 +54,18 @@ export interface WarDoc {
   startsAt: number;
   /** 한쪽이 끊긴 시각(다시 이어지면 지움). */
   pausedAt?: number;
-  /** 항복 신청. */
-  surrender?: { by: string; at: number };
+  /** 항복 신청(진영 대표가 낸다). votes = 받는 진영에서 동의한 도시. */
+  surrender?: { by: string; at: number; votes?: Record<string, boolean> };
   result?: WarResult;
   endedAt?: number;
   /** 이 시각까지 두 도시는 다시 전쟁할 수 없다. */
   peaceUntil?: number;
-  /** 패전국이 실제로 낸 배상(승전국이 받아 간다). */
-  paid?: { money: number; iron: number; coal: number; oil: number; chunks: string[] };
-  /** 점수(끝날 때 기록). */
+  /** 패전국마다 실제로 낸 배상(승전국들이 기여도 비율로 받아 간다). */
+  paid?: Record<string, Paid>;
+  /** 점수(끝날 때 기록). 진영 대표 uid(a·b) → 진영 점수. */
   score?: Record<string, number>;
+  /** 끝날 때 기여도(배상 나누기). */
+  contrib?: Record<string, number>;
 }
 
 /** 한쪽이 보내는 전장 스냅숏(wars/{id}/sides/{uid}). */
@@ -243,4 +261,141 @@ export function reparations(
     coal: Math.floor(stock.coal * REPARATION_RESOURCES),
     oil: Math.floor(stock.oil * REPARATION_RESOURCES),
   };
+}
+
+/* ---------------- 대규모 전쟁(연합) ---------------- */
+
+export function sideOf(w: WarDoc, uid: string): WarSide | null {
+  if (uid === w.a) return 'a';
+  if (uid === w.b) return 'b';
+  return w.joined?.[uid]?.side ?? null;
+}
+
+export function otherSide(s: WarSide): WarSide {
+  return s === 'a' ? 'b' : 'a';
+}
+
+/** 그 진영의 도시들(대표가 먼저). */
+export function membersOf(w: WarDoc, side: WarSide): string[] {
+  const out = [w[side]];
+  for (const [uid, j] of Object.entries(w.joined ?? {})) if (j.side === side) out.push(uid);
+  return out;
+}
+
+export function levelOf(w: WarDoc, uid: string): number {
+  return w.joined?.[uid]?.level ?? w.levels?.[uid] ?? 2;
+}
+
+/**
+ * 공격자(수도 3레벨)는 진영으로 참가한 수도 2레벨 도시의 영토를 공격할 수 없다(계획서).
+ */
+export function landProtected(w: WarDoc, attacker: string, target: string): boolean {
+  return levelOf(w, attacker) >= 3 && !!w.joined?.[target] && levelOf(w, target) < 3;
+}
+
+/** 수도까지 점령할 수 있는가: 대규모 전쟁의 직접 참여국(선포·받은 쪽)만. */
+export function capitalOpen(w: WarDoc, uid: string): boolean {
+  return w.kind === 'large' && (uid === w.a || uid === w.b);
+}
+
+/** 항복을 받아들이는 데 필요한 동의 수: 받는 진영의 2/3(기습 전쟁이면 3/4). */
+export function consentNeeded(w: WarDoc, side: WarSide): number {
+  const n = membersOf(w, side).length;
+  return Math.max(1, Math.ceil(n * (w.surprise ? 3 / 4 : 2 / 3) - 1e-9));
+}
+
+/** 항복이 받아들여졌는가: 받는 진영 대표가 동의했거나, 그 진영 2/3(3/4) 이상이 동의. */
+export function surrenderAccepted(w: WarDoc): boolean {
+  const s = w.surrender;
+  if (!s) return false;
+  const by = sideOf(w, s.by);
+  if (!by) return false;
+  const other = otherSide(by);
+  const votes = Object.keys(s.votes ?? {}).filter((u) => s.votes![u] && sideOf(w, u) === other);
+  return votes.includes(w[other]) || votes.length >= consentNeeded(w, other);
+}
+
+/**
+ * 여러 도시의 점령 주장을 합친다. 청크마다 가장 늦은 주장이 이긴다. 원래 주인이나 같은
+ * 진영 도시가 되찾았으면 빠진다(해방).
+ */
+export function mergeAllClaims(
+  w: WarDoc,
+  list: ReadonlyArray<{ uid: string; claims: Record<string, number>; owned: readonly string[] }>,
+): Map<string, string> {
+  const owner = new Map<string, string>();
+  for (const x of list) for (const k of x.owned) owner.set(k, x.uid);
+  const best = new Map<string, { uid: string; t: number }>();
+  for (const x of list)
+    for (const [k, t] of Object.entries(x.claims)) {
+      const cur = best.get(k);
+      if (!cur || t > cur.t) best.set(k, { uid: x.uid, t });
+    }
+  const out = new Map<string, string>();
+  for (const [k, { uid }] of best) {
+    const original = owner.get(k) ?? '';
+    if (uid === original) continue;
+    if (original && sideOf(w, original) === sideOf(w, uid)) continue;
+    out.set(k, uid);
+  }
+  return out;
+}
+
+/** 진영 점수: 상대 진영이 잃은 병력·시설 가치 + 우리 진영이 점령한 청크 × 2,000. */
+export function sideScore(
+  w: WarDoc,
+  side: WarSide,
+  occupied: Map<string, string>,
+  enemyLoss: number,
+): number {
+  let chunks = 0;
+  for (const who of occupied.values()) if (sideOf(w, who) === side) chunks++;
+  return Math.round(enemyLoss + chunks * OCCUPIED_CHUNK_SCORE);
+}
+
+/** 기여도: 점령한 청크 × 2,000 + 끝날 때 남은 부대 가치 + 1(참가만 해도 몫이 있다). */
+export function contributions(
+  w: WarDoc,
+  occupied: Map<string, string>,
+  armyValue: Record<string, number>,
+): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const uid of w.parties) {
+    let chunks = 0;
+    for (const who of occupied.values()) if (who === uid) chunks++;
+    out[uid] = Math.round(chunks * OCCUPIED_CHUNK_SCORE + (armyValue[uid] ?? 0) + 1);
+  }
+  return out;
+}
+
+/** 승전 진영에서 내 몫(0~1). */
+export function shareOf(w: WarDoc, uid: string): number {
+  const side = sideOf(w, uid);
+  if (!side) return 0;
+  const team = membersOf(w, side);
+  const c = w.contrib ?? {};
+  const total = team.reduce((s, u) => s + (c[u] ?? 1), 0);
+  return (c[uid] ?? 1) / Math.max(1, total);
+}
+
+/** 대규모 전쟁에 진영으로 참가할 수 없는 이유. */
+export function joinBlock(x: {
+  w: WarDoc;
+  me: { uid: string; capitalLevel: number };
+  side: WarSide;
+  wars: readonly WarDoc[];
+  alliedWith: (uid: string) => boolean;
+}): string {
+  const { w, me } = x;
+  if (w.kind !== 'large') return '대규모 전쟁에만 참가할 수 있습니다';
+  if (w.state === 'ended') return '이미 끝난 전쟁입니다';
+  if (w.parties.includes(me.uid)) return '이미 참가하고 있습니다';
+  if (me.capitalLevel < SMALL_WAR_CAPITAL)
+    return `수도 ${SMALL_WAR_CAPITAL}레벨부터 참가할 수 있습니다`;
+  for (const o of x.wars)
+    if (o.id !== w.id && o.state !== 'ended' && o.parties.includes(me.uid))
+      return '이미 다른 전쟁 중입니다';
+  if (!membersOf(w, x.side).some((u) => x.alliedWith(u)))
+    return '그 진영 도시와 동맹이어야 참가할 수 있습니다';
+  return '';
 }

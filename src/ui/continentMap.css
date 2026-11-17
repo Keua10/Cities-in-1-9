@@ -293,3 +293,28 @@
 .cm-incoming-row span {
   flex: 1;
 }
+
+.cm-open-wars {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+.cm-open-wars[hidden] {
+  display: none;
+}
+.cm-open-war {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  padding: 4px 6px;
+  border-radius: 6px;
+  background: rgba(220, 120, 100, 0.15);
+}
+.cm-open-war span {
+  flex: 1 1 100%;
+}
+.cm-open-war button {
+  flex: 1;
+  font-size: 11px;
+}

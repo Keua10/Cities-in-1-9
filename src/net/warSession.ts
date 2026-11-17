@@ -2,7 +2,7 @@ import {
   collection,
   deleteField,
   doc,
-  getDoc,
+  getDocs,
   onSnapshot,
   query,
   setDoc,
@@ -22,19 +22,30 @@ import type { MacroSim } from '../sim/macro';
 import type { Side, Unit } from '../sim/military/army';
 import type { WarLink } from '../sim/military/armySystem';
 import {
+  capitalOpen,
   ceasefireDue,
+  contributions,
   declareBlock,
   isBigBattle,
+  joinBlock,
   judge,
   judgeDue,
-  mergeClaims,
+  landProtected,
+  membersOf,
+  mergeAllClaims,
+  otherSide,
   reparations,
+  shareOf,
+  sideOf,
+  sideScore,
   surpriseBlock,
-  warScore,
+  surrenderAccepted,
+  unitValue,
   type CompactUnit,
   type SideDoc,
   type WarDoc,
   type WarKind,
+  type WarSide,
 } from '../sim/military/warRules';
 import { sharedNow } from '../sim/sharedClock';
 import { UNIT_SPECS } from '../sim/config/military';
@@ -63,8 +74,13 @@ export interface WarStatus {
   scoreEnemy: number;
   /** 상대가 항복을 신청했다(내가 받아들일 수 있다). */
   surrenderOffered: boolean;
-  /** 내가 항복을 신청해 둔 상태. */
+  /** 우리 진영이 항복을 신청해 둔 상태. */
   surrenderPending: boolean;
+  /** 내가 진영 대표(선포한 쪽·받은 쪽)인가 — 항복 신청은 대표만. */
+  isLeader: boolean;
+  /** 우리 진영 다른 도시·상대 진영 도시 이름. */
+  allies: string[];
+  enemies: string[];
 }
 
 function compact(u: Unit): CompactUnit {
@@ -83,9 +99,9 @@ function compact(u: Unit): CompactUnit {
   };
 }
 
-function expand(c: CompactUnit): Unit {
+function expand(c: CompactUnit, owner = 'e'): Unit {
   return {
-    id: `e${c.id}`,
+    id: `${owner.slice(0, 6)}:${c.id}`,
     type: c.t,
     men: c.m,
     maxMen: c.m,
@@ -102,15 +118,22 @@ function expand(c: CompactUnit): Unit {
   };
 }
 
+/** 전장에서 상대 진영 전체를 하나로 묶어 부르는 이름(점령 표시용). */
+const ENEMY = '#enemy';
+
 export class WarSession {
   /** 동맹 연결. 동맹에게 선전포고하면 배신(보증금이 상대에게). */
   alliances: AllianceSession | null = null;
   /** 나와 관련된 전쟁 전부(끝난 것 포함). */
   wars: WarDoc[] = [];
+  /** 참가할 수 있는 다른 도시들의 대규모 전쟁(준비·전투 중). */
+  openLarge: WarDoc[] = [];
   private unsubWars: Unsubscribe | null = null;
-  private unsubSide: Unsubscribe | null = null;
+  private unsubOpen: Unsubscribe | null = null;
+  private unsubSides: Unsubscribe | null = null;
   private sideWarId = '';
-  private enemySide: SideDoc | null = null;
+  /** 이 전쟁 참가국들의 전장 스냅숏. */
+  private sides = new Map<string, SideDoc>();
   private claims: Record<string, number> = {};
   private lossAtStart = 0;
   private bigBattleAt = 0;
@@ -134,22 +157,32 @@ export class WarSession {
       query(collection(fb.db, 'wars'), where('parties', 'array-contains', this.uid)),
       (snap) => {
         const before = this.current();
+        const prevJoined = Object.keys(before?.joined ?? {});
         this.wars = snap.docs.map((d) => ({ ...(d.data() as WarDoc), id: d.id }));
         const now = this.current();
         if (now && !before) {
-          const enemy = now.a === this.uid ? now.b : now.a;
+          const mine = sideOf(now, this.uid);
+          const enemy = mine ? now[otherSide(mine)] : now.a;
           this.onNotice?.(
             now.a === this.uid
               ? `선전포고했습니다 · ${now.names[enemy] ?? '상대'}${now.surprise ? ' · 기습!' : ' · 5분 뒤 개전'}`
-              : `⚠ ${now.names[now.a] ?? '다른 도시'}이(가) ${now.surprise ? '기습해 왔습니다!' : '선전포고했습니다 · 5분 뒤 개전'}`,
+              : now.joined?.[this.uid]
+                ? `${now.names[now[mine!]] ?? '동맹'} 진영으로 전쟁에 참가했습니다`
+                : `⚠ ${now.names[now.a] ?? '다른 도시'}이(가) ${now.surprise ? '기습해 왔습니다!' : '선전포고했습니다 · 5분 뒤 개전'}`,
           );
         }
+        if (now && before && now.id === before.id)
+          for (const u of Object.keys(now.joined ?? {}))
+            if (!prevJoined.includes(u) && u !== this.uid)
+              this.onNotice?.(
+                `${now.names[u] ?? '다른 도시'}이(가) ${sideOf(now, u) === sideOf(now, this.uid) ? '우리' : '상대'} 진영으로 참가했습니다`,
+              );
         if (
           before &&
           now &&
           before.surrender?.by !== now.surrender?.by &&
           now.surrender &&
-          now.surrender.by !== this.uid
+          sideOf(now, now.surrender.by) !== sideOf(now, this.uid)
         )
           this.onNotice?.('상대가 항복을 신청했습니다 · 대륙 지도에서 받아들일 수 있습니다');
         this.revision++;
@@ -157,12 +190,27 @@ export class WarSession {
       },
       (err) => console.warn('전쟁 구독 실패', err),
     );
+    this.unsubOpen = onSnapshot(
+      query(
+        collection(fb.db, 'wars'),
+        where('kind', '==', 'large'),
+        where('state', 'in', ['prep', 'active']),
+      ),
+      (snap) => {
+        this.openLarge = snap.docs
+          .map((d) => ({ ...(d.data() as WarDoc), id: d.id }))
+          .filter((w) => !w.parties.includes(this.uid));
+        this.revision++;
+      },
+      (err) => console.warn('대규모 전쟁 목록 구독 실패', err),
+    );
     this.timer = window.setInterval(() => this.tick(), 500);
   }
 
   stop(): void {
     this.unsubWars?.();
-    this.unsubSide?.();
+    this.unsubOpen?.();
+    this.unsubSides?.();
     if (this.timer !== null) clearInterval(this.timer);
   }
 
@@ -171,34 +219,73 @@ export class WarSession {
     return this.wars.find((w) => w.state !== 'ended') ?? null;
   }
 
-  private enemyOf(w: WarDoc): string {
-    return w.a === this.uid ? w.b : w.a;
+  /** 이 도시와 지금 전쟁 중인가(같은 전쟁의 상대 진영). */
+  atWarWith(uid: string): boolean {
+    const w = this.current();
+    if (!w) return false;
+    const a = sideOf(w, this.uid);
+    const b = sideOf(w, uid);
+    return !!a && !!b && a !== b;
   }
 
-  /** 진행 중인 전쟁의 상대 스냅숏을 구독한다. */
+  /** 진행 중인 전쟁 참가국들의 스냅숏을 구독한다. */
   private attach(): void {
     const w = this.current();
     const fb = getFirebase();
     if (!w || !fb) {
       // 끝난 전쟁의 마지막 스냅숏은 정산할 때 서버에서 다시 읽는다.
       if (this.sideWarId) {
-        this.unsubSide?.();
-        this.unsubSide = null;
+        this.unsubSides?.();
+        this.unsubSides = null;
         this.sideWarId = '';
       }
       return;
     }
     if (this.sideWarId === w.id) return;
-    this.unsubSide?.();
+    this.unsubSides?.();
     this.sideWarId = w.id;
-    this.enemySide = null;
+    this.sides = new Map();
     this.claims = {};
     this.lossAtStart = this.sim.army.army.lossValue ?? 0;
     this.menAtStart = this.sim.army.soldiers;
     this.bigBattleAt = 0;
-    this.unsubSide = onSnapshot(doc(fb.db, 'wars', w.id, 'sides', this.enemyOf(w)), (snap) => {
-      this.enemySide = snap.exists() ? (snap.data() as SideDoc) : null;
+    this.unsubSides = onSnapshot(collection(fb.db, 'wars', w.id, 'sides'), (snap) => {
+      const next = new Map<string, SideDoc>();
+      for (const d of snap.docs) if (d.id !== this.uid) next.set(d.id, d.data() as SideDoc);
+      this.sides = next;
     });
+  }
+
+  private fresh(uid: string, now: number): SideDoc | null {
+    const d = this.sides.get(uid);
+    return d && now - d.at <= WAR_STALE_MS ? d : null;
+  }
+
+  /** 모든 참가국 점령 주장을 합친 것(내 주장은 지금 것). */
+  private occupation(w: WarDoc): Map<string, string> {
+    const list = [
+      { uid: this.uid, claims: this.claims, owned: [...this.sim.territory.ownedKeys()] },
+    ];
+    for (const [uid, d] of this.sides)
+      if (w.parties.includes(uid)) list.push({ uid, claims: d.claims ?? {}, owned: d.owned ?? [] });
+    return mergeAllClaims(w, list);
+  }
+
+  /** 진영 점수 [내 진영, 상대 진영]. */
+  private scores(w: WarDoc, occupied: Map<string, string>): [number, number] {
+    const mine = sideOf(w, this.uid)!;
+    const myLoss = (this.sim.army.army.lossValue ?? 0) - this.lossAtStart;
+    let lossMine = myLoss;
+    let lossTheirs = 0;
+    for (const [uid, d] of this.sides) {
+      const s = sideOf(w, uid);
+      if (s === mine) lossMine += d.lossValue ?? 0;
+      else if (s) lossTheirs += d.lossValue ?? 0;
+    }
+    return [
+      sideScore(w, mine, occupied, lossTheirs),
+      sideScore(w, otherSide(mine), occupied, lossMine),
+    ];
   }
 
   /** 0.5초마다: 전쟁 연결 갱신, 스냅숏 보내기, 상태 전환, 정산. */
@@ -215,9 +302,11 @@ export class WarSession {
     }
     this.sim.atWar = true;
     this.sim.grantsEnabled = false;
-    const enemyUid = this.enemyOf(w);
-    const enemy = this.enemySide;
-    const stale = !enemy || now - enemy.at > WAR_STALE_MS;
+    const mine = sideOf(w, this.uid)!;
+    const enemies = membersOf(w, otherSide(mine));
+    const allies = membersOf(w, mine).filter((u) => u !== this.uid);
+    const freshEnemies = enemies.filter((u) => this.fresh(u, now));
+    const stale = !freshEnemies.length;
 
     // 준비 → 전투
     if (w.state === 'prep' && now >= w.startsAt) void this.patch(w, { state: 'active' });
@@ -228,33 +317,51 @@ export class WarSession {
       void this.publishSide(w, now);
     }
 
-    // 전쟁 연결
-    if (w.state === 'active' && enemy) {
-      const mine = army.mySide();
+    // 전쟁 연결: 상대 진영(지금 접속한 도시들)을 하나의 적으로 묶는다.
+    if (w.state === 'active' && !stale) {
       const enemySide: Side = {
-        uid: enemyUid,
-        units: (enemy.units ?? []).map(expand),
-        owned: new Set(enemy.owned ?? []),
-        capital: new Set(enemy.capital ?? []),
-        trenches: new Set(enemy.trenches ?? []),
-        urban: new Set(enemy.urban ?? []),
+        uid: ENEMY,
+        units: [],
+        owned: new Set(),
+        capital: new Set(),
+        trenches: new Set(),
+        urban: new Set(),
       };
-      const occupied = mergeClaims(
-        { uid: this.uid, claims: this.claims, owned: [...mine.owned] },
-        { uid: enemyUid, claims: enemy.claims ?? {}, owned: enemy.owned ?? [] },
+      for (const uid of freshEnemies) {
+        const d = this.fresh(uid, now)!;
+        for (const c of d.units ?? []) enemySide.units.push(expand(c, uid));
+        if (!landProtected(w, this.uid, uid)) for (const k of d.owned ?? []) enemySide.owned.add(k);
+        if (!capitalOpen(w, uid)) for (const k of d.capital ?? []) enemySide.capital.add(k);
+        for (const k of d.trenches ?? []) enemySide.trenches.add(k);
+        for (const k of d.urban ?? []) enemySide.urban.add(k);
+      }
+      const allyOwned = new Set<string>();
+      for (const uid of allies) for (const k of this.sides.get(uid)?.owned ?? []) allyOwned.add(k);
+      // 전장에서는 우리 진영 점령 = 나, 상대 진영 점령 = ENEMY 로 본다.
+      const occupied = new Map<string, string>();
+      for (const [k, who] of this.occupation(w))
+        occupied.set(k, sideOf(w, who) === mine ? this.uid : ENEMY);
+      const strikes = enemies.flatMap((u) =>
+        (this.sides.get(u)?.strikes ?? []).filter((x) => x.at >= w.startsAt),
       );
       const link: WarLink = {
         enemy: enemySide,
         occupied,
-        capitalProtected: w.kind === 'small',
-        paused: stale,
-        enemyStrikes: (enemy.strikes ?? []).filter((x) => x.at >= w.startsAt),
+        capitalProtected: true,
+        paused: false,
+        enemyStrikes: strikes,
+        allyOwned,
         onEvents: (events) => {
           for (const e of events) if (e.type === 'occupied') this.claims[e.key] = sharedNow();
         },
       };
       army.war = link;
-      this.sim.territory.foreign = new Set([...this.sim.territory.foreign, ...enemySide.owned]);
+      const foreign = new Set(this.sim.territory.foreign);
+      for (const uid of enemies) for (const k of this.sides.get(uid)?.owned ?? []) foreign.add(k);
+      this.sim.territory.foreign = foreign;
+    } else if (w.state === 'active') {
+      // 상대 진영이 모두 끊김: 전쟁만 멈춘다.
+      if (army.war) army.war.paused = true;
     } else {
       // 준비 중에는 평시 규칙으로 배치만 한다.
       army.war = null;
@@ -266,18 +373,22 @@ export class WarSession {
       if (!stale && w.pausedAt !== undefined) void this.patch(w, { pausedAt: deleteField() });
     }
 
+    // 항복이 받아들여졌으면 끝낸다(받는 진영 누구든 먼저 본 쪽이).
+    if (w.state !== 'ended' && surrenderAccepted(w)) {
+      const loser = sideOf(w, w.surrender!.by)!;
+      void this.end(w, loser === 'a' ? 'winB' : 'winA', now);
+      return;
+    }
+
     // 판정·휴전
-    if (w.state === 'active' && enemy) {
-      const last = Math.max(this.bigBattleAt, enemy.bigBattleAt ?? 0);
-      const status = this.status();
+    if (w.state === 'active') {
+      let last = this.bigBattleAt;
+      for (const d of this.sides.values()) last = Math.max(last, d.bigBattleAt ?? 0);
       if (judgeDue(w, now)) {
-        const r = judge(
-          w.a === this.uid ? status.scoreMe : status.scoreEnemy,
-          w.a === this.uid ? status.scoreEnemy : status.scoreMe,
-        );
-        void this.end(w, r, status, now);
+        const [me, them] = this.scores(w, this.occupation(w));
+        void this.end(w, mine === 'a' ? judge(me, them) : judge(them, me), now);
       } else if (!stale && ceasefireDue(w, last, now)) {
-        void this.end(w, 'ceasefire', status, now);
+        void this.end(w, 'ceasefire', now);
       }
     }
   }
@@ -323,25 +434,29 @@ export class WarSession {
     }
   }
 
-  private async end(
-    w: WarDoc,
-    result: WarDoc['result'],
-    status: WarStatus,
-    now: number,
-  ): Promise<void> {
+  private ending = '';
+
+  private async end(w: WarDoc, result: WarDoc['result'], now: number): Promise<void> {
+    if (this.ending === w.id) return;
+    this.ending = w.id;
     const peace =
-      result === 'ceasefire'
-        ? CEASEFIRE_PEACE_MS
-        : result === 'truce'
-          ? CEASEFIRE_PEACE_MS
-          : DEFEAT_PEACE_MS;
-    const enemy = this.enemyOf(w);
+      result === 'ceasefire' || result === 'truce' ? CEASEFIRE_PEACE_MS : DEFEAT_PEACE_MS;
+    const occupied = this.occupation(w);
+    const mine = sideOf(w, this.uid)!;
+    const [me, them] = this.scores(w, occupied);
+    // 기여도: 각자 마지막 스냅숏의 부대 가치 + 점령 청크.
+    const armyValue: Record<string, number> = {
+      [this.uid]: this.sim.army.units.reduce((s, u) => s + unitValue(u.type, u.men), 0),
+    };
+    for (const [uid, d] of this.sides)
+      armyValue[uid] = (d.units ?? []).reduce((s, u) => s + unitValue(u.t, u.m), 0);
     await this.patch(w, {
       state: 'ended',
       result,
       endedAt: now,
       peaceUntil: now + peace,
-      score: { [this.uid]: status.scoreMe, [enemy]: status.scoreEnemy },
+      score: { [w[mine]]: me, [w[otherSide(mine)]]: them },
+      contrib: contributions(w, occupied, armyValue),
       surrender: deleteField(),
     });
   }
@@ -352,84 +467,112 @@ export class WarSession {
   private settleEnded(now: number): void {
     if (this.settling) return;
     const settled = (this.sim.state.warsSettled ??= {});
-    const w = this.wars.find((x) => x.state === 'ended' && !settled[x.id]);
-    if (!w) return;
+    const list = this.wars.filter((x) => x.state === 'ended' && !settled[x.id]);
+    if (!list.length) return;
     this.settling = true;
-    void this.settle(w, now).finally(() => {
+    void (async () => {
+      for (const w of list) await this.settle(w, now);
+    })().finally(() => {
       this.settling = false;
     });
   }
 
   private async settle(w: WarDoc, now: number): Promise<void> {
     const settled = (this.sim.state.warsSettled ??= {});
-    const iWin =
-      (w.result === 'winA' && w.a === this.uid) || (w.result === 'winB' && w.b === this.uid);
-    const iLose =
-      (w.result === 'winA' && w.b === this.uid) || (w.result === 'winB' && w.a === this.uid);
-    if (iLose) {
-      if (w.paid) {
-        settled[w.id] = now;
-        return;
-      }
-      // 마지막 스냅숏(양쪽 점령 주장)을 서버에서 읽는다 — 끊겼다 돌아와도 정산할 수 있게.
-      const fb = getFirebase();
-      if (!fb) return;
-      const enemyUid = this.enemyOf(w);
-      let mineDoc: SideDoc | null = null;
-      let enemyDoc: SideDoc | null = null;
-      try {
-        const [a, b] = await Promise.all([
-          getDoc(doc(fb.db, 'wars', w.id, 'sides', this.uid)),
-          getDoc(doc(fb.db, 'wars', w.id, 'sides', enemyUid)),
-        ]);
-        mineDoc = a.exists() ? (a.data() as SideDoc) : null;
-        enemyDoc = b.exists() ? (b.data() as SideDoc) : null;
-      } catch (err) {
-        console.warn('정산용 스냅숏을 읽지 못했습니다', err);
-        return;
-      }
-      const occupied = mergeClaims(
-        {
-          uid: this.uid,
-          claims: mineDoc?.claims ?? {},
-          owned: [...this.sim.territory.ownedKeys()],
-        },
-        { uid: enemyUid, claims: enemyDoc?.claims ?? {}, owned: enemyDoc?.owned ?? [] },
-      );
-      const chunks: string[] = [];
-      for (const [k, who] of occupied)
-        if (who === enemyUid && this.sim.territory.isOwned(...xy(k))) chunks.push(k);
-      // 내가 낸다: 돈 25%, 자원 30%, 상대가 점령한 내 땅.
-      const pay = reparations(this.sim.money, this.sim.resources.stockNow);
-      this.sim.adjustMoney(-pay.money);
-      this.sim.resources.addStock('iron', -pay.iron);
-      this.sim.resources.addStock('coal', -pay.coal);
-      this.sim.resources.addStock('oil', -pay.oil);
-      this.sim.territory.cede(chunks);
-      settled[w.id] = now;
-      await this.patch(w, { paid: { ...pay, chunks } });
-      this.onNotice?.(
-        `패전 · 배상 ${Math.round(pay.money).toLocaleString('ko-KR')}만 원, 자원 30%, 영토 ${chunks.length}청크를 내줬습니다`,
-      );
-    } else if (iWin) {
-      if (!w.paid) return; // 상대가 낼 때까지 기다린다(상대가 접속하면 낸다).
-      this.sim.adjustMoney(w.paid.money);
-      this.sim.resources.addStock('iron', w.paid.iron);
-      this.sim.resources.addStock('coal', w.paid.coal);
-      this.sim.resources.addStock('oil', w.paid.oil);
-      this.sim.territory.annex(w.paid.chunks);
-      settled[w.id] = now;
-      this.onNotice?.(
-        `승전! 배상 ${Math.round(w.paid.money).toLocaleString('ko-KR')}만 원과 영토 ${w.paid.chunks.length}청크를 얻었습니다 · 새 땅은 도로로 이어 주세요`,
-      );
-    } else {
+    const mine = sideOf(w, this.uid);
+    const winner: WarSide | null = w.result === 'winA' ? 'a' : w.result === 'winB' ? 'b' : null;
+    if (!mine || !winner) {
       settled[w.id] = now;
       this.onNotice?.(
         w.result === 'ceasefire'
           ? '휴전 · 큰 전투 없이 1시간이 지났습니다 · 12시간 동안 다시 전쟁할 수 없습니다'
           : '종전 협정 · 피해가 비슷해 배상 없이 끝났습니다',
       );
+      this.done();
+      return;
     }
+    if (mine !== winner) {
+      if (w.paid?.[this.uid]) {
+        settled[w.id] = now;
+        return;
+      }
+      // 마지막 스냅숏(모든 점령 주장)을 서버에서 읽는다 — 끊겼다 돌아와도 정산할 수 있게.
+      const fb = getFirebase();
+      if (!fb) return;
+      let list: Array<{ uid: string; claims: Record<string, number>; owned: string[] }>;
+      try {
+        const snap = await getDocs(collection(fb.db, 'wars', w.id, 'sides'));
+        list = snap.docs.map((d) => {
+          const s = d.data() as SideDoc;
+          return { uid: d.id, claims: s.claims ?? {}, owned: s.owned ?? [] };
+        });
+      } catch (err) {
+        console.warn('정산용 스냅숏을 읽지 못했습니다', err);
+        return;
+      }
+      const me = list.find((x) => x.uid === this.uid);
+      if (me) me.owned = [...this.sim.territory.ownedKeys()];
+      else list.push({ uid: this.uid, claims: {}, owned: [...this.sim.territory.ownedKeys()] });
+      const occupied = mergeAllClaims(w, list);
+      const chunks: Record<string, string[]> = {};
+      const all: string[] = [];
+      for (const [k, who] of occupied)
+        if (sideOf(w, who) === winner && this.sim.territory.isOwned(...xy(k))) {
+          (chunks[who] ??= []).push(k);
+          all.push(k);
+        }
+      // 내가 낸다: 돈 25%, 자원 30%, 상대 진영이 점령한 내 땅.
+      const pay = reparations(this.sim.money, this.sim.resources.stockNow);
+      this.sim.adjustMoney(-pay.money);
+      this.sim.resources.addStock('iron', -pay.iron);
+      this.sim.resources.addStock('coal', -pay.coal);
+      this.sim.resources.addStock('oil', -pay.oil);
+      this.sim.territory.cede(all);
+      settled[w.id] = now;
+      await this.patch(w, { [`paid.${this.uid}`]: { ...pay, chunks } });
+      this.onNotice?.(
+        `패전 · 배상 ${Math.round(pay.money).toLocaleString('ko-KR')}만 원, 자원 30%, 영토 ${all.length}청크를 내줬습니다`,
+      );
+      this.done();
+      return;
+    }
+    // 승전: 패전국마다 낸 배상을 기여도 비율로 받는다(패전국이 접속해 낼 때까지 기다린다).
+    const share = shareOf(w, this.uid);
+    const losers = membersOf(w, otherSide(winner));
+    let got = 0;
+    let money = 0;
+    let land = 0;
+    for (const l of losers) {
+      const key = `${w.id}:${l}`;
+      const p = w.paid?.[l];
+      if (settled[key]) {
+        got++;
+        continue;
+      }
+      if (!p) continue;
+      this.sim.adjustMoney(p.money * share);
+      this.sim.resources.addStock('iron', Math.floor(p.iron * share));
+      this.sim.resources.addStock('coal', Math.floor(p.coal * share));
+      this.sim.resources.addStock('oil', Math.floor(p.oil * share));
+      const mineChunks = p.chunks?.[this.uid] ?? [];
+      this.sim.territory.annex(mineChunks);
+      settled[key] = now;
+      money += p.money * share;
+      land += mineChunks.length;
+      got++;
+    }
+    if (money || land)
+      this.onNotice?.(
+        `승전! 배상 ${Math.round(money).toLocaleString('ko-KR')}만 원과 영토 ${land}청크를 얻었습니다 · 새 땅은 도로로 이어 주세요`,
+      );
+    if (got === losers.length) {
+      settled[w.id] = now;
+      for (const l of losers) delete settled[`${w.id}:${l}`];
+      this.done();
+    }
+  }
+
+  private done(): void {
     this.claims = {};
     this.sim.army.war = null;
     this.revision++;
@@ -444,7 +587,8 @@ export class WarSession {
         .filter((x) => x.state === 'ended')
         .sort((a, b) => (b.endedAt ?? 0) - (a.endedAt ?? 0))[0] ??
       null;
-    if (!w)
+    const mine = w ? sideOf(w, this.uid) : null;
+    if (!w || !mine)
       return {
         war: null,
         enemyName: '',
@@ -454,31 +598,35 @@ export class WarSession {
         scoreEnemy: 0,
         surrenderOffered: false,
         surrenderPending: false,
+        isLeader: false,
+        allies: [],
+        enemies: [],
       };
     const now = sharedNow();
-    const enemyUid = this.enemyOf(w);
-    const enemy = w.state !== 'ended' ? this.enemySide : null;
-    const occupied =
-      enemy && w.state === 'active'
-        ? mergeClaims(
-            { uid: this.uid, claims: this.claims, owned: [...this.sim.territory.ownedKeys()] },
-            { uid: enemyUid, claims: enemy.claims ?? {}, owned: enemy.owned ?? [] },
-          )
-        : new Map<string, string>();
-    const myLoss = (this.sim.army.army.lossValue ?? 0) - this.lossAtStart;
-    const scoreMe = w.score?.[this.uid] ?? warScore(occupied, this.uid, enemy?.lossValue ?? 0);
-    const scoreEnemy = w.score?.[enemyUid] ?? warScore(occupied, enemyUid, myLoss);
-    const stale = w.state === 'active' && (!enemy || now - enemy.at > WAR_STALE_MS);
+    const other = otherSide(mine);
+    const enemies = membersOf(w, other);
+    const allies = membersOf(w, mine).filter((u) => u !== this.uid);
+    const live = w.state === 'active' ? this.occupation(w) : new Map<string, string>();
+    const [sMe, sEnemy] = w.state !== 'ended' ? this.scores(w, live) : [0, 0];
+    const stale = w.state === 'active' && !enemies.some((u) => this.fresh(u, now));
+    const leader = w[mine] === this.uid;
+    const s = w.surrender;
+    const surrenderSide = s ? sideOf(w, s.by) : null;
     return {
       war: w,
-      enemyName: w.names[enemyUid] ?? '상대 도시',
+      enemyName:
+        (w.names[w[other]] ?? '상대 도시') +
+        (enemies.length > 1 ? ` 외 ${enemies.length - 1}곳` : ''),
       phase:
         w.state === 'ended' ? 'ended' : w.state === 'prep' ? 'prep' : stale ? 'paused' : 'active',
       prepLeftMs: w.state === 'prep' ? Math.max(0, w.startsAt - now) : 0,
-      scoreMe,
-      scoreEnemy,
-      surrenderOffered: !!w.surrender && w.surrender.by !== this.uid,
-      surrenderPending: !!w.surrender && w.surrender.by === this.uid,
+      scoreMe: w.score?.[w[mine]] ?? sMe,
+      scoreEnemy: w.score?.[w[other]] ?? sEnemy,
+      surrenderOffered: !!s && surrenderSide === other && !s.votes?.[this.uid],
+      surrenderPending: !!s && surrenderSide === mine,
+      isLeader: leader,
+      allies: allies.map((u) => w.names[u] ?? u),
+      enemies: enemies.map((u) => w.names[u] ?? u),
     };
   }
 
@@ -531,6 +679,7 @@ export class WarSession {
       b: them.uid,
       parties: [this.uid, them.uid],
       names: { [this.uid]: this.myName, [them.uid]: them.cityName },
+      levels: { [this.uid]: me.capitalLevel, [them.uid]: them.capitalLevel },
       kind,
       surprise,
       state: surprise ? 'active' : 'prep',
@@ -548,22 +697,61 @@ export class WarSession {
     }
   }
 
+  /** 대규모 전쟁에 참가할 수 없는 이유(빈 문자열 = 가능). */
+  joinWhy(w: WarDoc, side: WarSide, me: PublicCity): string {
+    return joinBlock({
+      w,
+      me: { uid: this.uid, capitalLevel: me.capitalLevel },
+      side,
+      wars: this.wars,
+      alliedWith: (u) => !!this.alliances?.isAllied(u),
+    });
+  }
+
+  /** 대규모 전쟁에 한 진영으로 참가한다. */
+  async join(w: WarDoc, side: WarSide, me: PublicCity): Promise<string> {
+    const why = this.joinWhy(w, side, me);
+    if (why) return why;
+    const fb = getFirebase();
+    if (!fb) return '서버에 연결되어 있지 않습니다';
+    try {
+      await updateDoc(doc(fb.db, 'wars', w.id), {
+        parties: [...w.parties, this.uid],
+        [`joined.${this.uid}`]: { side, level: me.capitalLevel, at: sharedNow() },
+        [`names.${this.uid}`]: this.myName,
+      });
+      return '';
+    } catch (err) {
+      console.warn('전쟁 참가 실패', err);
+      return '참가하지 못했습니다';
+    }
+  }
+
+  /** 항복 신청(진영 대표만). */
   async offerSurrender(): Promise<void> {
     const w = this.current();
-    if (w) await this.patch(w, { surrender: { by: this.uid, at: sharedNow() } });
+    const mine = w && sideOf(w, this.uid);
+    if (w && mine && w[mine] === this.uid)
+      await this.patch(w, { surrender: { by: this.uid, at: sharedNow(), votes: {} } });
   }
 
   async withdrawSurrender(): Promise<void> {
     const w = this.current();
-    if (w) await this.patch(w, { surrender: deleteField() });
+    if (w && w.surrender?.by === this.uid) await this.patch(w, { surrender: deleteField() });
   }
 
-  /** 상대의 항복을 받아들인다 → 내 승전. */
+  /** 상대 진영의 항복에 동의한다. 대표가 동의하거나 진영 2/3(기습 3/4)가 동의하면 승전. */
   async acceptSurrender(): Promise<void> {
     const w = this.current();
-    if (!w || !w.surrender || w.surrender.by === this.uid) return;
-    const status = this.status();
-    await this.end(w, w.a === this.uid ? 'winA' : 'winB', status, sharedNow());
+    if (!w || !w.surrender) return;
+    const mine = sideOf(w, this.uid);
+    if (!mine || sideOf(w, w.surrender.by) === mine) return;
+    await this.patch(w, { [`surrender.votes.${this.uid}`]: true });
+    const next: WarDoc = {
+      ...w,
+      surrender: { ...w.surrender, votes: { ...(w.surrender.votes ?? {}), [this.uid]: true } },
+    };
+    if (surrenderAccepted(next)) await this.end(next, mine === 'a' ? 'winA' : 'winB', sharedNow());
   }
 }
 

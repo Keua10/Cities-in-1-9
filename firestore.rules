@@ -102,11 +102,18 @@ service cloud.firestore {
                     && request.resource.data.a == request.auth.uid
                     && request.resource.data.parties == [request.resource.data.a, request.resource.data.b]
                     && request.resource.data.a != request.resource.data.b;
+      // 참가국은 상태를 고친다. 대규모 전쟁에는 다른 도시가 자기 uid 만 덧붙여 참가할 수 있다.
       allow update: if signedIn()
-                    && request.auth.uid in resource.data.parties
                     && request.resource.data.a == resource.data.a
                     && request.resource.data.b == resource.data.b
-                    && request.resource.data.parties == resource.data.parties;
+                    && ((request.auth.uid in resource.data.parties
+                         && request.resource.data.parties == resource.data.parties)
+                        || (!(request.auth.uid in resource.data.parties)
+                            && resource.data.kind == 'large'
+                            && resource.data.state != 'ended'
+                            && request.resource.data.state == resource.data.state
+                            && request.resource.data.parties
+                               == resource.data.parties.concat([request.auth.uid])));
       allow delete: if false;
       // 한쪽의 전장 스냅숏. 자기 것만 쓴다.
       match /sides/{uid} {

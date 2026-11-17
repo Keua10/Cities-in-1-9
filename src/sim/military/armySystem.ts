@@ -68,6 +68,8 @@ export interface WarLink {
   onEvents?: (events: BattleEvent[]) => void;
   /** 상대가 내보낸 폭격·미사일(내 기기가 요격·피해를 계산한다). */
   enemyStrikes?: Strike[];
+  /** 같은 진영 도시들의 땅(지나가고 쉬고 보급받을 수 있다). */
+  allyOwned?: Set<string>;
 }
 
 /** 시가전으로 보는 청크: 거주+유동 인구가 이 이상. */
@@ -243,6 +245,7 @@ export class ArmySystem {
   battlefield(now: number): Battlefield {
     const me = this.mySide();
     const war = this.war;
+    if (war?.allyOwned?.size) for (const k of war.allyOwned) me.owned.add(k);
     return {
       now,
       me,
