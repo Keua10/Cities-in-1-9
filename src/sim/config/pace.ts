@@ -32,7 +32,7 @@ export const OFFLINE_MAX_REAL_MS = 24 * 60 * 60 * 1000;
 /* ---------------- 스타트 버닝 ---------------- */
 
 /** 도시를 처음 시작하면 한 번 주는 버프의 길이. 접속해 있는 플레이 시간으로 센다. */
-export const START_BOOST_MS = 10 * 60 * 1000;
+export const START_BOOST_MS = 40 * 60 * 1000;
 /** 버프 중 공사 진행 속도 배수. */
 export const START_BOOST_BUILD = 10;
 /** 버프 중 수입 배수(유지비는 그대로). */

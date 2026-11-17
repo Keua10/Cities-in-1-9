@@ -93,6 +93,14 @@ export function daytimeAt(epochMs: number, gameDay: number): DaytimeSnapshot {
   };
 }
 
+/** 대륙이 열린 날(세계 1일차). 이 날부터 센다. */
+const WORLD_EPOCH_DAY = Math.floor(Date.UTC(2026, 10, 17) / DAYTIME_DAY_MS);
+
+/** 화면에 보이는 세계 날짜(1일차부터). */
+export function worldDayNumber(life: DaytimeSnapshot): number {
+  return Math.max(1, life.absoluteDay - WORLD_EPOCH_DAY + 1);
+}
+
 /** 대륙 공통 달력의 날. worldMs = 세계 시각(worldClock.ts, 실제 60초 = 1일 × 배속). */
 export function worldGameDay(worldMs: number): number {
   return Math.floor(worldMs / WORLD_GAMEDAY_MS);

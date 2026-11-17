@@ -273,7 +273,7 @@ async function boot(): Promise<void> {
   const assignment = new AssignmentTable();
   sim.attachTraffic(congestion, assignment);
   sim.primeCatchup(Date.now());
-  // 도시마다 한 번: 스타트 버닝(플레이 시간 10분 동안 건설 ×10 · 수입 ×10).
+  // 도시마다 한 번: 스타트 버닝(플레이 시간 40분 동안 건설 ×10 · 수입 ×10).
   const boostGranted = sim.grantStartBoost();
   transport.update();
 
@@ -749,7 +749,7 @@ async function boot(): Promise<void> {
   const chrome = bindGameChrome(camera, tools, centerCamera);
   constructionPanel.onCancel = (tx, ty) => tools.cancelConstruction(tx, ty);
   if (boostGranted)
-    tools.announce('🔥 스타트 버닝 시작! 10분(플레이 시간) 동안 건설 속도 ×10 · 수입 ×10');
+    tools.announce('🔥 스타트 버닝 시작! 40분(플레이 시간) 동안 건설 속도 ×10 · 수입 ×10');
   sim.territory.onChange = (gained, lost) => {
     if (lost.length)
       tools.announce(
@@ -826,7 +826,7 @@ async function boot(): Promise<void> {
     weatherStatus.textContent =
       (weather.precipitation === 'rain' ? '비' : weather.precipitation === 'snow' ? '눈' : '맑음') +
       ' · ' +
-      weather.temperature.toFixed(0) +
+      (Math.round(weather.temperature) || 0) +
       '°C · 바람 ' +
       weather.windSpeed.toFixed(1) +
       'm/s' +

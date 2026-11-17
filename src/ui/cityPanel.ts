@@ -1,3 +1,4 @@
+import { worldDayNumber } from '../sim/time';
 import { audio } from '../audio/audio';
 import { LEVEL_COUNT, TIER_NAMES, ZONE_C, ZONE_I, ZONE_NAMES, ZONE_R } from '../sim/buildings';
 import { formatMoney } from './money';
@@ -241,7 +242,7 @@ export class CityPanel {
     const life = sim.daytime();
     setText(
       this.dateEl,
-      `${life.absoluteDay + 1}일차 ${String(life.hourOfDay).padStart(2, '0')}시`,
+      `${worldDayNumber(life)}일차 ${String(life.hourOfDay).padStart(2, '0')}시`,
     );
 
     /*

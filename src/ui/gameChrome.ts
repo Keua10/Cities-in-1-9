@@ -1,3 +1,4 @@
+import { worldDayNumber } from '../sim/time';
 import { WEEKDAY_NAMES, type DaytimeSnapshot } from '../sim/time';
 import { decorateGameIcons } from './gameIcons';
 import { formatMoney } from './money';
@@ -154,7 +155,7 @@ export function bindGameChrome(camera: Camera, tools: Tools, center: () => void)
       document.getElementById('strip-income')!.classList.toggle('negative', net < 0);
       setText(
         'strip-date',
-        `${life.absoluteDay + 1}일차 ${WEEKDAY_NAMES[life.weekday]} ${String(life.hourOfDay).padStart(2, '0')}:${String(life.minuteOfDay % 60).padStart(2, '0')} ${life.isDay ? '낮' : '밤'}`,
+        `${worldDayNumber(life)}일차 ${WEEKDAY_NAMES[life.weekday]} ${String(life.hourOfDay).padStart(2, '0')}:${String(life.minuteOfDay % 60).padStart(2, '0')} ${life.isDay ? '낮' : '밤'}`,
       );
       setNotice(tools.activeMessage(now));
       const boost = sim.startBoostLeftMs;
