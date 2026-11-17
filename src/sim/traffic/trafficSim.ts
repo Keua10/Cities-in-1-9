@@ -47,8 +47,7 @@ import {
   VEHICLE_BODY_LENGTH_TILES,
   VEHICLE_SPEED_TILES_PER_SEC,
 } from '../simConstants';
-import { sessionDaytimeAt, type DaytimeSnapshot } from '../time';
-import { worldGameDay } from '../military/weather';
+import { sessionDaytimeAt, worldDaytimeAt, type DaytimeSnapshot } from '../time';
 import { sharedNow } from '../sharedClock';
 import { bodiesOverlap, SpatialGrid, type Body } from './collision';
 import {
@@ -322,7 +321,7 @@ export class TrafficSim {
     // 수백 명이 잡혀도 scanCursor가 다음 프레임부터 이어서 처리한다.
     const tripBudget = Math.min(room, ROUTE_BUDGET_PER_FRAME);
     const lifeDelta = Math.min(dtMs, 250);
-    this.daytime = sessionDaytimeAt(this.macro.lifeElapsedMs, worldGameDay(sharedNow()));
+    this.daytime = worldDaytimeAt(sharedNow());
     const trips = this.citizens.collectTrips(this.daytime, lifeDelta, tripBudget);
     for (const trip of trips) this.queueTrip(trip);
 
@@ -362,7 +361,7 @@ export class TrafficSim {
     return this.citizens.pedestrians.walkers;
   }
   get daytimeState(): DaytimeSnapshot {
-    return sessionDaytimeAt(this.macro.lifeElapsedMs, worldGameDay(sharedNow()));
+    return worldDaytimeAt(sharedNow());
   }
   /** 렌더러의 신호등 색과 차량 판정이 같은 시계를 보게 한다. */
   get signalTimeMs(): number {

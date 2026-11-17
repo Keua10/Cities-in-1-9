@@ -1,11 +1,7 @@
-import {
-  DAYTIME_DAY_MS,
-  GAMETIME_DAY_MS,
-  GAMETIME_DAYS_PER_YEAR,
-  SEASON_DAYS,
-} from '../config/macro';
+import { DAYTIME_DAY_MS, GAMETIME_DAYS_PER_YEAR, SEASON_DAYS } from '../config/macro';
 import { CONTINENT_Y0, CONTINENT_H } from '../../world/continent';
 import { chunkTerrain } from './terrain';
+import { worldDaytimeAt, worldGameDay } from '../time';
 
 /**
  * 전쟁용 밤·날씨 (설계안 Ⅵ: 밤에는 시야 절반, 비·눈에는 이동 −20%, 바람이 강하면 공군 정확도 감소).
@@ -49,15 +45,13 @@ export function hourAt(now: number): number {
   return f * 24;
 }
 
+/** 밤: 도시 화면과 같은 기준(계절에 따른 해 뜨고 지는 시각, 공유 시계). */
 export function isNight(now: number): boolean {
-  const h = hourAt(now);
-  return h >= 20 || h < 5;
+  return !worldDaytimeAt(now).isDay;
 }
 
 /** 대륙 공통 달력의 날(공유 시계 기준). 도시 배속과 상관없다. */
-export function worldGameDay(now: number): number {
-  return Math.floor(now / GAMETIME_DAY_MS);
-}
+export { worldGameDay };
 
 /** 대륙 공통 계절 0 봄 · 1 여름 · 2 가을 · 3 겨울. */
 export function worldSeason(now: number): 0 | 1 | 2 | 3 {

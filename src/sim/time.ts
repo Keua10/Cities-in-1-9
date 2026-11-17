@@ -6,6 +6,9 @@ import {
   SEASON_DAYS,
 } from './simConstants';
 
+/** 실제 60초 = 게임 1일(config/macro.ts GAMETIME_DAY_MS 와 같다). */
+const WORLD_GAMEDAY_MS = 60_000;
+
 export const enum Season {
   Spring = 0,
   Summer = 1,
@@ -87,6 +90,19 @@ export function daytimeAt(epochMs: number, gameDay: number): DaytimeSnapshot {
     isDay: hour >= sunriseHour && hour < sunsetHour,
     gameDayOfYear,
   };
+}
+
+/** 대륙 공통 달력의 날(공유 시계 기준, 실제 60초 = 1일). 도시 배속과 상관없다. */
+export function worldGameDay(now: number): number {
+  return Math.floor(now / WORLD_GAMEDAY_MS);
+}
+
+/**
+ * 대륙 공통 시계(피드백 1차). 모든 도시와 전쟁이 같은 시각·같은 낮밤·같은 계절을 본다.
+ * now = 공유 시계(sharedNow). 하루 = 실제 10분, 배속과 상관없이 흐른다.
+ */
+export function worldDaytimeAt(now: number): DaytimeSnapshot {
+  return daytimeAt(now, worldGameDay(now));
 }
 
 /**

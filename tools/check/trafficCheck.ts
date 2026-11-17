@@ -426,7 +426,12 @@ console.log('4. 실제 주행 (4차로 격자 도시)');
   }
   const watch = new Map<Vehicle, Watch>();
 
+  // 생활 시계는 대륙 공통(공유 시계)이라, 시뮬레이션 시각을 07:30 출근 시간에 맞춰 흘린다.
+  const realNow = Date.now;
+  let simNow = 1_900_000_000_000 - (1_900_000_000_000 % 600_000) + 187_500;
+  Date.now = () => simNow;
   for (let frame = 0; frame < FRAMES; frame++) {
+    simNow += framePattern[frame % framePattern.length];
     sim.advanceLifeClock(framePattern[frame % framePattern.length]);
     traffic.update(framePattern[frame % framePattern.length]);
     const vehicles = all();
@@ -569,6 +574,7 @@ console.log('4. 실제 주행 (4차로 격자 도시)');
     redRightNoStop === 0,
     `${redRightNoStop}회`,
   );
+  Date.now = realNow;
 }
 
 /* ------------------------------------------------------------------ *

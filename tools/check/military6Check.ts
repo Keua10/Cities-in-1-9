@@ -524,6 +524,9 @@ console.log('  OK   병원 회복 2배·전쟁 피로·승전 기분·전후 복
   assert.ok(
     W.temperatureAt(summer + 30 * DAYMS, base.cy) > W.temperatureAt(winter + 30 * DAYMS, base.cy),
   );
+  // 도시 화면 낮·밤 = 전쟁 낮·밤(대륙 공통 시계).
+  const { worldDaytimeAt } = await import('../../src/sim/time');
+  for (let t = 0; t < 2 * DAY; t += 7_000) assert.equal(W.isNight(t), !worldDaytimeAt(t).isDay);
   // 도시 화면 날씨 = 전쟁 날씨(같은 시각·같은 자리).
   const origin = { cx: base.cx + 3, cy: base.cy };
   const world = new World(origin);

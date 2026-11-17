@@ -18,8 +18,7 @@ import {
 } from '../sim/territory';
 import { SERVICE_KIND_COUNT } from '../sim/services';
 import { FACILITY_NAMES } from '../sim/simConstants';
-import { sessionDaytimeAt } from '../sim/time';
-import { worldGameDay } from '../sim/military/weather';
+import { worldDaytimeAt } from '../sim/time';
 import { sharedNow } from '../sim/sharedClock';
 import { sewerOutletHint } from '../sim/sewerHint';
 import type { FoodSummary } from '../sim/food';
@@ -241,7 +240,7 @@ export class CityPanel {
 
     // 화면 아래 시계와 같은 생활 시계를 쓴다. 예전에는 시뮬레이션 날짜
     // (1일 = 1분)를 써서 아래 시계(1일 = 10분)보다 날짜가 10배 빨리 갔다.
-    const life = sessionDaytimeAt(sim.lifeElapsedMs, worldGameDay(sharedNow()));
+    const life = worldDaytimeAt(sharedNow());
     setText(
       this.dateEl,
       `${life.absoluteDay + 1}일차 ${String(life.hourOfDay).padStart(2, '0')}시`,
