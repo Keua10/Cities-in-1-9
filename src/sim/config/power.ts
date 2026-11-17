@@ -46,5 +46,6 @@ export function facilityPowerDemand(kind: number): number {
   if (res !== undefined) return res;
   if (kind === 48) return 150;
   if (kind === 49) return 0;
+  if (kind === 50) return 40;
   return 100;
 }

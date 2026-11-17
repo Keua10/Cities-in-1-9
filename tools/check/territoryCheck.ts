@@ -1,3 +1,5 @@
+import { FAC_OCC_TOWER, OCC_TOWER_MS } from '../../src/sim/config/military';
+import { FACILITY_SPECS } from '../../src/sim/facilities';
 import { strict as assert } from 'node:assert';
 import { BASE_CHUNK_SPAN, CHUNK_SIZE } from '../../src/core/constants';
 import { chunkKey } from '../../src/core/iso';
@@ -31,7 +33,7 @@ import { World } from '../../src/world/world';
 
 // 1. 레벨
 assert.equal(CITY_LEVELS.length, 9);
-assert.equal(FACILITY_UNLOCK_LEVEL.length, 50);
+assert.equal(FACILITY_UNLOCK_LEVEL.length, 51);
 assert.equal(cityLevelFor(0, 16), 1);
 assert.equal(cityLevelFor(100, 16), 1, '영토 20청크 전에는 2레벨이 안 된다');
 assert.equal(cityLevelFor(100, 20), 2);
@@ -99,7 +101,9 @@ assert.ok(t.isOwned(bx - 1, by + 1), '도로로 이어진 청크는 거주 100�
 assert.ok(!t.isOwned(bx + 1, by - 1), '길이 없으면 유동인구가 많아도 점령 안 됨');
 assert.equal(t.count, 17);
 assert.ok(world.isExplored(bx - 3, by + 1), '새 땅 둘레가 탐사된다');
-t.people = new Map([[west, { residents: OCCUPY_RESIDENTS - 1, floating: OCCUPY_FLOATING - 1, raw: 0 }]]);
+t.people = new Map([
+  [west, { residents: OCCUPY_RESIDENTS - 1, floating: OCCUPY_FLOATING - 1, raw: 0 }],
+]);
 t.people.set(chunkKey(bx - 2, by + 1), { residents: 500, floating: 0, raw: 500 });
 t.update(now + 2000, true);
 assert.ok(t.isOwned(bx - 1, by + 1), '한 번 얻은 땅은 인구가 줄어도 안 잃는다');
@@ -171,4 +175,37 @@ console.log('  OK   수도 확장(레벨·25%·둘러싼 땅), 이전(5분·하�
   assert.equal(again.territory.count, 20);
   assert.equal(again.cityLevel, 2);
 }
-console.log('Territory passed: 9 levels, start land, build rules, auto occupation, cut, capital.');
+// 9. 점령타워: 맞닿은 무소유 청크만, 실제 1시간 뒤 영토, 타워가 헐리면 취소
+{
+  const w5 = new World(0);
+  const s5 = new MacroSim(w5, macro());
+  const t5 = s5.territory;
+  const east = chunkKey(bx + 4, by + 1);
+  assert.equal(t5.towerRule(bx + 4, by + 1), '');
+  assert.ok(t5.towerRule(bx + 1, by + 1).includes('이미'));
+  assert.ok(t5.towerRule(bx + 6, by + 1).includes('맞닿은'));
+  t5.foreign = new Set([chunkKey(bx - 1, by)]);
+  assert.ok(t5.towerRule(bx - 1, by).includes('다른 도시'));
+  const at = 9_000_000;
+  t5.updateTowers(new Set([east]), at);
+  assert.equal(t5.towerProgress(at)[0].leftMs, OCC_TOWER_MS);
+  t5.updateTowers(new Set([east]), at + OCC_TOWER_MS - 1);
+  assert.ok(!t5.isOwned(bx + 4, by + 1), '1시간 전에는 아직');
+  t5.updateTowers(new Set([east]), at + OCC_TOWER_MS);
+  assert.ok(t5.isOwned(bx + 4, by + 1), '1시간 뒤 내 땅');
+  t5.update(at + OCC_TOWER_MS + 60 * 60_000, true);
+  assert.ok(t5.isOwned(bx + 4, by + 1), '사람이 없고 도로가 없어도 유지');
+  const far = chunkKey(bx + 5, by + 1);
+  t5.updateTowers(new Set([far]), at);
+  t5.updateTowers(new Set(), at + 1000);
+  t5.updateTowers(new Set([far]), at + OCC_TOWER_MS);
+  assert.ok(!t5.isOwned(bx + 5, by + 1), '헐었다 다시 지으면 처음부터');
+  const p5 = FACILITY_SPECS[FAC_OCC_TOWER];
+  assert.equal(p5.unlockLevel, 2);
+  assert.equal(p5.cost, 20_000);
+  assert.equal(p5.needsRoad, false);
+}
+console.log('  OK   점령타워(맞닿은 무소유 청크, 1시간, 철거 시 취소)');
+console.log(
+  'Territory passed: 9 levels, start land, build rules, auto occupation, cut, capital, tower.',
+);

@@ -8,6 +8,9 @@
 
 export const FAC_BARRACKS = 48;
 export const FAC_TRENCH = 49;
+/** 점령타워: 내 영토와 맞닿은 무소유 청크에 세우면 실제 1시간 뒤 그 청크가 내 땅이 된다. */
+export const FAC_OCC_TOWER = 50;
+export const OCC_TOWER_MS = 60 * 60_000;
 
 export type UnitType =
   | 'infantry'

@@ -432,7 +432,11 @@ export class CityPanel {
     setText(
       this.terrLineEl,
       `영토 ${t.count}청크 · 수도 Lv.${t.capitalLevel} (${span}×${span})` +
-        (moving ? `\n수도 이전 중 · ${Math.ceil(moving.leftMs / 1000)}초 남음` : ''),
+        (moving ? `\n수도 이전 중 · ${Math.ceil(moving.leftMs / 1000)}초 남음` : '') +
+        t
+          .towerProgress()
+          .map((p) => `\n점령타워 (${p.key}) · ${Math.ceil(p.leftMs / 60000)}분 뒤 내 땅`)
+          .join(''),
     );
     const cut = t.cutChunks();
     if (cut.length) {

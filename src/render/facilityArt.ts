@@ -430,6 +430,34 @@ function militaryArt(a: PixelArt, kind: number, n: number): void {
     a.vehicle(2.7, 4.3, M.teal);
     return;
   }
+  if (kind === 50) {
+    // 점령타워: 철골 탑 + 꼭대기 깃발, 발치에 천막과 모래주머니
+    a.slab(0.1, 0.1, n - 0.2, n - 0.2, 0, 'soil', 'shadow');
+    a.box(0.75, 0.75, 0.5, 0.5, 4, M.steel);
+    for (const [u, v] of [
+      [0.8, 0.8],
+      [1.2, 0.8],
+      [0.8, 1.2],
+      [1.2, 1.2],
+    ] as const)
+      a.line(a.p(u, v, 4), a.p(1.0, 1.0, 46), 'stoneDark');
+    a.line(a.p(0.82, 0.82, 18), a.p(1.18, 1.18, 30), 'stoneDark');
+    a.line(a.p(1.18, 0.82, 18), a.p(0.82, 1.18, 30), 'stoneDark');
+    a.box(0.88, 0.88, 0.24, 0.24, 4, M.roof, 46);
+    const top = a.p(1.0, 1.0, 50);
+    a.line(top, a.p(1.0, 1.0, 64), 'ink');
+    const f = a.p(1.0, 1.0, 64);
+    a.rect(f[0] + 1, f[1], 10, 6, 'red');
+    a.rect(f[0] + 1, f[1] + 2, 10, 1, 'white');
+    a.box(0.2, 1.35, 0.5, 0.4, 7, M.teal);
+    for (const [u, v] of [
+      [1.45, 0.25],
+      [1.6, 0.5],
+      [1.5, 1.55],
+    ] as const)
+      a.box(u, v, 0.22, 0.16, 3, M.yellow);
+    return;
+  }
   // 참호·벙커: 모래주머니 고리 + 낮은 콘크리트 벙커
   a.slab(0.08, 0.08, 0.84, 0.84, 0, 'soil', 'shadow');
   for (const [u, v] of [

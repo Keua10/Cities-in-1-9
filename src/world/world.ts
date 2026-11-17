@@ -196,7 +196,7 @@ export class World {
    * 짓는 공공·행정·군사 시설이다. 막히면 이유 문장, 되면 빈 문자열. 없으면 제한 없음
    * (점검 도구·둘러보기 전 단계).
    */
-  landRule: ((cx: number, cy: number, use: 'zone' | 'owned') => string) | null = null;
+  landRule: ((cx: number, cy: number, use: 'zone' | 'owned' | 'tower') => string) | null = null;
 
   /** 광산 자리 규칙(sim/resources.ts mineSiteProblem + 남은 매장량). 없으면 매장지만 본다. */
   mineRule: ((kind: number, tx: number, ty: number) => string) | null = null;

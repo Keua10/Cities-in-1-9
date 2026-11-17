@@ -10,7 +10,8 @@ import { CHUNK_SIZE } from '../core/constants';
 import { MetroNetwork } from './metro';
 import { Build } from '../world/build';
 import { JunctionIndex } from './traffic/junctions';
-import { chunkIndexOf, localIndexOf } from '../core/iso';
+import { chunkIndexOf, chunkKey, localIndexOf } from '../core/iso';
+import { FAC_OCC_TOWER } from './config/military';
 import type { MacroState } from '../net/types';
 import type { Parcel, World } from '../world/world';
 import { AssignmentTable } from './assignment';
@@ -614,6 +615,14 @@ export class MacroSim {
     this.nature.update();
   }
 
+  /** 서 있는 점령타워 청크를 영토 계산에 넘긴다(실제 1시간 뒤 영토). */
+  private updateTowers(): void {
+    const chunks = new Set<string>();
+    for (const f of this.services.facilityList())
+      if (f.kind === FAC_OCC_TOWER) chunks.add(chunkKey(chunkIndexOf(f.tx), chunkIndexOf(f.ty)));
+    this.territory.updateTowers(chunks);
+  }
+
   /**
    * deltaMs: 게임 시간(배속 적용). realMs: 실제로 흐른 플레이 시간(버닝을 여기서 쓴다).
    * realMs 를 주지 않으면 deltaMs 와 같다고 본다(점검 도구).
@@ -622,6 +631,7 @@ export class MacroSim {
     const boosted = this.consumeBoost(realMs);
     this.advanceLifeClock(deltaMs, boosted);
     this.territory.update();
+    this.updateTowers();
     this.army.update();
     this.power.ensure(this.world);
     this.water.ensure(this.world);

@@ -1,3 +1,4 @@
+import { OCC_TOWER_MS } from './config/military';
 import { BASE_CHUNK_SPAN, CHUNK_SIZE } from '../core/constants';
 import { chunkIndexOf, chunkKey, localIndexOf, parseChunkKey } from '../core/iso';
 import type { MacroState } from '../net/types';
@@ -73,6 +74,8 @@ export interface TerritoryState {
   ceded?: string[];
   /** 전쟁으로 얻은 청크. 길 연결 규칙을 보지 않는다. */
   annexed?: string[];
+  /** 점령타워가 선 청크와 타워 완공 시각(실제 ms). OCC_TOWER_MS 뒤 영토가 된다. */
+  towers?: Record<string, number>;
 }
 
 export interface ChunkPeople {
@@ -89,7 +92,7 @@ export interface Rect {
   span: number;
 }
 
-export type LandUse = 'zone' | 'owned';
+export type LandUse = 'zone' | 'owned' | 'tower';
 
 export function emptyTerritory(baseCx: number, baseCy: number): TerritoryState {
   const owned: string[] = [];
@@ -144,6 +147,7 @@ export class TerritorySystem {
     if (typeof raw.movedAt === 'number') out.movedAt = raw.movedAt;
     if (Array.isArray(raw.ceded)) out.ceded = raw.ceded.filter((k) => typeof k === 'string');
     if (Array.isArray(raw.annexed)) out.annexed = raw.annexed.filter((k) => typeof k === 'string');
+    if (raw.towers && typeof raw.towers === 'object') out.towers = { ...raw.towers };
     return out;
   }
 
@@ -220,6 +224,7 @@ export class TerritorySystem {
    * owned: 공공·행정·군사 시설 — 내 땅만.
    */
   landRule = (cx: number, cy: number, use: LandUse): string => {
+    if (use === 'tower') return this.towerRule(cx, cy);
     if (this.isOwned(cx, cy)) return '';
     if (use === 'zone' && this.isFrontier(cx, cy)) return '';
     return use === 'zone'
@@ -536,6 +541,56 @@ export class TerritorySystem {
     this.state.owned = [...this.owned];
     this.revision++;
     this.changed();
+  }
+
+  /** 점령타워를 세울 수 있는 청크인가(빈 문자열 = 가능). */
+  towerRule(cx: number, cy: number): string {
+    const key = chunkKey(cx, cy);
+    if (this.isOwned(cx, cy)) return '이미 내 영토입니다';
+    if (this.foreign.has(key)) return '다른 도시의 땅에는 세울 수 없습니다';
+    const near =
+      this.isOwned(cx - 1, cy) ||
+      this.isOwned(cx + 1, cy) ||
+      this.isOwned(cx, cy - 1) ||
+      this.isOwned(cx, cy + 1);
+    if (!near) return '내 영토와 맞닿은 청크에만 세울 수 있습니다';
+    return '';
+  }
+
+  /** 점령타워 진행: 타워 청크 → 완공 시각. 남은 ms(진행 중인 것만). */
+  towerProgress(now = Date.now()): { key: string; leftMs: number }[] {
+    return Object.entries(this.state.towers ?? {}).map(([key, at]) => ({
+      key,
+      leftMs: Math.max(0, at + OCC_TOWER_MS - now),
+    }));
+  }
+
+  /**
+   * 점령타워. towerChunks = 지금 완공되어 서 있는 타워의 청크.
+   * 처음 보면 시각을 적고, 1시간이 지나면 영토로 만든다. 타워가 헐리거나 다른 도시
+   * 땅이 되면 기록을 지운다.
+   */
+  updateTowers(towerChunks: ReadonlySet<string>, now = Date.now()): void {
+    const prev = this.state.towers ?? {};
+    const next: Record<string, number> = {};
+    const gained: string[] = [];
+    for (const key of towerChunks) {
+      if (this.owned.has(key) || this.foreign.has(key)) continue;
+      const at = prev[key] ?? now;
+      if (now - at >= OCC_TOWER_MS) gained.push(key);
+      else next[key] = at;
+    }
+    const changed =
+      gained.length ||
+      Object.keys(next).length !== Object.keys(prev).length ||
+      Object.keys(next).some((k) => prev[k] !== next[k]);
+    if (!changed) return;
+    if (Object.keys(next).length) this.state.towers = next;
+    else delete this.state.towers;
+    if (gained.length) {
+      this.annex(gained);
+      this.onChange?.(gained, []);
+    } else this.changed();
   }
 
   /** 전쟁에서 얻은 땅을 영토에 더한다. */

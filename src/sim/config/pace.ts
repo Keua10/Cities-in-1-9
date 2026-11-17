@@ -106,6 +106,7 @@ export const CONSTRUCTION_SECONDS: readonly number[] = [
   15 * MIN, // 47 석탄 화력 발전소
   10 * MIN, // 48 병영
   1 * MIN, // 49 참호·벙커
+  10 * MIN, // 50 점령타워
 ];
 
 /** 표에 없는 시설(새로 추가했는데 표를 안 고친 경우)은 일반 등급으로 본다. */
