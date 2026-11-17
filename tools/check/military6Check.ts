@@ -297,5 +297,111 @@ console.log('  OK   공장별 생산·군수 공장 −30%·미사일 발사·�
 }
 console.log('  OK   병원 회복 2배·전쟁 피로·승전 기분·전후 복구(×2·×3)·식량 수입 1.5배');
 
+// 7. 밤·날씨(공유 시계로 결정), 공중 수송, 식량 봉쇄
+{
+  const W = await import('../../src/sim/military/weather');
+  const DAY = 600_000;
+  assert.ok(W.isNight(0) && !W.isNight(DAY / 2), '0시 밤, 12시 낮');
+  assert.equal(W.visionAt(DAY / 2, 2), 2);
+  assert.equal(W.visionAt(0, 2), 1, '밤 시야 절반');
+  const counts: Record<string, number> = { clear: 0, rain: 0, snow: 0, wind: 0 };
+  for (let p = 0; p < 400; p++) counts[W.weatherAt(p * W.WEATHER_PERIOD_MS, base.cx, base.cy)]++;
+  assert.ok(counts.clear > 180 && counts.clear < 320, `맑음 비율 ${JSON.stringify(counts)}`);
+  assert.equal(
+    W.weatherAt(123_456_789, base.cx, base.cy),
+    W.weatherAt(123_456_789 + 1000, base.cx + 1, base.cy + 1),
+    '같은 지역·같은 20분이면 같은 날씨(두 기기 동일)',
+  );
+  // 비 오는 시각을 찾아 이동이 느린지
+  let wet = -1;
+  for (let p = 0; p < 400 && wet < 0; p++) {
+    const w = W.weatherAt(p * W.WEATHER_PERIOD_MS, base.cx + 3, base.cy);
+    if (w === 'rain' || w === 'snow') wet = p * W.WEATHER_PERIOD_MS;
+  }
+  let dry = -1;
+  for (let p = 0; p < 400 && dry < 0; p++)
+    if (W.weatherAt(p * W.WEATHER_PERIOD_MS, base.cx + 3, base.cy) === 'clear')
+      dry = p * W.WEATHER_PERIOD_MS;
+  const walk = (t0: number) => {
+    const a = emptyArmy();
+    const u = mk(a, 'infantry', 2);
+    u.path = [chunkKey(base.cx + 3, base.cy)];
+    u.state = 'moving';
+    stepArmy(a, bf(side('a', a.units, keys(0, 6)), null, t0 + 1000), 1000);
+    return u.progress;
+  };
+  assert.ok(Math.abs(walk(wet) / walk(dry) - W.WET_MOVE) < 1e-6, '비·눈 이동 −20%');
+}
+{
+  const origin = { cx: base.cx, cy: base.cy - 1 };
+  const world = new World(origin);
+  const sim = new MacroSim(world, { money: 10_000, population: 0, tick: 0, tickedAt: 0 } as never);
+  let facilities: FacilityRecord[] = [];
+  const sys = new ArmySystem(
+    sim.state,
+    sim.territory,
+    sim.resources,
+    () => facilities,
+    () => 9,
+    () => {},
+  );
+  const u = newUnit(sys.army, 'infantry', { cx: base.cx + 1, cy: base.cy }, {}, 0);
+  u.state = 'idle';
+  const [ox, oy] = [...sim.territory.ownedKeys()].at(-1)!.split(',').map(Number);
+  assert.ok(sys.airliftBlock(u.id, ox, oy).includes('공항'), '공항이 있어야');
+  facilities = [
+    {
+      index: 0,
+      kind: 18,
+      tx: (base.cx + 1) * 32 + 4,
+      ty: base.cy * 32 + 4,
+      span: 2,
+      hasRoad: true,
+    },
+  ];
+  assert.ok(sys.airliftBlock(u.id, base.cx + 30, base.cy).includes('내 땅'), '내 땅에만');
+  const money0 = sim.state.money;
+  assert.equal(sys.airlift(u.id, ox, oy, 1000), '');
+  assert.equal(sim.state.money, money0 - 200, '수송비');
+  assert.ok(u.airlift && u.state === 'moving');
+  assert.ok(sys.order(u.id, ox, oy).includes('날아가는'), '날아가는 동안 명령 불가');
+  const me = sys.battlefield(1000);
+  stepArmy(sys.army, { ...me, now: 2000 }, 1000);
+  assert.ok(u.airlift, '아직 비행 중');
+  const ev = stepArmy(sys.army, { ...me, now: u.airlift!.arriveAt }, 1000);
+  assert.ok(
+    ev.some((e) => e.type === 'landed') && u.cx === ox && u.cy === oy && !u.airlift,
+    '도착',
+  );
+}
+{
+  const origin = { cx: base.cx, cy: base.cy - 1 };
+  const world = new World(origin);
+  const sim = new MacroSim(world, { money: 10_000, population: 0, tick: 0, tickedAt: 0 } as never);
+  const owned = [...sim.territory.ownedKeys()];
+  const edge = owned[0];
+  sim.atWar = true;
+  sim.army.war = {
+    enemy: side('b', [], []),
+    occupied: new Map([[edge, '#enemy']]),
+    capitalProtected: true,
+    paused: false,
+  };
+  sim.update(1, 0);
+  assert.ok(sim.blockaded, '국경 청크를 빼앗기면 봉쇄');
+  assert.equal(sim.food.importLimit, 0.5);
+  sim.food.summary.production = 0;
+  sim.food.summary.consumption = 100;
+  sim.food.applyStock(0);
+  assert.equal(sim.food.summary.importPerDay, 50, '수입 절반');
+  assert.equal(sim.food.summary.hunger, 0.5, '나머지는 굶주림');
+  sim.army.war.occupied = new Map();
+  sim.update(1, 0);
+  assert.ok(!sim.blockaded && sim.food.importLimit === 1, '되찾으면 풀림');
+}
+console.log(
+  '  OK   밤(시야 절반)·날씨(비·눈 이동 −20%, 공유 시계로 같음)·공중 수송·식량 봉쇄(수입 절반·굶주림)',
+);
+
 void BOMB_INTERVAL_MS;
 console.log('Military stage 6 passed: machines, air/sea domains, matchups, bombing, missiles.');

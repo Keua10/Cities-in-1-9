@@ -12,6 +12,8 @@ import { Build } from '../world/build';
 import { JunctionIndex } from './traffic/junctions';
 import { chunkIndexOf, chunkKey, localIndexOf } from '../core/iso';
 import { FAC_OCC_TOWER } from './config/military';
+/** 항구(여객·화물·복합). 봉쇄 판정. */
+const PORT_KINDS: ReadonlySet<number> = new Set([19, 21, 22, 23]);
 import {
   POSTWAR_MS,
   REBUILD_MUL,
@@ -20,6 +22,8 @@ import {
   WAR_FATIGUE_MAX,
   WAR_FATIGUE_PER_HOUR,
   WAR_FOOD_IMPORT_MUL,
+  BLOCKADE_IMPORT,
+  HUNGER_PENALTY,
 } from './config/war';
 import type { MacroState } from '../net/types';
 import type { Parcel, World } from '../world/world';
@@ -336,6 +340,36 @@ export class MacroSim {
   grantsEnabled = true;
   /** 전쟁 중이면 1배속(공유 시계와 맞춘다). net/warSession.ts 가 켠다. */
   atWar = false;
+
+  /** 식량 봉쇄 중(적이 내 항구나 국경 청크를 점령). */
+  blockaded = false;
+
+  /**
+   * 봉쇄: 적이 점령한 내 땅 중에 항구가 있거나 국경(내 땅이 아닌 곳과 맞닿은) 청크가 있으면.
+   * 국경 도로 = 바깥과 이어지는 길목이라 국경 청크면 끊긴 것으로 본다.
+   */
+  private checkBlockade(): boolean {
+    const war = this.army.war;
+    if (!war) return false;
+    const ports = new Set<string>();
+    for (const f of this.services.facilityList())
+      if (PORT_KINDS.has(f.kind)) ports.add(chunkKey(chunkIndexOf(f.tx), chunkIndexOf(f.ty)));
+    const t = this.territory;
+    for (const [key, who] of war.occupied) {
+      if (who === this.army.uid) continue;
+      const [cx, cy] = key.split(',').map(Number);
+      if (!t.isOwned(cx, cy)) continue;
+      if (ports.has(key)) return true;
+      if (
+        !t.isOwned(cx + 1, cy) ||
+        !t.isOwned(cx - 1, cy) ||
+        !t.isOwned(cx, cy + 1) ||
+        !t.isOwned(cx, cy - 1)
+      )
+        return true;
+    }
+    return false;
+  }
 
   /** 전후 복구: 종전 뒤 6시간 공사 속도 ×2(패전국 ×3). */
   rebuildMul(now = Date.now()): number {
@@ -668,6 +702,8 @@ export class MacroSim {
     this.territory.update();
     this.updateTowers();
     this.food.importPriceMul = this.atWar ? WAR_FOOD_IMPORT_MUL : 1;
+    this.blockaded = this.atWar && this.checkBlockade();
+    this.food.importLimit = this.blockaded ? BLOCKADE_IMPORT : 1;
     this.army.update();
     this.power.ensure(this.world);
     this.water.ensure(this.world);
@@ -820,6 +856,7 @@ export class MacroSim {
     const policies = this.policies;
     const essentialGateNow = this.essentialGateFactor;
     const warMood = this.warMood();
+    const hungerPenalty = this.food.summary.hunger * HUNGER_PENALTY;
     const sanitationAge =
       (this.tick - (this.macro.sanitationStartTick ?? this.tick)) / TICKS_PER_DAY;
     const sanitationRamp = Math.max(0, Math.min(1, (sanitationAge - 30) / 30));
@@ -979,6 +1016,7 @@ export class MacroSim {
                     1,
                     satisfaction(zone, dist, nui, congestion, needsGap, amenityBonus) +
                       warMood -
+                      hungerPenalty -
                       incidentPenalty -
                       taxSatisfactionPenalty(policies, zone),
                   ),

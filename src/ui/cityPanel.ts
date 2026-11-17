@@ -696,6 +696,9 @@ function describeFood(f: FoodSummary): string {
     (f.localSupply > 0 ? ` · 근교 농가 ${n(f.localSupply)} 포함` : '') +
     '\n' +
     `비축 ${n(f.stock)} / ${n(f.capacity)} · ${flow}\n` +
+    (f.hunger > 0
+      ? `⚠ 식량 봉쇄: 적이 항구·국경을 점령해 절반만 사 옵니다 · ${Math.round(f.hunger * 100)}% 모자라 시민 만족도가 떨어집니다\n`
+      : '') +
     farms
   );
 }

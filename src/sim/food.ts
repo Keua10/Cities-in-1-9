@@ -52,6 +52,8 @@ export interface FoodSummary {
   farms: number;
   /** 가공 공장 보너스 (0.2 = +20%). */
   processingBonus: number;
+  /** 사 오지 못해 모자란 몫(소비 대비 0~1). 봉쇄 때만 생긴다. */
+  hunger: number;
 }
 
 export interface FarmStatus {
@@ -78,6 +80,7 @@ export function emptyFoodSummary(): FoodSummary {
     activeFarms: 0,
     farms: 0,
     processingBonus: 0,
+    hunger: 0,
   };
 }
 
@@ -85,6 +88,8 @@ export class FoodSystem {
   summary: FoodSummary = emptyFoodSummary();
   /** 수입 가격 배율(전쟁 중 1.5). */
   importPriceMul = 1;
+  /** 사 올 수 있는 몫(봉쇄되면 0.5). */
+  importLimit = 1;
   private farms = new Map<string, FarmStatus>();
   /** 앵커별 비옥도(땅 성질이라 시설이 서 있는 동안 바뀌지 않는다). */
   private fertilityCache = new Map<string, number>();
@@ -151,7 +156,9 @@ export class FoodSystem {
     const s = this.summary;
     s.stock = Math.max(0, Math.min(s.capacity, stock));
     const net = s.production - s.consumption;
-    s.importPerDay = net < 0 && s.stock <= 0 ? -net : 0;
+    const deficit = net < 0 && s.stock <= 0 ? -net : 0;
+    s.importPerDay = deficit * this.importLimit;
+    s.hunger = s.consumption > 0 ? (deficit - s.importPerDay) / s.consumption : 0;
     s.exportPerDay = net > 0 && s.stock >= s.capacity ? net : 0;
     s.importCost = s.importPerDay * FOOD_IMPORT_PRICE * this.importPriceMul;
     s.exportIncome = s.exportPerDay * FOOD_EXPORT_PRICE;

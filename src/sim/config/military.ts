@@ -370,3 +370,15 @@ export const HOSPITAL_RANGE_CHUNKS = 2;
 export const POLICE_URBAN_DEFENSE = 0.1;
 /** 통신탑 둘레 시야(부대 시야 2 + 1). */
 export const COMM_TOWER_VISION = 3;
+
+/* ---------------- 공중 수송 (설계안 Ⅶ: 공항 = 병력 공중 수송) ---------------- */
+
+/** 땅 부대를 태울 수 있는 공항: 소형·중형·대형 공항, 군사 공항(기본·중간). */
+export const AIRLIFT_AIRPORTS = [18, 24, 25, 54, 56] as const;
+/** 내 땅(점령지 포함)으로 이 거리까지. */
+export const AIRLIFT_RANGE_CHUNKS = 40;
+/** 한 부대 비용(만 원). */
+export const AIRLIFT_COST = 200;
+/** 비행 시간 = 기본 + 청크당. */
+export const AIRLIFT_BASE_MS = 30_000;
+export const AIRLIFT_PER_CHUNK_MS = 1_500;

@@ -67,3 +67,8 @@ export const POSTWAR_MS = 6 * HOUR;
 /** 전후 복구: 종전 뒤 6시간 공사 속도(패전국 3배, 나머지 2배). */
 export const REBUILD_MUL = 2;
 export const REBUILD_MUL_LOSER = 3;
+
+/** 식량 봉쇄: 적이 내 항구·국경 청크를 점령하면 수입을 이만큼만 할 수 있다. */
+export const BLOCKADE_IMPORT = 0.5;
+/** 모자란 식량(소비 대비 비율) 1 당 만족도 감소. */
+export const HUNGER_PENALTY = 0.4;

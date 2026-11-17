@@ -2,6 +2,11 @@ import { chunkIndexOf, chunkKey, parseChunkKey } from '../../core/iso';
 import type { MacroState } from '../../net/types';
 import {
   AA_BOMB_REDUCE_EACH,
+  AIRLIFT_AIRPORTS,
+  AIRLIFT_COST,
+  AIRLIFT_RANGE_CHUNKS,
+  AIRLIFT_BASE_MS,
+  AIRLIFT_PER_CHUNK_MS,
   AA_BOMB_REDUCE_MAX,
   AA_INTERCEPT_EACH,
   AA_INTERCEPT_MAX,
@@ -30,6 +35,7 @@ import {
 } from '../config/military';
 import { FACILITY_SPECS } from '../facilities';
 import { chunkTerrain } from './terrain';
+import { visionAt } from './weather';
 import { RESOURCE_NAMES } from '../config/resources';
 import type { ResourceSystem } from '../resources';
 import type { FacilityRecord } from '../services';
@@ -117,12 +123,13 @@ export class ArmySystem {
   }
 
   /** 부대 둘레(시야)를 가 본 곳에 더한다. */
-  private scout(): void {
+  private scout(now: number): void {
     let added = 0;
+    const v = visionAt(now, VISION_CHUNKS);
     for (const u of this.army.units) {
-      if (u.state === 'training' || UNIT_SPECS[u.type].domain === 'strike') continue;
-      for (let dy = -VISION_CHUNKS; dy <= VISION_CHUNKS; dy++)
-        for (let dx = -VISION_CHUNKS; dx <= VISION_CHUNKS; dx++) {
+      if (u.state === 'training' || u.airlift || UNIT_SPECS[u.type].domain === 'strike') continue;
+      for (let dy = -v; dy <= v; dy++)
+        for (let dx = -v; dx <= v; dx++) {
           const k = chunkKey(u.cx + dx, u.cy + dy);
           if (this.scoutSet.has(k)) continue;
           this.scoutSet.add(k);
@@ -241,6 +248,7 @@ export class ArmySystem {
     if (!u) return '부대가 없습니다';
     if (u.state === 'training') return '아직 훈련 중입니다';
     if (UNIT_SPECS[u.type].domain === 'strike') return this.launch(id, cx, cy, now);
+    if (u.airlift) return '비행기로 날아가는 중입니다';
     const bf = this.battlefield(now);
     const path = findPath(u, { cx, cy }, u.type, bf);
     if (!path.length)
@@ -321,7 +329,7 @@ export class ArmySystem {
       if (struck.length) this.emit(struck);
       return struck;
     }
-    this.scout();
+    this.scout(now);
     // 오래 비웠다 돌아오면 한 번에 최대 10분만 진행한다(이동·훈련).
     const span = Math.min(dt, 10 * 60_000);
     const events: BattleEvent[] = [];
@@ -383,6 +391,60 @@ export class ArmySystem {
     });
     this.army.units = this.army.units.filter((x) => x !== u);
     this.emit([{ type: 'strike', key, kind: 'missile', from: chunkKey(u.cx, u.cy) }]);
+    return '';
+  }
+
+  /** 이 청크에 도로에 이어진 내 공항(공중 수송 출발지)이 있는가. */
+  airportAt(cx: number, cy: number): boolean {
+    return this.facilities().some(
+      (f) =>
+        f.hasRoad &&
+        (AIRLIFT_AIRPORTS as readonly number[]).includes(f.kind) &&
+        chunkIndexOf(f.tx) <= cx &&
+        cx <= chunkIndexOf(f.tx + f.span - 1) &&
+        chunkIndexOf(f.ty) <= cy &&
+        cy <= chunkIndexOf(f.ty + f.span - 1),
+    );
+  }
+
+  /** 공중 수송을 막는 이유(빈 문자열 = 가능). */
+  airliftBlock(id: string, cx: number, cy: number, now = Date.now()): string {
+    const u = this.army.units.find((x) => x.id === id);
+    if (!u) return '부대가 없습니다';
+    if (UNIT_SPECS[u.type].domain !== 'ground') return '땅 부대만 비행기로 옮길 수 있습니다';
+    if (u.state === 'training') return '아직 훈련 중입니다';
+    if (u.airlift) return '이미 날아가는 중입니다';
+    if (u.state === 'fighting') return '전투 중에는 탈 수 없습니다';
+    if (this.war?.paused) return '전쟁이 멈춰 있습니다';
+    if (!this.airportAt(u.cx, u.cy)) return '부대가 내 공항이 있는 청크에 있어야 합니다';
+    const bf = this.battlefield(now);
+    if (ownerOf(bf, chunkKey(cx, cy)) !== this.uid)
+      return '내 땅(점령지 포함)에만 내릴 수 있습니다';
+    if (Math.max(Math.abs(u.cx - cx), Math.abs(u.cy - cy)) > AIRLIFT_RANGE_CHUNKS)
+      return `${AIRLIFT_RANGE_CHUNKS}청크 안까지만 날아갈 수 있습니다`;
+    if (this.macro.money < AIRLIFT_COST) return '수송비가 모자랍니다';
+    return '';
+  }
+
+  /** 공중 수송: 공항에서 내 땅으로(30초 + 청크당 1.5초). */
+  airlift(id: string, cx: number, cy: number, now = Date.now()): string {
+    const why = this.airliftBlock(id, cx, cy, now);
+    if (why) return why;
+    const u = this.army.units.find((x) => x.id === id)!;
+    const dist = Math.max(Math.abs(u.cx - cx), Math.abs(u.cy - cy));
+    this.macro.money -= AIRLIFT_COST;
+    u.path = [];
+    u.progress = 0;
+    u.state = 'moving';
+    delete u.occupyKey;
+    delete u.occupyAt;
+    u.airlift = {
+      from: chunkKey(u.cx, u.cy),
+      to: chunkKey(cx, cy),
+      departAt: now,
+      arriveAt: now + AIRLIFT_BASE_MS + dist * AIRLIFT_PER_CHUNK_MS,
+    };
+    this.bump();
     return '';
   }
 

@@ -25,6 +25,7 @@ import {
   type UnitType,
 } from '../config/military';
 import { attackFactor, chunkTerrain, defenseFactor, moveFactor } from './terrain';
+import { weatherAir, weatherMove } from './weather';
 
 /**
  * 부대·이동·전투·점령 (군사 4단계). 화면·네트워크와 무관한 순수 계산.
@@ -63,6 +64,8 @@ export interface Unit {
   engagedAt?: number;
   /** 이 청크에 처음 들어온(또는 멈춘) 시각. */
   arrivedAt?: number;
+  /** 공중 수송 중(공항 → 내 땅). 이동 중에는 지도에 비행기로만 보이고 싸우지 않는다. */
+  airlift?: { from: string; to: string; departAt: number; arriveAt: number };
   /** 폭격기: 마지막으로 폭탄을 떨어뜨린 시각. */
   bombAt?: number;
   /** 이 부대를 뽑은 청크별 인원(죽거나 해산하면 돌려준다). */
@@ -96,6 +99,8 @@ export function normalizeArmy(raw: unknown): ArmyState {
     u.path = Array.isArray(u.path) ? u.path.filter((k) => typeof k === 'string') : [];
     u.source = u.source && typeof u.source === 'object' ? u.source : {};
     u.progress = Math.max(0, Math.min(1, Number(u.progress) || 0));
+    if (u.airlift && (typeof u.airlift.to !== 'string' || !Number.isFinite(u.airlift.arriveAt)))
+      delete u.airlift;
   }
   return {
     units,
@@ -108,7 +113,14 @@ export function normalizeArmy(raw: unknown): ArmyState {
 }
 
 /** 그리기용 위치(청크 좌표, 가운데 = +0.5). */
-export function unitPosition(u: Unit): { x: number; y: number } {
+export function unitPosition(u: Unit, now = Date.now()): { x: number; y: number } {
+  if (u.airlift) {
+    const a = parseChunkKey(u.airlift.from);
+    const b = parseChunkKey(u.airlift.to);
+    const span = Math.max(1, u.airlift.arriveAt - u.airlift.departAt);
+    const f = Math.max(0, Math.min(1, (now - u.airlift.departAt) / span));
+    return { x: a.cx + 0.5 + (b.cx - a.cx) * f, y: a.cy + 0.5 + (b.cy - a.cy) * f };
+  }
   if (u.path.length && u.progress > 0) {
     const n = parseChunkKey(u.path[0]);
     return {
@@ -167,7 +179,8 @@ export type BattleEvent =
       intercepted: boolean;
       destroyed: string[];
     }
-  | { type: 'airRaid'; key: string };
+  | { type: 'airRaid'; key: string }
+  | { type: 'landed'; unit: string; key: string };
 
 /** 전쟁 중 이 청크의 실제 주인 uid(없으면 ''). */
 export function ownerOf(bf: Battlefield, key: string): string {
@@ -378,6 +391,18 @@ export function stepArmy(army: ArmyState, bf: Battlefield, dtMs: number): Battle
       continue;
     }
     if (UNIT_SPECS[u.type].domain === 'strike') continue;
+    if (u.airlift) {
+      if (bf.now >= u.airlift.arriveAt) {
+        const to = parseChunkKey(u.airlift.to);
+        u.cx = to.cx;
+        u.cy = to.cy;
+        delete u.airlift;
+        u.state = 'idle';
+        u.arrivedAt = bf.now;
+        events.push({ type: 'landed', unit: u.id, key: chunkKey(u.cx, u.cy) });
+      }
+      continue;
+    }
     const here = chunkKey(u.cx, u.cy);
     const foes = blockersAt(u, here);
     if (foes.length && u.state !== 'retreating') {
@@ -401,7 +426,9 @@ export function stepArmy(army: ArmyState, bf: Battlefield, dtMs: number): Battle
       u.state = 'idle';
       continue;
     }
-    u.progress += ((spec.speed * f) / 60) * dt;
+    // 비·눈은 땅 부대를 느리게 한다(밤낮·날씨는 공유 시계로 두 기기가 같다).
+    const wet = spec.domain === 'ground' ? weatherMove(bf.now, next.cx, next.cy) : 1;
+    u.progress += ((spec.speed * f * wet) / 60) * dt;
     if (u.progress >= 1) {
       u.cx = next.cx;
       u.cy = next.cy;
@@ -419,7 +446,7 @@ export function stepArmy(army: ArmyState, bf: Battlefield, dtMs: number): Battle
     const sec = Math.floor(bf.now / 1000);
     const groups = new Map<string, Unit[]>();
     for (const u of army.units) {
-      if (u.state === 'training' || UNIT_SPECS[u.type].domain === 'strike') continue;
+      if (u.state === 'training' || u.airlift || UNIT_SPECS[u.type].domain === 'strike') continue;
       const g = `${u.cx},${u.cy}|${unitDomainAt(u)}`;
       const list = groups.get(g);
       if (list) list.push(u);
@@ -461,6 +488,7 @@ export function stepArmy(army: ArmyState, bf: Battlefield, dtMs: number): Battle
           Math.max(0.3, e.morale) *
           (surface ? attackFactor(t, e.type, urban, from) : 1) *
           matchup(e.type, mine) *
+          (es.domain === 'air' ? weatherAir(bf.now, e.cx, e.cy) : 1) *
           jitter(sec, e.id);
         // 매복: 골짜기에서 먼저 자리 잡고 있던 적이 처음 30초 +50%.
         const eng = mine[0].engagedAt ?? bf.now;
@@ -509,7 +537,7 @@ export function stepArmy(army: ArmyState, bf: Battlefield, dtMs: number): Battle
 
   // 3) 조직력 0 → 후퇴(갈 곳 없으면 포위 전멸), 병력 바닥 → 전멸
   for (const u of [...army.units]) {
-    if (u.state === 'training' || UNIT_SPECS[u.type].domain === 'strike') continue;
+    if (u.state === 'training' || u.airlift || UNIT_SPECS[u.type].domain === 'strike') continue;
     if (u.men < unitStrength(u.type) * DESTROYED_SHARE) {
       removeUnit(army, u.id, false);
       events.push({ type: 'destroyed', unit: u.id, why: 'casualties' });
@@ -531,7 +559,7 @@ export function stepArmy(army: ArmyState, bf: Battlefield, dtMs: number): Battle
 
   // 4) 보급·회복·점령·폭격
   for (const u of army.units) {
-    if (u.state === 'training') continue;
+    if (u.state === 'training' || u.airlift) continue;
     const dom = UNIT_SPECS[u.type].domain;
     if (dom === 'strike') continue;
     const key = chunkKey(u.cx, u.cy);
@@ -556,7 +584,10 @@ export function stepArmy(army: ArmyState, bf: Battlefield, dtMs: number): Battle
           kind: 'bomb',
           key,
           at: bf.now,
-          power: UNIT_SPECS.bomber.attack * (u.men / unitStrength('bomber')),
+          power:
+            UNIT_SPECS.bomber.attack *
+            (u.men / unitStrength('bomber')) *
+            weatherAir(bf.now, u.cx, u.cy),
         });
         events.push({ type: 'strike', key, kind: 'bomb' });
       }

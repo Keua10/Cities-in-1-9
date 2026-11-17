@@ -3,7 +3,21 @@ import { parseChunkKey } from '../core/iso';
 import type { PublicCity } from '../net/publicCities';
 import { sharedClockOffset, sharedNow } from '../sim/sharedClock';
 import { loadOverview } from './startPicker';
-import { OCCUPY_SECONDS, UNIT_SPECS, VISION_CHUNKS, type UnitType } from '../sim/config/military';
+import {
+  isNight,
+  visionAt,
+  weatherAt,
+  WEATHER_NAMES,
+  WEATHER_REGION,
+} from '../sim/military/weather';
+import {
+  AIRLIFT_COST,
+  AIRLIFT_RANGE_CHUNKS,
+  OCCUPY_SECONDS,
+  UNIT_SPECS,
+  VISION_CHUNKS,
+  type UnitType,
+} from '../sim/config/military';
 import { unitPosition, type Unit } from '../sim/military/army';
 import type { ArmySystem } from '../sim/military/armySystem';
 import type { WarSession } from '../net/warSession';
@@ -93,6 +107,8 @@ export class ContinentMap {
   private overview: HTMLImageElement | null = null;
   /** 안 가 본 곳에 쓰는 흐린 지도(작게 줄였다 늘려서 흐리게 — 오래된 아이패드에서도 됨). */
   private blurred: HTMLCanvasElement | null = null;
+  /** ✈ 를 누른 뒤: 다음 지도 누르기 = 공중 수송 목적지. */
+  private airliftMode = false;
   /** 부대가 화면에 그려진 자리(스냅숏 사이를 부드럽게 잇는다). */
   private shown = new Map<string, { x: number; y: number }>();
   private lastFrameAt = 0;
@@ -324,7 +340,8 @@ export class ContinentMap {
           : '전투 중';
     this.warEl.querySelector('.cm-war-text')!.textContent =
       `⚔ ${st.enemyName}와 ${st.war?.kind === 'large' ? '대규모' : '소규모'} 전쟁 · ${phase} · 점수 ${st.scoreMe.toLocaleString('ko-KR')} : ${st.scoreEnemy.toLocaleString('ko-KR')}` +
-      (st.allies.length ? ` · 우리 진영: ${st.allies.join(', ')}` : '');
+      (st.allies.length ? ` · 우리 진영: ${st.allies.join(', ')}` : '') +
+      ` · ${this.skyText()}`;
     const surrender = this.warEl.querySelector<HTMLButtonElement>('.cm-war-surrender')!;
     // 항복 신청·철회는 진영 대표만.
     surrender.hidden = !st.isLeader;
@@ -384,6 +401,16 @@ export class ContinentMap {
       stateEl.textContent = '이 도시가 동맹을 신청했습니다 · 위 알림에서 답하세요';
       go.textContent = '거절';
     }
+  }
+
+  /** 내 수도 위 밤낮·날씨 한 줄(효과 포함). */
+  private skyText(): string {
+    const now = Date.now();
+    const { cx, cy } = parseChunkKey(this.source.mine().capital);
+    const w = weatherAt(now, cx, cy);
+    const effect =
+      w === 'rain' || w === 'snow' ? '(땅 부대 이동 −20%)' : w === 'wind' ? '(공군 공격 −30%)' : '';
+    return `${isNight(now) ? '🌙 밤(시야 절반)' : '☀ 낮'} · ${WEATHER_NAMES[w]}${effect}`;
   }
 
   /** 다른 도시들의 대규모 전쟁: 동맹한 진영으로 참가. */
@@ -536,11 +563,26 @@ export class ContinentMap {
       li.className = 'cm-unit' + (u.id === this.selectedUnit ? ' selected' : '');
       li.innerHTML = `<span class="cm-unit-badge"></span><span class="cm-unit-text"></span>
         <span class="cm-bar"><i class="org"></i></span>
+        <button type="button" class="cm-airlift" title="공중 수송: 공항에서 내 땅으로" hidden>✈</button>
         <button type="button" class="cm-disband" title="해산: 남은 인원이 인구로 돌아갑니다">해산</button>`;
       li.addEventListener('click', (e) => {
-        if ((e.target as HTMLElement).closest('.cm-disband')) return;
+        if ((e.target as HTMLElement).closest('.cm-disband, .cm-airlift')) return;
         this.selectedUnit = u.id === this.selectedUnit ? null : u.id;
         if (this.selectedUnit) this.focusUnit(u);
+        this.lastArmyRevision = -1;
+        this.renderArmy(true);
+        this.draw();
+      });
+      const fly = li.querySelector<HTMLButtonElement>('.cm-airlift')!;
+      fly.hidden =
+        UNIT_SPECS[u.type].domain !== 'ground' ||
+        u.state === 'training' ||
+        !!u.airlift ||
+        !army.airportAt(u.cx, u.cy);
+      fly.addEventListener('click', () => {
+        this.selectedUnit = u.id;
+        this.airliftMode = true;
+        this.armyMsgEl.textContent = `✈ 공중 수송: 내릴 내 땅을 지도에서 누르세요 (${formatMoney(AIRLIFT_COST)}, ${AIRLIFT_RANGE_CHUNKS}청크 안)`;
         this.lastArmyRevision = -1;
         this.renderArmy(true);
         this.draw();
@@ -890,6 +932,40 @@ export class ContinentMap {
       return cur;
     };
     const drawUnit = (u: Unit, mine: boolean) => {
+      if (u.airlift) {
+        // 수송기: 출발지 → 도착지 점선 위를 나는 비행기
+        const a = parseChunkKey(u.airlift.from);
+        const b = parseChunkKey(u.airlift.to);
+        const p = unitPosition(u);
+        const x = X(p.x - 0.5) + s / 2;
+        const y = Y(p.y - 0.5) + s / 2;
+        ctx.strokeStyle = 'rgba(242, 207, 122, 0.6)';
+        ctx.setLineDash([3, 4]);
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(X(a.cx) + s / 2, Y(a.cy) + s / 2);
+        ctx.lineTo(X(b.cx) + s / 2, Y(b.cy) + s / 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        const ang = Math.atan2(b.cy - a.cy, b.cx - a.cx);
+        ctx.save();
+        ctx.translate(x, y - 4);
+        ctx.rotate(ang);
+        ctx.fillStyle = '#e8eef2';
+        ctx.strokeStyle = '#0d1418';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(r, 0);
+        ctx.lineTo(-r * 0.8, -r * 0.25);
+        ctx.lineTo(-r * 0.8, r * 0.25);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillRect(-r * 0.2, -r * 0.8, r * 0.35, r * 1.6);
+        ctx.restore();
+        moving = true;
+        return;
+      }
       const p = place(u, mine);
       if (u.state === 'moving' || u.state === 'retreating' || u.state === 'fighting') moving = true;
       const x = X(p.x - 0.5) + s / 2;
@@ -969,15 +1045,17 @@ export class ContinentMap {
     if (war) {
       // 적 부대는 내 부대·영토에서 시야(2청크), 레이더(6청크) 안에 있을 때만 보인다.
       const radar = army.visionSources();
+      // 밤에는 시야 절반.
+      const vis = visionAt(Date.now(), VISION_CHUNKS);
       const seeing = (e: Unit) => {
         for (const u of army.units)
           if (
             u.state !== 'training' &&
-            Math.max(Math.abs(u.cx - e.cx), Math.abs(u.cy - e.cy)) <= VISION_CHUNKS
+            Math.max(Math.abs(u.cx - e.cx), Math.abs(u.cy - e.cy)) <= vis
           )
             return true;
-        for (let dy = -VISION_CHUNKS; dy <= VISION_CHUNKS; dy++)
-          for (let dx = -VISION_CHUNKS; dx <= VISION_CHUNKS; dx++)
+        for (let dy = -vis; dy <= vis; dy++)
+          for (let dx = -vis; dx <= vis; dx++)
             if (this.source.army.mySide().owned.has(`${e.cx + dx},${e.cy + dy}`)) return true;
         for (const r of radar)
           if (Math.max(Math.abs(r.cx - e.cx), Math.abs(r.cy - e.cy)) <= r.r) return true;
@@ -987,7 +1065,8 @@ export class ContinentMap {
     }
     for (const id of [...this.shown.keys()]) if (!seen.has(id)) this.shown.delete(id);
     const fx = this.drawEffects(X, Y, s, now);
-    this.animating = moving || fx;
+    const sky = this.drawSky(X, Y, s, now);
+    this.animating = moving || fx || sky;
   }
 
   /** 미사일·폭발·요격·점령·교전 효과. 그린 게 있으면 true. */
@@ -1068,6 +1147,109 @@ export class ContinentMap {
     return list.length > 0;
   }
 
+  /**
+   * 밤·날씨: 밤이면 지도 전체를 어둡게, 날씨 지역(16×16청크)마다 비·눈·바람을 흘린다.
+   * 화면에 보이는 지역만 그린다. 그린 게 있으면 true(계속 움직이므로).
+   */
+  private drawSky(
+    X: (cx: number) => number,
+    Y: (cy: number) => number,
+    s: number,
+    now: number,
+  ): boolean {
+    const ctx = this.ctx;
+    const wall = Date.now();
+    const cw = this.canvas.clientWidth;
+    const ch = this.canvas.clientHeight;
+    if (isNight(wall)) {
+      ctx.fillStyle = 'rgba(10, 18, 48, 0.32)';
+      ctx.fillRect(0, 0, cw, ch);
+    }
+    const R = WEATHER_REGION;
+    // 날씨는 내가 아는 땅 위에서만 보인다(모르는 곳의 하늘은 모른다).
+    const known = this.knownSet();
+    const knowsRegion = (rx: number, ry: number): boolean => {
+      if (!known) return true;
+      for (const k of known) {
+        const { cx, cy } = parseChunkKey(k);
+        if (cx >= rx && cx < rx + R && cy >= ry && cy < ry + R) return true;
+      }
+      return false;
+    };
+    const cx0 = Math.floor((CONTINENT_X0 + (0 - this.ox) / s) / R) * R;
+    const cy0 = Math.floor((CONTINENT_Y0 + (0 - this.oy) / s) / R) * R;
+    const cx1 = CONTINENT_X0 + (cw - this.ox) / s;
+    const cy1 = CONTINENT_Y0 + (ch - this.oy) / s;
+    let any = false;
+    const t = now / 1000;
+    for (let ry = cy0; ry < cy1; ry += R)
+      for (let rx = cx0; rx < cx1; rx += R) {
+        const w = weatherAt(wall, rx, ry);
+        if (w === 'clear' || !knowsRegion(rx, ry)) continue;
+        const x0 = X(rx);
+        const y0 = Y(ry);
+        const size = R * s;
+        ctx.save();
+        ctx.beginPath();
+        if (known) {
+          for (const k of known) {
+            const { cx, cy } = parseChunkKey(k);
+            if (cx >= rx && cx < rx + R && cy >= ry && cy < ry + R) ctx.rect(X(cx), Y(cy), s, s);
+          }
+        } else ctx.rect(x0, y0, size, size);
+        ctx.clip();
+        ctx.fillStyle = w === 'snow' ? 'rgba(220,230,240,0.06)' : 'rgba(40,60,80,0.07)';
+        ctx.fillRect(x0, y0, size, size);
+        if (s < 12) {
+          // 멀리서 볼 때는 지역마다 작은 표시만(움직이지 않음).
+          ctx.restore();
+          ctx.font = `${Math.max(10, Math.min(16, size * 0.3))}px system-ui, sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.globalAlpha = 0.7;
+          ctx.fillText(
+            w === 'rain' ? '🌧' : w === 'snow' ? '❄' : '💨',
+            x0 + size / 2,
+            y0 + size / 2,
+          );
+          ctx.globalAlpha = 1;
+          continue;
+        }
+        any = true;
+        const n = Math.min(40, Math.max(8, Math.round(size / 14)));
+        for (let i = 0; i < n; i++) {
+          // 입자마다 고정 위치에서 시간에 따라 흘러간다(난수 대신 i 로).
+          const fx = ((i * 0.6180339) % 1) * size;
+          const fy = ((i * 0.4142135) % 1) * size;
+          if (w === 'rain') {
+            const y = y0 + ((fy + t * 220) % size);
+            const x = x0 + ((fx + t * 40) % size);
+            ctx.strokeStyle = 'rgba(170, 200, 230, 0.55)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+            ctx.lineTo(x - 3, y + 9);
+            ctx.stroke();
+          } else if (w === 'snow') {
+            const y = y0 + ((fy + t * 30) % size);
+            const x = x0 + ((fx + Math.sin(t + i) * 8 + size) % size);
+            ctx.fillStyle = 'rgba(255,255,255,0.8)';
+            ctx.fillRect(x, y, 2, 2);
+          } else {
+            const x = x0 + ((fx + t * 160) % size);
+            const y = y0 + fy + Math.sin(t * 2 + i) * 3;
+            ctx.strokeStyle = 'rgba(230, 240, 245, 0.35)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+            ctx.quadraticCurveTo(x + 8, y - 3, x + 16, y);
+            ctx.stroke();
+          }
+        }
+        ctx.restore();
+      }
+    return any;
+  }
+
   /** 폭발: 섬광 → 불덩이 → 연기 고리. t = 터진 뒤 초. */
   private boom(x: number, y: number, s: number, t: number): void {
     if (t < 0 || t > 1.8) return;
@@ -1122,6 +1304,15 @@ export class ContinentMap {
     const s = this.scale * PX_PER_CHUNK;
     const cx = Math.floor(CONTINENT_X0 + (px - this.ox) / s);
     const cy = Math.floor(CONTINENT_Y0 + (py - this.oy) / s);
+    if (this.airliftMode) {
+      this.airliftMode = false;
+      const why = this.source.army.airlift(this.selectedUnit, cx, cy);
+      this.armyMsgEl.textContent = why || '✈ 이륙! 잠시 뒤 내립니다';
+      if (why) this.source.announce(why);
+      this.renderArmy(true);
+      this.draw();
+      return;
+    }
     const missile =
       this.source.army.units.find((u) => u.id === this.selectedUnit)?.type === 'missile';
     const why = this.source.army.order(this.selectedUnit, cx, cy);

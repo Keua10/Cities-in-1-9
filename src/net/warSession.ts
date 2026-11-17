@@ -443,7 +443,9 @@ export class WarSession {
     const docData: SideDoc = {
       at: now,
       units: army.units
-        .filter((u) => u.state !== 'training' && UNIT_SPECS[u.type].domain !== 'strike')
+        .filter(
+          (u) => u.state !== 'training' && !u.airlift && UNIT_SPECS[u.type].domain !== 'strike',
+        )
         .map(compact),
       owned: [...side.owned],
       capital: [...side.capital],

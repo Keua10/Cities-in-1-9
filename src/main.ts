@@ -383,7 +383,8 @@ async function boot(): Promise<void> {
         : st.phase === 'paused'
           ? '일시정지(상대 접속 끊김)'
           : '전투 중') +
-      ` · 점수 ${st.scoreMe.toLocaleString('ko-KR')} : ${st.scoreEnemy.toLocaleString('ko-KR')} · 대륙 지도에서 지휘`;
+      ` · 점수 ${st.scoreMe.toLocaleString('ko-KR')} : ${st.scoreEnemy.toLocaleString('ko-KR')} · 대륙 지도에서 지휘` +
+      (sim.blockaded ? ' · 🚫 식량 봉쇄' : '');
   }, 1000);
   sim.army.uid = myUid;
   sim.army.onEvent = (e) => {
@@ -404,6 +405,8 @@ async function boot(): Promise<void> {
           : `💥 적 ${e.kind === 'missile' ? '미사일' : '폭격'} · 청크 ${e.key}` +
               (e.destroyed.length ? ` · 부서짐: ${e.destroyed.join(', ')}` : ''),
       );
+    else if (e.type === 'landed')
+      tools.announce(`✈ 공중 수송한 부대가 내렸습니다 (청크 ${e.key})`);
     else if (e.type === 'airRaid')
       tools.announce(`🚨 공습 경보 · 적 공군이 레이더에 잡혔습니다 (청크 ${e.key})`);
   };
